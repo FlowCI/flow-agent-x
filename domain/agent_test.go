@@ -9,7 +9,7 @@ import (
 )
 
 func TestAgentQueueName(t *testing.T) {
-	agent := Agent{Id: "1"}
+	agent := Agent{ID: "1"}
 
 	if agent.GetQueueName() != "queue.agent.1" {
 		t.Errorf("Unexpected agent queue name")
@@ -24,14 +24,15 @@ func TestAgentParesedFromJson(t *testing.T) {
 		"token": "xxx-xxx",
 		"host": "test",
 		"tags": ["ios", "mac"],
-		"status": "OFFLINE"
+		"status": "OFFLINE",
+		"jobid": "job-id"
 	}`)
 
 	var agent Agent
 	err := json.Unmarshal(raw, &agent)
 
 	assert.Nil(err)
-	assert.Equal("1", agent.Id)
+	assert.Equal("1", agent.ID)
 	assert.Equal("local", agent.Name)
 	assert.Equal("xxx-xxx", agent.Token)
 	assert.Equal("test", agent.Host)
@@ -41,4 +42,5 @@ func TestAgentParesedFromJson(t *testing.T) {
 	assert.Equal("mac", agent.Tags[1])
 
 	assert.Equal(AgentStatus("OFFLINE"), agent.Status)
+	assert.Equal("job-id", agent.JobID)
 }

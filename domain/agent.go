@@ -1,21 +1,28 @@
 package domain
 
+// AgentStatus string of agent status
 type AgentStatus string
 
 const (
-	OFFLINE AgentStatus = "OFFLINE"
-	BUSY    AgentStatus = "BUSY"
-	IDLE    AgentStatus = "IDLE"
+	// AgentOffline offline status
+	AgentOffline AgentStatus = "OFFLINE"
+
+	// AgentBusy busy status
+	AgentBusy AgentStatus = "BUSY"
+
+	// AgentIdle idle status
+	AgentIdle AgentStatus = "IDLE"
 )
 
+// Agent Class
 type Agent struct {
-	Id     string
+	ID     string
 	Name   string
 	Token  string
 	Host   string
 	Tags   []string
 	Status AgentStatus
-	JobId  string
+	JobID  string
 }
 
 func (a *Agent) HasHost() bool {
@@ -23,21 +30,21 @@ func (a *Agent) HasHost() bool {
 }
 
 func (a *Agent) IsBusy() bool {
-	return a.Status == BUSY
+	return a.Status == AgentBusy
 }
 
 func (a *Agent) IsIdle() bool {
-	return a.Status == IDLE
+	return a.Status == AgentIdle
 }
 
 func (a *Agent) IsOffline() bool {
-	return a.Status == OFFLINE
+	return a.Status == AgentOffline
 }
 
 func (a *Agent) IsOnline() bool {
-	return a.Status != OFFLINE
+	return a.Status != AgentOffline
 }
 
 func (a *Agent) GetQueueName() string {
-	return "queue.agent." + a.Id
+	return "queue.agent." + a.ID
 }
