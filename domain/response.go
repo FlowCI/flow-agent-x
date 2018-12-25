@@ -17,5 +17,5 @@ func (r *Response) IsOk() bool {
 
 type SettingsResponse struct {
 	Response
-	Data Settings
+	Data *Settings
 }

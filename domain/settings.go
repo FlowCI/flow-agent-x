@@ -25,9 +25,9 @@ type ZookeeperConfig struct {
 
 // Settings the setting info from server side
 type Settings struct {
-	Agent             Agent
-	Queue             RabbitMQConfig
-	Zookeeper         ZookeeperConfig
+	Agent             *Agent
+	Queue             *RabbitMQConfig
+	Zookeeper         *ZookeeperConfig
 	CallbackQueueName string
 	LogsExchangeName  string
 }

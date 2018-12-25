@@ -58,12 +58,12 @@ func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	assert := assert.New(t)
 	defer ts.Close()
 
-	configManager := GetInstance()
-	settings, err := configManager.Connect()
+	m := GetInstance()
+	err := m.Connect()
 
 	assert.Nil(err)
-	assert.NotNil(settings)
+	assert.NotNil(m.Settings)
 
-	assert.Equal("1", settings.Agent.ID)
-	assert.Equal("xxx-xxx", settings.Agent.Token)
+	assert.Equal("1", m.Settings.Agent.ID)
+	assert.Equal("xxx-xxx", m.Settings.Agent.Token)
 }

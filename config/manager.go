@@ -24,6 +24,7 @@ var (
 
 // Manager to handle server connection and config
 type Manager struct {
+	Settings *domain.Settings
 }
 
 // GetInstance get singleton of config manager
@@ -35,7 +36,7 @@ func GetInstance() *Manager {
 }
 
 // Connect get settings from server
-func (m *Manager) Connect() (domain.Settings, error) {
+func (m *Manager) Connect() error {
 	server, token, port := getVaraibles()
 
 	uri := server + "/agents/connect"
@@ -44,7 +45,7 @@ func (m *Manager) Connect() (domain.Settings, error) {
 	var message domain.SettingsResponse
 	resp, errFromReq := http.Post(uri, "application/json", bytes.NewBuffer(body))
 	if errFromReq != nil {
-		return message.Data, fmt.Errorf(errSettingConnectFail)
+		return fmt.Errorf(errSettingConnectFail)
 	}
 
 	defer resp.Body.Close()
@@ -52,14 +53,23 @@ func (m *Manager) Connect() (domain.Settings, error) {
 	errFromJSON := json.Unmarshal(raw, &message)
 
 	if errFromJSON != nil {
-		return message.Data, errFromJSON
+		return errFromJSON
 	}
 
 	if !message.IsOk() {
-		return message.Data, fmt.Errorf(message.Message)
+		return fmt.Errorf(message.Message)
 	}
 
-	return message.Data, nil
+	m.Settings = message.Data
+	return nil
+}
+
+func (m *Manager) InitRabbitMQ() error {
+	if m.Settings == nil {
+		return fmt.Errorf("")
+	}
+
+	return nil
 }
 
 func getVaraibles() (server string, token string, port int) {
