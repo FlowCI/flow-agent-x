@@ -7,6 +7,19 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestRabbitMQConfigConnectionString(t *testing.T) {
+	assert := assert.New(t)
+
+	mq := &RabbitMQConfig{
+		Host:     "aaa",
+		Port:     1234,
+		Username: "guest",
+		Password: "guest",
+	}
+
+	assert.Equal("amqp://guest:guest@aaa:1234", mq.GetConnectionString())
+}
+
 func TestSettringsShouldParseFromJson(t *testing.T) {
 	// init:
 	assert := assert.New(t)
