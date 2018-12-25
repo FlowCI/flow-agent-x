@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/streadway/amqp"
+
 	"github.com/flowci/flow-agent-x/domain"
 )
 
@@ -22,21 +24,49 @@ var (
 	once      sync.Once
 )
 
+type QueueConfig struct {
+	Conn          *amqp.Connection
+	Channel       *amqp.Channel
+	JobQueue      *amqp.Queue
+	CallbackQueue *amqp.Queue
+}
+
 // Manager to handle server connection and config
 type Manager struct {
 	Settings *domain.Settings
+	Queue    *QueueConfig
 }
 
 // GetInstance get singleton of config manager
 func GetInstance() *Manager {
 	once.Do(func() {
-		singleton = &Manager{}
+		singleton = new(Manager)
 	})
 	return singleton
 }
 
-// Connect get settings from server
-func (m *Manager) Connect() error {
+func (m *Manager) Init() error {
+	var err = m.initSettings()
+	if err != nil {
+		return err
+	}
+
+	err = m.initRabbitMQ()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *Manager) Close() {
+	if m.Queue != nil {
+		m.Queue.Channel.Close()
+		m.Queue.Conn.Close()
+	}
+}
+
+func (m *Manager) initSettings() error {
 	server, token, port := getVaraibles()
 
 	uri := server + "/agents/connect"
@@ -64,11 +94,38 @@ func (m *Manager) Connect() error {
 	return nil
 }
 
-func (m *Manager) InitRabbitMQ() error {
+func (m *Manager) initRabbitMQ() error {
 	if m.Settings == nil {
-		return fmt.Errorf("")
+		return fmt.Errorf("The agent settings not been initialized")
 	}
 
+	// get connection
+	connStr := m.Settings.Queue.GetConnectionString()
+	conn, err := amqp.Dial(connStr)
+	if err != nil {
+		return err
+	}
+
+	// get channel
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	// init queue config
+	qc := new(QueueConfig)
+	qc.Conn = conn
+	qc.Channel = ch
+
+	// init queue to receive job
+	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), true, false, false, false, nil)
+	qc.JobQueue = &jobQueue
+
+	// init queue to send callback
+	callbackQueue, err := ch.QueueDeclare(m.Settings.CallbackQueueName, true, false, false, false, nil)
+	qc.CallbackQueue = &callbackQueue
+
+	m.Queue = qc
 	return nil
 }
 

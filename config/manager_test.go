@@ -26,7 +26,7 @@ var (
 	
 			"queue": {
 				"host": "127.0.0.1",
-				"port": 15671,
+				"port": 5672,
 				"username": "guest",
 				"password": "guest"
 			},
@@ -59,7 +59,8 @@ func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	defer ts.Close()
 
 	m := GetInstance()
-	err := m.Connect()
+	err := m.Init()
+	defer m.Close()
 
 	assert.Nil(err)
 	assert.NotNil(m.Settings)
