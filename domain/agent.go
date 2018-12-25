@@ -14,6 +14,12 @@ const (
 	AgentIdle AgentStatus = "IDLE"
 )
 
+// AgentConnect request data to get settings from server
+type AgentConnect struct {
+	Token string `json:"token"`
+	Port  int    `json:"port"`
+}
+
 // Agent Class
 type Agent struct {
 	ID     string
