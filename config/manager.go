@@ -8,16 +8,30 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"sync"
 
 	"github.com/flowci/flow-agent-x/domain"
 )
 
+const (
+	errSettingConnectFail = "Cannot get settings from server"
+)
+
 var (
-	ErrSettingConnectFail = "Cannot get settings from server"
+	singleton *Manager
+	once      sync.Once
 )
 
 // Manager to handle server connection and config
 type Manager struct {
+}
+
+// GetInstance get singleton of config manager
+func GetInstance() *Manager {
+	once.Do(func() {
+		singleton = &Manager{}
+	})
+	return singleton
 }
 
 // Connect get settings from server
@@ -30,7 +44,7 @@ func (m *Manager) Connect() (domain.Settings, error) {
 	var message domain.SettingsResponse
 	resp, errFromReq := http.Post(uri, "application/json", bytes.NewBuffer(body))
 	if errFromReq != nil {
-		return message.Data, fmt.Errorf(ErrSettingConnectFail)
+		return message.Data, fmt.Errorf(errSettingConnectFail)
 	}
 
 	defer resp.Body.Close()

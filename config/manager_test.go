@@ -58,7 +58,7 @@ func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	assert := assert.New(t)
 	defer ts.Close()
 
-	configManager := Manager{}
+	configManager := GetInstance()
 	settings, err := configManager.Connect()
 
 	assert.Nil(err)
