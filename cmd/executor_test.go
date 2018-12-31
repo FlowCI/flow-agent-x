@@ -7,18 +7,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	cmd = &domain.CmdIn{
+		Cmd: domain.Cmd{
+			ID: "1-1-1",
+		},
+		Scripts: []string{"echo bbb", "sleep 5", "echo aaa"},
+		Timeout: 10,
+	}
+)
+
 func TestShouldRunLinuxShell(t *testing.T) {
 	assert := assert.New(t)
 
-	// init: cmd
-	cmd := &domain.CmdIn{}
-	cmd.ID = "1-1-1"
-	cmd.Scripts = []string{"echo bbb", "sleep 5", "echo aaa"}
-
 	// when: new shell executor and run
 	executor := NewShellExecutor(cmd)
-	defer executor.Close()
-
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -33,4 +36,25 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert.Equal(cmd.ID, secondLog.CmdID)
 	assert.Equal("aaa", secondLog.Content)
 	assert.Equal(int64(2), secondLog.Number)
+}
+
+func TestShouldRunLinuxShellWithTimeOut(t *testing.T) {
+	assert := assert.New(t)
+
+	// init: cmd with timeout
+	cmd.Timeout = 2
+
+	// when: new shell executor and run
+	executor := NewShellExecutor(cmd)
+	err := executor.Run()
+	assert.Nil(err)
+
+	result := executor.Result
+	assert.NotNil(result)
+
+	// then:
+	assert.NotNil(result.StartAt)
+	assert.NotNil(result.FinishAt)
+	assert.True(result.ProcessId > 0)
+	assert.Equal(domain.CmdExitCodeTimeOut, result.Code)
 }

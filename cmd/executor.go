@@ -7,9 +7,11 @@ import (
 	"os/exec"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/flowci/flow-agent-x/domain"
 	"github.com/google/uuid"
+	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -21,36 +23,38 @@ const (
 type LogChannel chan *domain.LogItem
 
 type ShellExecutor struct {
-	CmdIn      *domain.CmdIn
-	EndTerm    string
-	Result     *domain.CmdResult
-	LogChannel LogChannel
+	CmdIn          *domain.CmdIn
+	EndTerm        string
+	Result         *domain.CmdResult
+	TimeOutSeconds time.Duration
+	LogChannel     LogChannel
 }
 
 // NewShellExecutor new instance of shell executor
 func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
-	result := &domain.CmdResult{}
-	result.ID = cmdIn.ID
-	result.AllowFailure = cmdIn.AllowFailure
-	result.Plugin = cmdIn.Plugin
+	result := &domain.CmdResult{
+		Cmd: domain.Cmd{
+			ID:           cmdIn.ID,
+			AllowFailure: cmdIn.AllowFailure,
+			Plugin:       cmdIn.Plugin,
+		},
+	}
 
 	uuid, _ := uuid.NewRandom()
 
 	return &ShellExecutor{
-		CmdIn:      cmdIn,
-		EndTerm:    fmt.Sprintf("=====EOF-%s=====", uuid),
-		Result:     result,
-		LogChannel: make(chan *domain.LogItem, logBufferSize),
+		CmdIn:          cmdIn,
+		EndTerm:        fmt.Sprintf("=====EOF-%s=====", uuid),
+		Result:         result,
+		LogChannel:     make(chan *domain.LogItem, logBufferSize),
+		TimeOutSeconds: time.Duration(cmdIn.Timeout),
 	}
-}
-
-// Close to release resource of executor
-func (e *ShellExecutor) Close() {
-	close(e.LogChannel)
 }
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
+	defer cleanUp(e)
+
 	cmd := exec.Command(linuxBash)
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
@@ -60,15 +64,38 @@ func (e *ShellExecutor) Run() error {
 	stdOutChannel := make(LogChannel, logBufferSize)
 	stdErrChannel := make(LogChannel, logBufferSize)
 
-	err := cmd.Start()
+	// channel for cmd wait
+	done := make(chan error)
 
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	e.Result.ProcessId = cmd.Process.Pid
+	e.Result.StartAt = time.Now()
+
+	go pushToTotalChannel(e.CmdIn.ID, stdOutChannel, stdErrChannel, e.LogChannel)
 	go handleStdIn(e.CmdIn.Scripts, stdin)
 	go handleStdOut(stdout, stdOutChannel, domain.LogTypeOut)
 	go handleStdOut(stderr, stdErrChannel, domain.LogTypeErr)
-	go pushToTotalChannel(e.CmdIn.ID, stdOutChannel, stdErrChannel, e.LogChannel)
+	go func() { done <- cmd.Wait() }()
 
-	err = cmd.Wait()
-	return err
+	select {
+	case err := <-done:
+		return err
+
+	case <-time.After(e.TimeOutSeconds * time.Second):
+		log.Info("Cmd killed since timeout")
+		err := cmd.Process.Kill()
+
+		e.Result.Code = domain.CmdExitCodeTimeOut
+		e.Result.FinishAt = time.Now()
+		return err
+	}
+}
+
+func cleanUp(e *ShellExecutor) {
+	close(e.LogChannel)
 }
 
 func handleStdIn(scripts []string, stdin io.WriteCloser) {
