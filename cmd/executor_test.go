@@ -25,6 +25,13 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	err := executor.Run()
 	assert.Nil(err)
 
+	// then: verfiy result of shell executor
+	result := executor.Result
+	assert.NotNil(result)
+	assert.Equal(0, result.Code)
+	assert.False(result.StartAt.IsZero())
+	assert.False(result.FinishAt.IsZero())
+
 	// then: verify first log output
 	firstLog := <-executor.LogChannel
 	assert.Equal(cmd.ID, firstLog.CmdID)
@@ -53,8 +60,8 @@ func TestShouldRunLinuxShellWithTimeOut(t *testing.T) {
 	assert.NotNil(result)
 
 	// then:
-	assert.NotNil(result.StartAt)
-	assert.NotNil(result.FinishAt)
+	assert.False(result.StartAt.IsZero())
+	assert.False(result.FinishAt.IsZero())
 	assert.True(result.ProcessId > 0)
 	assert.Equal(domain.CmdExitCodeTimeOut, result.Code)
 }

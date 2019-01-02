@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/flowci/flow-agent-x/domain"
@@ -38,6 +39,8 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 			AllowFailure: cmdIn.AllowFailure,
 			Plugin:       cmdIn.Plugin,
 		},
+		Code:   domain.CmdExitCodeUnknow,
+		Status: domain.CmdStatusPending,
 	}
 
 	uuid, _ := uuid.NewRandom()
@@ -80,16 +83,41 @@ func (e *ShellExecutor) Run() error {
 	go handleStdOut(stderr, stdErrChannel, domain.LogTypeErr)
 	go func() { done <- cmd.Wait() }()
 
+	// wait for done
 	select {
 	case err := <-done:
-		return err
+		result := e.Result
+		result.FinishAt = time.Now()
+
+		// get wait status
+		ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
+
+		// success status if no err
+		if err == nil {
+			result.Code = ws.ExitStatus()
+			result.Status = domain.CmdStatusSuccess
+			return nil
+		}
+
+		exitError, ok := err.(*exec.ExitError)
+		result.Status = domain.CmdStatusException
+
+		if ok {
+			result.Code = ws.ExitStatus()
+			return err
+		}
+
+		return exitError
 
 	case <-time.After(e.TimeOutSeconds * time.Second):
 		log.Info("Cmd killed since timeout")
 		err := cmd.Process.Kill()
 
-		e.Result.Code = domain.CmdExitCodeTimeOut
-		e.Result.FinishAt = time.Now()
+		result := e.Result
+		result.Code = domain.CmdExitCodeTimeOut
+		result.FinishAt = time.Now()
+		result.Status = domain.CmdStatusKilled
+
 		return err
 	}
 }
