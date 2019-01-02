@@ -60,18 +60,18 @@ type CmdIn struct {
 	Scripts    []string
 	WorkDir    string
 	Timeout    int64
-	Inputs     map[string]string
+	Inputs     Variables
 	EnvFilters []string
 }
 
 type CmdResult struct {
 	Cmd
-	ProcessId int               `json:"processId"`
-	Status    CmdStatus         `json:"status"`
-	Code      int               `json:"code"`
-	Output    map[string]string `json:"output"`
-	StartAt   time.Time         `json:"startAt"`
-	FinishAt  time.Time         `json:"finishAt"`
-	Error     string            `json:"error"`
-	LogSize   int64             `json:"logSize"`
+	ProcessId int       `json:"processId"`
+	Status    CmdStatus `json:"status"`
+	Code      int       `json:"code"`
+	Output    Variables `json:"output"`
+	StartAt   time.Time `json:"startAt"`
+	FinishAt  time.Time `json:"finishAt"`
+	Error     string    `json:"error"`
+	LogSize   int64     `json:"logSize"`
 }

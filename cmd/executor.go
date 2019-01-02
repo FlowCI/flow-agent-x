@@ -41,7 +41,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		},
 		Code:   domain.CmdExitCodeUnknow,
 		Status: domain.CmdStatusPending,
-		Output: make(map[string]string),
+		Output: make(domain.Variables),
 	}
 
 	uuid, _ := uuid.NewRandom()
@@ -63,6 +63,12 @@ func (e *ShellExecutor) Run() error {
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
+
+	// set env varaibles for cmd
+	inputs := e.CmdIn.Inputs
+	if !domain.NilOrEmpty(inputs) {
+		cmd.Env = inputs.ToStringArray()
+	}
 
 	// channel for stdout and stderr
 	stdOutChannel := make(LogChannel, logBufferSize)
