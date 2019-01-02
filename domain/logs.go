@@ -2,10 +2,10 @@ package domain
 
 const (
 	// LogTypeOut for stdout
-	LogTypeOut = "STDOUT"
+	LogTypeOut LogType = "STDOUT"
 
 	// LogTypeErr for stderr
-	LogTypeErr = "STDERR"
+	LogTypeErr LogType = "STDERR"
 )
 
 // LogType stdout or stderr
