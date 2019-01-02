@@ -65,3 +65,19 @@ func TestShouldRunLinuxShellWithTimeOut(t *testing.T) {
 	assert.True(result.ProcessId > 0)
 	assert.Equal(domain.CmdExitCodeTimeOut, result.Code)
 }
+
+func TestShouldCmdNotFoundErr(t *testing.T) {
+	assert := assert.New(t)
+
+	// init:
+	cmd.Scripts = []string{"notCommand"}
+
+	// when:
+	executor := NewShellExecutor(cmd)
+	err := executor.Run()
+	assert.Nil(err)
+
+	// then:
+	assert.Equal(127, executor.Result.Code)
+	assert.Equal(domain.CmdStatusException, executor.Result.Status)
+}

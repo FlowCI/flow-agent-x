@@ -104,7 +104,7 @@ func (e *ShellExecutor) Run() error {
 
 		if ok {
 			result.Code = ws.ExitStatus()
-			return err
+			return nil
 		}
 
 		return exitError
