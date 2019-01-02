@@ -12,7 +12,12 @@ var (
 		Cmd: domain.Cmd{
 			ID: "1-1-1",
 		},
-		Scripts: []string{"echo bbb", "sleep 5", "echo aaa"},
+		Scripts: []string{
+			"echo bbb",
+			"sleep 5",
+			">&2 echo aaa",
+			"export FLOW_VVV=flowci",
+		},
 		Timeout: 10,
 	}
 )
@@ -37,12 +42,14 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert.Equal(cmd.ID, firstLog.CmdID)
 	assert.Equal("bbb", firstLog.Content)
 	assert.Equal(int64(1), firstLog.Number)
+	assert.Equal(domain.LogTypeOut, firstLog.Type)
 
 	// then: verify second of log output
 	secondLog := <-executor.LogChannel
 	assert.Equal(cmd.ID, secondLog.CmdID)
 	assert.Equal("aaa", secondLog.Content)
 	assert.Equal(int64(2), secondLog.Number)
+	assert.Equal(domain.LogTypeErr, secondLog.Type)
 }
 
 func TestShouldRunLinuxShellWithTimeOut(t *testing.T) {
