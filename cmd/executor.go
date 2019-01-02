@@ -41,6 +41,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		},
 		Code:   domain.CmdExitCodeUnknow,
 		Status: domain.CmdStatusPending,
+		Output: make(map[string]string),
 	}
 
 	uuid, _ := uuid.NewRandom()
@@ -78,9 +79,9 @@ func (e *ShellExecutor) Run() error {
 	e.Result.StartAt = time.Now()
 
 	go pushToTotalChannel(e.CmdIn.ID, stdOutChannel, stdErrChannel, e.LogChannel)
-	go handleStdIn(e.CmdIn.Scripts, stdin)
-	go handleStdOut(stdout, stdOutChannel, domain.LogTypeOut)
-	go handleStdOut(stderr, stdErrChannel, domain.LogTypeErr)
+	go handleStdIn(createExecScripts(e), stdin)
+	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
+	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
 	go func() { done <- cmd.Wait() }()
 
 	// wait for done
@@ -128,6 +129,16 @@ func cleanUp(e *ShellExecutor) {
 	close(e.LogChannel)
 }
 
+func createExecScripts(e *ShellExecutor) []string {
+	if len(e.CmdIn.EnvFilters) == 0 {
+		return e.CmdIn.Scripts
+	}
+
+	echoEndTerm := fmt.Sprintf("echo %s%s", e.EndTerm, lineBreakLinux)
+	printEnvs := fmt.Sprintf("env%s", lineBreakLinux)
+	return append(e.CmdIn.Scripts, echoEndTerm, printEnvs)
+}
+
 func handleStdIn(scripts []string, stdin io.WriteCloser) {
 	defer stdin.Close()
 
@@ -139,7 +150,7 @@ func handleStdIn(scripts []string, stdin io.WriteCloser) {
 	}
 }
 
-func handleStdOut(reader io.ReadCloser, channel LogChannel, t domain.LogType) {
+func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t domain.LogType) {
 	defer reader.Close()
 	defer close(channel)
 
@@ -147,6 +158,27 @@ func handleStdOut(reader io.ReadCloser, channel LogChannel, t domain.LogType) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		// to read system env vars in the end
+		if strings.EqualFold(line, e.EndTerm) {
+			for scanner.Scan() {
+				envLine := scanner.Text()
+				index := strings.IndexAny(envLine, "=")
+				if index == -1 {
+					continue
+				}
+
+				key := envLine[0:index]
+				value := envLine[index+1:]
+
+				if matchEnvFilter(key, e.CmdIn.EnvFilters) {
+					e.Result.Output[key] = value
+				}
+			}
+			return
+		}
+
+		// send log item instance to channel
 		channel <- &domain.LogItem{
 			Type:    t,
 			Content: line,
@@ -181,4 +213,13 @@ func pushToTotalChannel(cmdID string, out LogChannel, err LogChannel, total LogC
 			total <- errLog
 		}
 	}
+}
+
+func matchEnvFilter(env string, filters []string) bool {
+	for _, filter := range filters {
+		if strings.HasPrefix(env, filter) {
+			return true
+		}
+	}
+	return false
 }

@@ -17,8 +17,10 @@ var (
 			"sleep 5",
 			">&2 echo aaa",
 			"export FLOW_VVV=flowci",
+			"export FLOW_AAA=flow...",
 		},
-		Timeout: 10,
+		Timeout:    10,
+		EnvFilters: []string{"FLOW_"},
 	}
 )
 
@@ -36,6 +38,8 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert.Equal(0, result.Code)
 	assert.False(result.StartAt.IsZero())
 	assert.False(result.FinishAt.IsZero())
+	assert.Equal("flowci", result.Output["FLOW_VVV"])
+	assert.Equal("flow...", result.Output["FLOW_AAA"])
 
 	// then: verify first log output
 	firstLog := <-executor.LogChannel
@@ -77,7 +81,7 @@ func TestShouldCmdNotFoundErr(t *testing.T) {
 	assert := assert.New(t)
 
 	// init:
-	cmd.Scripts = []string{"notCommand"}
+	cmd.Scripts = []string{"set -e", "notCommand"}
 
 	// when:
 	executor := NewShellExecutor(cmd)
