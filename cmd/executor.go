@@ -86,6 +86,8 @@ func (e *ShellExecutor) Run() error {
 	// wait for done
 	select {
 	case err := <-done:
+		defer close(done)
+
 		result := e.Result
 		result.FinishAt = time.Now()
 
