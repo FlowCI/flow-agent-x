@@ -111,10 +111,14 @@ func (e *ShellExecutor) Run() error {
 			return nil
 		}
 
-		exitError, ok := err.(*exec.ExitError)
-		result.Status = domain.CmdStatusException
+		// return if cmd kill by Kill() method
+		if e.Result.Code == domain.CmdExitCodeKilled {
+			return nil
+		}
 
+		exitError, ok := err.(*exec.ExitError)
 		if ok {
+			result.Status = domain.CmdStatusException
 			result.Code = ws.ExitStatus()
 			return nil
 		}
@@ -127,20 +131,27 @@ func (e *ShellExecutor) Run() error {
 
 		result := e.Result
 		result.Code = domain.CmdExitCodeTimeOut
-		result.FinishAt = time.Now()
-		result.Status = domain.CmdStatusKilled
+		result.Status = domain.CmdStatusTimeout
 
 		return err
 	}
 }
 
 // Kill to kill executing cmd
+// it will jump to 'err := <-done:' on the Run() method
 func (e *ShellExecutor) Kill() error {
 	if e.Command == nil {
 		return nil
 	}
 
-	return e.Command.Process.Kill()
+	err := e.Command.Process.Kill()
+
+	result := e.Result
+	result.FinishAt = time.Now()
+	result.Code = domain.CmdExitCodeKilled
+	result.Status = domain.CmdStatusKilled
+
+	return err
 }
 
 func cleanUp(e *ShellExecutor) {

@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/flowci/flow-agent-x/domain"
 	log "github.com/sirupsen/logrus"
@@ -23,7 +24,7 @@ var (
 			"export FLOW_AAA=flow...",
 		},
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
-		Timeout:    10,
+		Timeout:    1800,
 		EnvFilters: []string{"FLOW_"},
 	}
 )
@@ -85,6 +86,27 @@ func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
 	assert.False(result.FinishAt.IsZero())
 	assert.True(result.ProcessId > 0)
 	assert.Equal(domain.CmdExitCodeTimeOut, result.Code)
+	assert.Equal(domain.CmdStatusTimeout, executor.Result.Status)
+}
+
+func TestShouldRunLinuxShellButKilled(t *testing.T) {
+	assert := assert.New(t)
+	cmd.Scripts = []string{"set -e", "sleep 9999"}
+
+	// when: new shell executor and run
+	executor := NewShellExecutor(cmd)
+
+	go func() {
+		time.Sleep(5 * time.Second)
+		executor.Kill()
+	}()
+
+	err := executor.Run()
+	assert.Nil(err)
+
+	// then:
+	assert.Equal(130, executor.Result.Code)
+	assert.Equal(domain.CmdStatusKilled, executor.Result.Status)
 }
 
 func TestShouldCmdNotFoundErr(t *testing.T) {

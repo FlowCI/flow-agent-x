@@ -40,6 +40,9 @@ const (
 	// CmdExitCodeTimeOut exit code for timeout
 	CmdExitCodeTimeOut = -100
 
+	// CmdExitCodeKilled exit code for killed
+	CmdExitCodeKilled = 130
+
 	// CmdExitCodeSuccess exit code for command executed successfuly
 	CmdExitCodeSuccess = 0
 )
