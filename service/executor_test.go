@@ -1,4 +1,4 @@
-package cmd
+package service
 
 import (
 	"os"
@@ -91,7 +91,10 @@ func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
 
 func TestShouldRunLinuxShellButKilled(t *testing.T) {
 	assert := assert.New(t)
+
+	// init:
 	cmd.Scripts = []string{"set -e", "sleep 9999"}
+	cmd.Timeout = 18000
 
 	// when: new shell executor and run
 	executor := NewShellExecutor(cmd)
