@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"os"
 	"testing"
 
 	"github.com/flowci/flow-agent-x/domain"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -25,6 +27,12 @@ var (
 		EnvFilters: []string{"FLOW_"},
 	}
 )
+
+func init() {
+	log.SetFormatter(&log.JSONFormatter{})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
+}
 
 func TestShouldRunLinuxShell(t *testing.T) {
 	assert := assert.New(t)
@@ -58,11 +66,11 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert.Equal(domain.LogTypeErr, secondLog.Type)
 }
 
-func TestShouldRunLinuxShellWithTimeOut(t *testing.T) {
+func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
 	assert := assert.New(t)
 
 	// init: cmd with timeout
-	cmd.Timeout = 2
+	cmd.Timeout = 1
 
 	// when: new shell executor and run
 	executor := NewShellExecutor(cmd)

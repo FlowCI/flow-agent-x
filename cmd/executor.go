@@ -29,6 +29,7 @@ type ShellExecutor struct {
 	Result         *domain.CmdResult
 	TimeOutSeconds time.Duration
 	LogChannel     LogChannel
+	Command        *exec.Cmd
 }
 
 // NewShellExecutor new instance of shell executor
@@ -60,6 +61,8 @@ func (e *ShellExecutor) Run() error {
 	defer cleanUp(e)
 
 	cmd := exec.Command(linuxBash)
+	e.Command = cmd
+
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -84,7 +87,7 @@ func (e *ShellExecutor) Run() error {
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
-	go pushToTotalChannel(e.CmdIn.ID, stdOutChannel, stdErrChannel, e.LogChannel)
+	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.LogChannel)
 	go handleStdIn(createExecScripts(e), stdin)
 	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
 	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
@@ -119,8 +122,8 @@ func (e *ShellExecutor) Run() error {
 		return exitError
 
 	case <-time.After(e.TimeOutSeconds * time.Second):
-		log.Info("Cmd killed since timeout")
-		err := cmd.Process.Kill()
+		log.Debug("Cmd killed since timeout")
+		err := e.Kill()
 
 		result := e.Result
 		result.Code = domain.CmdExitCodeTimeOut
@@ -129,6 +132,15 @@ func (e *ShellExecutor) Run() error {
 
 		return err
 	}
+}
+
+// Kill to kill executing cmd
+func (e *ShellExecutor) Kill() error {
+	if e.Command == nil {
+		return nil
+	}
+
+	return e.Command.Process.Kill()
 }
 
 func cleanUp(e *ShellExecutor) {
@@ -146,7 +158,10 @@ func createExecScripts(e *ShellExecutor) []string {
 }
 
 func handleStdIn(scripts []string, stdin io.WriteCloser) {
-	defer stdin.Close()
+	defer func() {
+		stdin.Close()
+		log.Debug("Stdin: thread exited")
+	}()
 
 	for _, script := range scripts {
 		if !strings.HasSuffix(script, lineBreakLinux) {
@@ -157,8 +172,11 @@ func handleStdIn(scripts []string, stdin io.WriteCloser) {
 }
 
 func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t domain.LogType) {
-	defer reader.Close()
-	defer close(channel)
+	defer func() {
+		reader.Close()
+		close(channel)
+		log.Debug("Stdout: thread exited for ", t)
+	}()
 
 	scanner := bufio.NewScanner(reader)
 
@@ -192,7 +210,9 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 	}
 }
 
-func pushToTotalChannel(cmdID string, out LogChannel, err LogChannel, total LogChannel) {
+func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total LogChannel) {
+	defer log.Debug("Log channel producer exited")
+
 	var counter uint32
 	var numOfLine int64
 
@@ -204,7 +224,7 @@ func pushToTotalChannel(cmdID string, out LogChannel, err LogChannel, total LogC
 				continue
 			}
 
-			outLog.CmdID = cmdID
+			outLog.CmdID = e.CmdIn.ID
 			outLog.Number = atomic.AddInt64(&numOfLine, 1)
 			total <- outLog
 
@@ -214,7 +234,7 @@ func pushToTotalChannel(cmdID string, out LogChannel, err LogChannel, total LogC
 				continue
 			}
 
-			errLog.CmdID = cmdID
+			errLog.CmdID = e.CmdIn.ID
 			errLog.Number = atomic.AddInt64(&numOfLine, 1)
 			total <- errLog
 		}
