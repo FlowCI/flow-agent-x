@@ -63,8 +63,14 @@ func (m *Manager) Init() error {
 	return nil
 }
 
+// HasQueue has rabbit mq connected
+func (m *Manager) HasQueue() bool {
+	return m.Queue != nil
+}
+
+// Close release resources and connections
 func (m *Manager) Close() {
-	if m.Queue != nil {
+	if m.HasQueue() {
 		m.Queue.Channel.Close()
 		m.Queue.Conn.Close()
 	}

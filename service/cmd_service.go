@@ -20,10 +20,23 @@ const (
 	VarAgentPluginPath = "FLOWCI_AGENT_PLUGIN_PATH"
 )
 
+var (
+	singleton *CmdService
+	once      sync.Once
+)
+
 // CmdService receive and execute cmd
 type CmdService struct {
 	executor *executor.ShellExecutor
 	mux      sync.Mutex
+}
+
+// GetCmdService get singleton of cmd service
+func GetCmdService() *CmdService {
+	once.Do(func() {
+		singleton = new(CmdService)
+	})
+	return singleton
 }
 
 // Execute execute cmd accroding the type
@@ -72,16 +85,20 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 // Save result to local database and push it back to server
 func saveAndPushBack(r *domain.ExecutedCmd) {
-	queue := config.GetInstance().Queue
-	callbackQueue := queue.CallbackQueue
+	config := config.GetInstance()
 
-	json, _ := json.Marshal(r)
+	if config.HasQueue() {
+		queue := config.Queue
+		callbackQueue := queue.CallbackQueue
 
-	msg := amqp.Publishing{
-		ContentType: util.HttpMimeJson,
-		Body:        json,
+		json, _ := json.Marshal(r)
+
+		msg := amqp.Publishing{
+			ContentType: util.HttpMimeJson,
+			Body:        json,
+		}
+
+		err := queue.Channel.Publish("", callbackQueue.Name, false, false, msg)
+		util.LogIfError(err)
 	}
-
-	err := queue.Channel.Publish("", callbackQueue.Name, false, false, msg)
-	util.LogIfError(err)
 }
