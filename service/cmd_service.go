@@ -50,6 +50,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 			s.executor = executor.NewShellExecutor(in)
 			s.executor.Run()
+			saveAndPushBack(s.executor.Result)
 		}()
 
 		return nil
@@ -64,4 +65,9 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	}
 
 	return nil
+}
+
+// Save result to local database and push it back to server
+func saveAndPushBack(r *domain.ExecutedCmd) {
+
 }

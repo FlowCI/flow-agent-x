@@ -26,7 +26,7 @@ type LogChannel chan *domain.LogItem
 type ShellExecutor struct {
 	CmdIn          *domain.CmdIn
 	EndTerm        string
-	Result         *domain.CmdResult
+	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
 	LogChannel     LogChannel
 	Command        *exec.Cmd
@@ -34,7 +34,7 @@ type ShellExecutor struct {
 
 // NewShellExecutor new instance of shell executor
 func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
-	result := &domain.CmdResult{
+	result := &domain.ExecutedCmd{
 		Cmd: domain.Cmd{
 			ID:           cmdIn.ID,
 			AllowFailure: cmdIn.AllowFailure,

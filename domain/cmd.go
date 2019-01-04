@@ -67,7 +67,7 @@ type CmdIn struct {
 	EnvFilters []string
 }
 
-type CmdResult struct {
+type ExecutedCmd struct {
 	Cmd
 	ProcessId int       `json:"processId"`
 	Status    CmdStatus `json:"status"`
