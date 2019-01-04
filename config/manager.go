@@ -13,6 +13,7 @@ import (
 	"github.com/streadway/amqp"
 
 	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 const (
@@ -76,7 +77,7 @@ func (m *Manager) initSettings() error {
 	body, _ := json.Marshal(domain.AgentConnect{Token: token, Port: port})
 
 	var message domain.SettingsResponse
-	resp, errFromReq := http.Post(uri, "application/json", bytes.NewBuffer(body))
+	resp, errFromReq := http.Post(uri, util.HttpMimeJson, bytes.NewBuffer(body))
 	if errFromReq != nil {
 		return fmt.Errorf(errSettingConnectFail)
 	}

@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -127,7 +127,7 @@ func (e *ShellExecutor) Run() error {
 		return exitError
 
 	case <-time.After(e.TimeOutSeconds * time.Second):
-		log.Debug("Cmd killed since timeout")
+		util.LogDebug("Cmd killed since timeout")
 		err := e.Kill()
 
 		result := e.Result
@@ -172,7 +172,7 @@ func createExecScripts(e *ShellExecutor) []string {
 func handleStdIn(scripts []string, stdin io.WriteCloser) {
 	defer func() {
 		stdin.Close()
-		log.Debug("Stdin: thread exited")
+		util.LogDebug("Stdin: thread exited")
 	}()
 
 	for _, script := range scripts {
@@ -187,7 +187,7 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 	defer func() {
 		reader.Close()
 		close(channel)
-		log.Debug("Stdout: thread exited for ", t)
+		util.LogDebug("Stdout: thread exited for %s", t)
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -223,7 +223,7 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 }
 
 func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total LogChannel) {
-	defer log.Debug("Log channel producer exited")
+	defer util.LogDebug("Log channel producer exited")
 
 	var counter uint32
 	var numOfLine int64

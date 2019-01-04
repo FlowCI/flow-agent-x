@@ -1,12 +1,15 @@
 package service
 
 import (
+	"encoding/json"
 	"sync"
+
+	"github.com/streadway/amqp"
 
 	"github.com/flowci/flow-agent-x/config"
 	"github.com/flowci/flow-agent-x/domain"
 	"github.com/flowci/flow-agent-x/executor"
-	log "github.com/sirupsen/logrus"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 const (
@@ -33,7 +36,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 		// check has running command
 		if s.executor != nil {
-			log.Info("Cannot start cmd since is running")
+			util.LogInfo("Cannot start cmd since is running")
 			return nil
 		}
 
@@ -69,5 +72,16 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 // Save result to local database and push it back to server
 func saveAndPushBack(r *domain.ExecutedCmd) {
+	queue := config.GetInstance().Queue
+	callbackQueue := queue.CallbackQueue
 
+	json, _ := json.Marshal(r)
+
+	msg := amqp.Publishing{
+		ContentType: util.HttpMimeJson,
+		Body:        json,
+	}
+
+	err := queue.Channel.Publish("", callbackQueue.Name, false, false, msg)
+	util.LogIfError(err)
 }
