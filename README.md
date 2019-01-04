@@ -8,6 +8,8 @@
 
 `go get -u github.com/google/uuid`
 
+`go get -u github.com/gin-gonic/gin`
+
 ## Run Test
 
 `go test ./...`

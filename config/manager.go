@@ -33,8 +33,11 @@ type QueueConfig struct {
 
 // Manager to handle server connection and config
 type Manager struct {
-	Settings *domain.Settings
-	Queue    *QueueConfig
+	Settings   *domain.Settings
+	Queue      *QueueConfig
+	Workspace  string
+	LoggingDir string
+	PluginDir  string
 }
 
 // GetInstance get singleton of config manager

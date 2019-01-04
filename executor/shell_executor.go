@@ -1,4 +1,4 @@
-package service
+package executor
 
 import (
 	"bufio"
@@ -30,6 +30,7 @@ type ShellExecutor struct {
 	TimeOutSeconds time.Duration
 	LogChannel     LogChannel
 	Command        *exec.Cmd
+	Listener       ProcessListener
 }
 
 // NewShellExecutor new instance of shell executor
@@ -53,6 +54,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		Result:         result,
 		LogChannel:     make(chan *domain.LogItem, logBufferSize),
 		TimeOutSeconds: time.Duration(cmdIn.Timeout),
+		Listener:       new(EmptyProcessListener),
 	}
 }
 
@@ -87,6 +89,9 @@ func (e *ShellExecutor) Run() error {
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
+	// call process listener
+	e.Listener.OnStart(e.Result)
+
 	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.LogChannel)
 	go handleStdIn(createExecScripts(e), stdin)
 	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
@@ -108,11 +113,13 @@ func (e *ShellExecutor) Run() error {
 		if err == nil {
 			result.Code = ws.ExitStatus()
 			result.Status = domain.CmdStatusSuccess
+			e.Listener.OnExecuted(result)
 			return nil
 		}
 
 		// return if cmd kill by Kill() method
 		if e.Result.Code == domain.CmdExitCodeKilled {
+			e.Listener.OnExecuted(result)
 			return nil
 		}
 
@@ -120,6 +127,7 @@ func (e *ShellExecutor) Run() error {
 		if ok {
 			result.Status = domain.CmdStatusException
 			result.Code = ws.ExitStatus()
+			e.Listener.OnException(err)
 			return nil
 		}
 
