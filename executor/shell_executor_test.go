@@ -108,7 +108,7 @@ func TestShouldRunLinuxShellButKilled(t *testing.T) {
 	assert.Nil(err)
 
 	// then:
-	assert.Equal(130, executor.Result.Code)
+	assert.Equal(-1, executor.Result.Code)
 	assert.Equal(domain.CmdStatusKilled, executor.Result.Status)
 }
 

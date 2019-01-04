@@ -39,7 +39,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 		// git clone required plugin
 		if in.HasPlugin() {
-
+			// TODO: git clone plugin from server
 		}
 
 		// start command via shell executor
