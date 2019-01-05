@@ -7,6 +7,10 @@ import (
 	logger "github.com/sirupsen/logrus"
 )
 
+func EnableDebugLog() {
+	logger.SetLevel(logger.DebugLevel)
+}
+
 // FailOnError exit program with err
 func FailOnError(err error, msg string) {
 	if err != nil {

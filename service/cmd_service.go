@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/streadway/amqp"
@@ -80,7 +81,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		return nil
 	}
 
-	return nil
+	return fmt.Errorf("Unsupported cmd type")
 }
 
 // Save result to local database and push it back to server
@@ -100,5 +101,6 @@ func saveAndPushBack(r *domain.ExecutedCmd) {
 
 		err := queue.Channel.Publish("", callbackQueue.Name, false, false, msg)
 		util.LogIfError(err)
+		util.LogDebug("Result of cmd %s been pushed", r.ID)
 	}
 }
