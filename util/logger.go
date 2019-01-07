@@ -17,10 +17,13 @@ func EnableDebugLog() {
 	logger.SetLevel(logger.DebugLevel)
 }
 
-func LogIfError(err error) {
+func LogIfError(err error) bool {
 	if err != nil {
 		logger.Error(err)
+		return true
 	}
+
+	return false
 }
 
 func LogInfo(format string, a ...interface{}) {

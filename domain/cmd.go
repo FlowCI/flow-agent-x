@@ -59,12 +59,12 @@ func (cmd *Cmd) HasPlugin() bool {
 
 type CmdIn struct {
 	Cmd
-	Type       CmdType
-	Scripts    []string
-	WorkDir    string
-	Timeout    int64
-	Inputs     Variables
-	EnvFilters []string
+	Type       CmdType   `json:"type"`
+	Scripts    []string  `json:"scripts"`
+	WorkDir    string    `json:"workDir"`
+	Timeout    int64     `json:"timeout"`
+	Inputs     Variables `json:"inputs"`
+	EnvFilters []string  `json:"envFilters"`
 }
 
 type ExecutedCmd struct {

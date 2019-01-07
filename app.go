@@ -16,7 +16,9 @@ func main() {
 
 	// try to load config from server
 	config := config.GetInstance()
-	config.Init()
+	err := config.Init()
+	util.FailOnError(err, "Init failure")
+
 	defer config.Close()
 
 	// start agent

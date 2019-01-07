@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net/http"
 	"reflect"
 	"strings"
 
@@ -18,8 +19,37 @@ const (
 	httpDeletePrefix = "Delete"
 )
 
+// ResponseMessage the response body
+type ResponseMessage struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data"`
+}
+
 // RootController supper controller type
 type RootController struct {
+}
+
+func (c *RootController) responseIfError(context *gin.Context, err error) bool {
+	if err == nil {
+		return false
+	}
+
+	context.Abort()
+
+	context.JSON(http.StatusBadRequest, ResponseMessage{
+		Code:    -1,
+		Message: err.Error(),
+	})
+
+	return context.IsAborted()
+}
+
+func (c *RootController) responseOk(context *gin.Context, data interface{}) {
+	context.JSON(http.StatusOK, ResponseMessage{
+		Code: 0,
+		Data: data,
+	})
 }
 
 // autoWireController it will regist request mapping automatically
@@ -47,6 +77,10 @@ func autoWireController(c interface{}, router *gin.Engine) {
 	for i := 1; i < t.NumField(); i++ {
 		field := t.Field(i)
 		subPath := field.Tag.Get(pathTagName)
+
+		if util.IsEmptyString(subPath) {
+			continue
+		}
 
 		// get field related method according to the rule
 		searchMethodName := field.Name + methodSuffix
