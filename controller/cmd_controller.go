@@ -13,12 +13,7 @@ type CmdController struct {
 }
 
 func NewCmdController(router *gin.Engine) *CmdController {
-	c := &CmdController{
-		RootController: RootController{
-			router: router,
-		},
-	}
-
+	c := new(CmdController)
 	autoWireController(c, router)
 	return c
 }

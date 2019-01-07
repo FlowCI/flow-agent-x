@@ -20,7 +20,6 @@ const (
 
 // RootController supper controller type
 type RootController struct {
-	router *gin.Engine
 }
 
 // autoWireController it will regist request mapping automatically
