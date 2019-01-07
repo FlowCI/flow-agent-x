@@ -1,7 +1,6 @@
 package controller
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 
@@ -10,7 +9,7 @@ import (
 )
 
 const (
-	filedName    = "ControllerRoot"
+	filedName    = "RootController"
 	pathTagName  = "path"
 	methodSuffix = "Impl"
 
@@ -19,10 +18,28 @@ const (
 	httpDeletePrefix = "Delete"
 )
 
-type ControllerRoot struct {
+// RootController supper controller type
+type RootController struct {
 	router *gin.Engine
 }
 
+// autoWireController it will regist request mapping automatically
+//
+// Example:
+// 	type SubController struct {
+//		RootController 		 	'path:"/roots"'
+//
+//		PostCreateHelloWorld 	gin.HandlerFunc 'path:"/new"'
+//  }
+//
+// The request '/roots/new'	for http POST will be registered
+//
+// first field 'RootController' define the root path by tag 'path'
+//
+// the field 'PostCreateHelloWorld' define POST request by method prefix
+// and sub request mapping by tag 'path'
+//
+// the method 'PostCreateHelloWorldImpl' has to created to receive the request
 func autoWireController(c interface{}, router *gin.Engine) {
 	t := util.GetType(c)
 
@@ -36,27 +53,26 @@ func autoWireController(c interface{}, router *gin.Engine) {
 		searchMethodName := field.Name + methodSuffix
 		m := reflect.ValueOf(c).MethodByName(searchMethodName)
 
-		fmt.Println(reflect.TypeOf(m.Interface()))
-
 		fullPath := rootPath + subPath
+		handler := toGinHandlerFunc(m)
 
 		if strings.HasPrefix(searchMethodName, httpGetPrefix) {
-			router.GET(fullPath, toHandlerFunc(m))
+			router.GET(fullPath, handler)
 			continue
 		}
 
 		if strings.HasPrefix(searchMethodName, httpPostPrefix) {
-			router.POST(fullPath, toHandlerFunc(m))
+			router.POST(fullPath, handler)
 			continue
 		}
 
 		if strings.HasPrefix(searchMethodName, httpDeletePrefix) {
-			router.DELETE(fullPath, toHandlerFunc(m))
+			router.DELETE(fullPath, handler)
 			continue
 		}
 	}
 }
 
-func toHandlerFunc(method reflect.Value) gin.HandlerFunc {
+func toGinHandlerFunc(method reflect.Value) gin.HandlerFunc {
 	return (method.Interface()).(func(*gin.Context))
 }

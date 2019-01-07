@@ -7,14 +7,14 @@ import (
 )
 
 type CmdController struct {
-	ControllerRoot `path:"/cmds"`
+	RootController `path:"/cmds"`
 
 	GetCmdByID gin.HandlerFunc `path:"/:id"`
 }
 
 func NewCmdController(router *gin.Engine) *CmdController {
 	c := &CmdController{
-		ControllerRoot: ControllerRoot{
+		RootController: RootController{
 			router: router,
 		},
 	}
