@@ -1,15 +1,9 @@
 package util
 
 import (
-	"fmt"
 	"log"
-
-	logger "github.com/sirupsen/logrus"
+	"reflect"
 )
-
-func EnableDebugLog() {
-	logger.SetLevel(logger.DebugLevel)
-}
 
 // FailOnError exit program with err
 func FailOnError(err error, msg string) {
@@ -18,18 +12,17 @@ func FailOnError(err error, msg string) {
 	}
 }
 
-func LogIfError(err error) {
-	if err != nil {
-		logger.Error(err)
+// IsPointerType to check the input v is pointer type
+func IsPointerType(v interface{}) bool {
+	return reflect.ValueOf(v).Kind() == reflect.Ptr
+}
+
+// GetType get type of pointer
+func GetType(v interface{}) reflect.Type {
+	if IsPointerType(v) {
+		val := reflect.ValueOf(v)
+		return val.Elem().Type()
 	}
-}
 
-func LogInfo(format string, a ...interface{}) {
-	str := fmt.Sprintf(format, a...)
-	logger.Info(str)
-}
-
-func LogDebug(format string, a ...interface{}) {
-	str := fmt.Sprintf(format, a...)
-	logger.Debug(str)
+	return reflect.TypeOf(v)
 }
