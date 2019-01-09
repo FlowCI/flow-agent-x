@@ -187,7 +187,7 @@ func createExecScripts(e *ShellExecutor) []string {
 func handleStdIn(scripts []string, stdin io.WriteCloser) {
 	defer func() {
 		stdin.Close()
-		util.LogDebug("Stdin: thread exited")
+		util.LogDebug("Exit: stdin thread exited")
 	}()
 
 	for _, script := range scripts {
@@ -202,7 +202,7 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 	defer func() {
 		reader.Close()
 		close(channel)
-		util.LogDebug("Stdout: thread exited for %s", t)
+		util.LogDebug("Exit: stdout thread exited for %s", t)
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -238,7 +238,7 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 }
 
 func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total LogChannel) {
-	defer util.LogDebug("Log channel producer exited")
+	defer util.LogDebug("Release: Log channel producer exited")
 
 	var counter uint32
 	var numOfLine int64

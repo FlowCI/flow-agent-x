@@ -68,6 +68,8 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		go logPushConsumer(s.executor.LogChannel)
 
 		go func() {
+			defer s.release()
+
 			s.executor.Run()
 
 			result := s.executor.Result
@@ -87,6 +89,11 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	}
 
 	return ErrorCmdUnsupportedType
+}
+
+func (s *CmdService) release() {
+	s.executor = nil
+	util.LogDebug("Exit: cmd been executed and service is available !")
 }
 
 func verifyAndInitCmdIn(in *domain.CmdIn) error {
@@ -109,7 +116,7 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 
 // Push stdout, stderr log back to server
 func logPushConsumer(channel executor.LogChannel) {
-	defer util.LogDebug("Log push consumer existed")
+	defer util.LogDebug("Release: log push consumer")
 
 	config := config.GetInstance()
 
