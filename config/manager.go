@@ -18,6 +18,9 @@ import (
 
 const (
 	errSettingConnectFail = "Cannot get settings from server"
+	defaultWorkspace      = "$HOME/.flow.ci.agent"
+	defaultLoggingDir     = defaultWorkspace + "/logs"
+	defaultPluginDir      = defaultWorkspace + "/plugins"
 )
 
 var (
@@ -36,6 +39,7 @@ type QueueConfig struct {
 type Manager struct {
 	Settings   *domain.Settings
 	Queue      *QueueConfig
+	IsOffline  bool
 	Workspace  string
 	LoggingDir string
 	PluginDir  string
@@ -45,6 +49,10 @@ type Manager struct {
 func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
+		singleton.IsOffline = false
+		singleton.Workspace = defaultWorkspace
+		singleton.LoggingDir = defaultLoggingDir
+		singleton.PluginDir = defaultPluginDir
 	})
 	return singleton
 }
@@ -52,6 +60,8 @@ func GetInstance() *Manager {
 func (m *Manager) Init() error {
 	var err = m.initSettings()
 	if err != nil {
+		util.LogInfo("Model: 'offline'")
+		singleton.IsOffline = true
 		return err
 	}
 

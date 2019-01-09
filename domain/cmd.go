@@ -67,6 +67,22 @@ type CmdIn struct {
 	EnvFilters []string  `json:"envFilters"`
 }
 
+func (in *CmdIn) HasScripts() bool {
+	if in.Scripts == nil {
+		return false
+	}
+
+	return len(in.Scripts) != 0
+}
+
+func (in *CmdIn) HasEnvFilters() bool {
+	if in.EnvFilters == nil {
+		return false
+	}
+
+	return len(in.EnvFilters) != 0
+}
+
 type ExecutedCmd struct {
 	Cmd
 	ProcessId int       `json:"processId"`

@@ -9,6 +9,7 @@ import (
 
 func init() {
 	util.LogInit()
+	util.EnableDebugLog()
 }
 
 func main() {
@@ -16,8 +17,7 @@ func main() {
 
 	// try to load config from server
 	config := config.GetInstance()
-	err := config.Init()
-	util.FailOnError(err, "Init failure")
+	config.Init()
 
 	defer config.Close()
 

@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"github.com/streadway/amqp"
@@ -40,19 +39,25 @@ func GetCmdService() *CmdService {
 	return singleton
 }
 
+// IsAvailable check is available to run cmd
+func (s *CmdService) IsAvailable() bool {
+	return s.executor == nil
+}
+
 // Execute execute cmd accroding the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
 	if in.Type == domain.CmdTypeShell {
 		s.mux.Lock()
 		defer s.mux.Unlock()
 
-		config := config.GetInstance()
+		verifyCmdIn(in)
 
-		// check has running command
-		if s.executor != nil {
+		if !s.IsAvailable() {
 			util.LogInfo("Cannot start cmd since is running")
 			return nil
 		}
+
+		config := config.GetInstance()
 
 		// git clone required plugin
 		if in.HasPlugin() {
@@ -67,7 +72,10 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 			s.executor = executor.NewShellExecutor(in)
 			s.executor.Run()
-			saveAndPushBack(s.executor.Result)
+
+			result := s.executor.Result
+			util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
+			saveAndPushBack(result)
 		}()
 
 		return nil
@@ -81,7 +89,19 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		return nil
 	}
 
-	return fmt.Errorf("Unsupported cmd type")
+	return ErrorCmdUnsupportedType
+}
+
+func verifyCmdIn(in *domain.CmdIn) error {
+	if in.Inputs == nil {
+		in.Inputs = make(domain.Variables, 10)
+	}
+
+	if !in.HasScripts() {
+		return ErrorCmdMissingScripts
+	}
+
+	return nil
 }
 
 // Save result to local database and push it back to server
