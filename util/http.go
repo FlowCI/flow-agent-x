@@ -1,5 +1,6 @@
 package util
 
 const (
-	HttpMimeJson = "application/json"
+	HttpMimeJson  = "application/json"
+	HttpTextPlain = "text/plain"
 )

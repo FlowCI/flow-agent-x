@@ -50,27 +50,24 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		s.mux.Lock()
 		defer s.mux.Unlock()
 
-		verifyCmdIn(in)
-
 		if !s.IsAvailable() {
 			util.LogInfo("Cannot start cmd since is running")
 			return nil
 		}
 
-		config := config.GetInstance()
+		verifyAndInitCmdIn(in)
 
 		// git clone required plugin
 		if in.HasPlugin() {
 			// TODO: git clone plugin from server
 		}
 
-		// start command via shell executor
-		go func() {
-			in.WorkDir = config.Workspace
-			in.Inputs[VarAgentPluginPath] = config.PluginDir
-			in.Inputs[VarAgentWorkspace] = config.Workspace
+		// init and start executor
+		s.executor = executor.NewShellExecutor(in)
+		s.executor.LogChannel = make(chan *domain.LogItem, 1000)
+		go logPushConsumer(s.executor.LogChannel)
 
-			s.executor = executor.NewShellExecutor(in)
+		go func() {
 			s.executor.Run()
 
 			result := s.executor.Result
@@ -92,16 +89,51 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	return ErrorCmdUnsupportedType
 }
 
-func verifyCmdIn(in *domain.CmdIn) error {
-	if in.Inputs == nil {
-		in.Inputs = make(domain.Variables, 10)
-	}
-
+func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
 
+	config := config.GetInstance()
+
+	if in.Inputs == nil {
+		in.Inputs = make(domain.Variables, 10)
+	}
+
+	in.WorkDir = config.Workspace
+	in.Inputs[VarAgentPluginPath] = config.PluginDir
+	in.Inputs[VarAgentWorkspace] = config.Workspace
+
 	return nil
+}
+
+// Push stdout, stderr log back to server
+func logPushConsumer(channel executor.LogChannel) {
+	defer util.LogDebug("Log push consumer existed")
+
+	config := config.GetInstance()
+
+	for {
+		item, ok := <-channel
+		if !ok {
+			return
+		}
+
+		if !config.HasQueue() {
+			util.LogDebug(item.String())
+			continue
+		}
+
+		logsExchange := config.Settings.LogsExchangeName
+		queue := config.Queue
+
+		msg := amqp.Publishing{
+			ContentType: util.HttpTextPlain,
+			Body:        []byte(item.String()),
+		}
+
+		queue.Channel.Publish(logsExchange, "", false, false, msg)
+	}
 }
 
 // Save result to local database and push it back to server
