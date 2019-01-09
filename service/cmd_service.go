@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/streadway/amqp"
 
 	"github.com/flowci/flow-agent-x/config"
@@ -101,12 +103,17 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 		return ErrorCmdMissingScripts
 	}
 
-	config := config.GetInstance()
+	// init cmd id if undefined
+	if in.ID == "" {
+		in.ID = uuid.New().String()
+	}
 
+	// init inputs if undefined
 	if in.Inputs == nil {
 		in.Inputs = make(domain.Variables, 10)
 	}
 
+	config := config.GetInstance()
 	in.WorkDir = config.Workspace
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace
