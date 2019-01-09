@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 const (
 	// LogTypeOut for stdout
 	LogTypeOut LogType = "STDOUT"
@@ -17,4 +19,8 @@ type LogItem struct {
 	Type    LogType
 	Content string
 	Number  int64
+}
+
+func (item LogItem) String() string {
+	return fmt.Sprintf("%s#%s#%d#%s", item.CmdID, item.Type, item.Number, item.Content)
 }
