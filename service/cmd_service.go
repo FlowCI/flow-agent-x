@@ -53,8 +53,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		defer s.mux.Unlock()
 
 		if !s.IsAvailable() {
-			util.LogInfo("Cannot start cmd since is running")
-			return nil
+			return ErrorCmdIsRunning
 		}
 
 		verifyAndInitCmdIn(in)
