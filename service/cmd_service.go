@@ -125,6 +125,8 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 		in.WorkDir = config.Workspace
 	}
 
+	in.WorkDir = util.ParseString(in.WorkDir)
+
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace
 

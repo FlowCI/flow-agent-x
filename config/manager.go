@@ -18,7 +18,7 @@ import (
 
 const (
 	errSettingConnectFail = "Cannot get settings from server"
-	defaultWorkspace      = "$HOME/.flow.ci.agent"
+	defaultWorkspace      = "${HOME}/.flow.ci.agent"
 	defaultLoggingDir     = defaultWorkspace + "/logs"
 	defaultPluginDir      = defaultWorkspace + "/plugins"
 )

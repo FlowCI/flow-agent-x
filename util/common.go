@@ -1,8 +1,11 @@
 package util
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"reflect"
+	"strings"
 )
 
 // FailOnError exit program with err
@@ -30,4 +33,39 @@ func GetType(v interface{}) reflect.Type {
 	}
 
 	return reflect.TypeOf(v)
+}
+
+// ParseString parse string which include system env variable
+func ParseString(src string) string {
+	if IsEmptyString(src) {
+		return src
+	}
+
+	for i := 0; i < len(src); i++ {
+		if src[i] != '$' {
+			continue
+		}
+
+		// left bracket index
+		lIndex := i + 1
+		if src[lIndex] != '{' {
+			continue
+		}
+
+		// find right bracket index
+		for rIndex := lIndex + 1; rIndex < len(src); rIndex++ {
+			if src[rIndex] != '}' {
+				continue
+			}
+
+			env := src[lIndex+1 : rIndex]
+			val := os.Getenv(env)
+
+			src = strings.Replace(src, fmt.Sprintf("${%s}", env), val, -1)
+			i = rIndex
+			break
+		}
+	}
+
+	return src
 }
