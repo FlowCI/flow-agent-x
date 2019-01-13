@@ -22,6 +22,10 @@ const (
 	VarAgentPluginPath = "FLOWCI_AGENT_PLUGIN_PATH"
 )
 
+const (
+	defaultChannelBufferSize = 1000
+)
+
 var (
 	singleton *CmdService
 	once      sync.Once
@@ -41,9 +45,9 @@ func GetCmdService() *CmdService {
 	return singleton
 }
 
-// IsAvailable check is available to run cmd
-func (s *CmdService) IsAvailable() bool {
-	return s.executor == nil
+// IsRunning check is available to run cmd
+func (s *CmdService) IsRunning() bool {
+	return s.executor != nil
 }
 
 // Execute execute cmd accroding the type
@@ -52,7 +56,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		s.mux.Lock()
 		defer s.mux.Unlock()
 
-		if !s.IsAvailable() {
+		if s.IsRunning() {
 			return ErrorCmdIsRunning
 		}
 
@@ -65,12 +69,11 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 		// init and start executor
 		s.executor = executor.NewShellExecutor(in)
-		s.executor.LogChannel = make(chan *domain.LogItem, 1000)
+		s.executor.LogChannel = make(chan *domain.LogItem, defaultChannelBufferSize)
 		go logPushConsumer(s.executor.LogChannel)
 
 		go func() {
 			defer s.release()
-
 			s.executor.Run()
 
 			result := s.executor.Result
@@ -82,6 +85,10 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	}
 
 	if in.Type == domain.CmdTypeKill {
+		if s.IsRunning() {
+			return s.executor.Kill()
+		}
+
 		return nil
 	}
 

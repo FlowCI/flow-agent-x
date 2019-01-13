@@ -47,8 +47,9 @@ func (c *RootController) responseIfError(context *gin.Context, err error) bool {
 
 func (c *RootController) responseOk(context *gin.Context, data interface{}) {
 	context.JSON(http.StatusOK, ResponseMessage{
-		Code: 0,
-		Data: data,
+		Code:    0,
+		Message: "ok",
+		Data:    data,
 	})
 }
 

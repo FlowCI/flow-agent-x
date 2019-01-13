@@ -11,10 +11,10 @@ const (
 	CmdTypeShell CmdType = "SHELL"
 
 	// CmdTypeKill kill command
-	CmdTypeKill CmdType = "SHELL"
+	CmdTypeKill CmdType = "KILL"
 
 	// CmdTypeClose close command
-	CmdTypeClose CmdType = "SHELL"
+	CmdTypeClose CmdType = "CLOSE"
 )
 
 const (
