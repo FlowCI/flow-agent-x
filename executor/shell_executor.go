@@ -65,17 +65,14 @@ func (e *ShellExecutor) Run() error {
 	}
 
 	cmd := exec.Command(linuxBash)
-	e.Command = cmd
+	cmd.Dir = e.CmdIn.WorkDir
+	cmd.Env = getInputs(e.CmdIn)
 
 	stdin, _ := cmd.StdinPipe()
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
-	// set env varaibles for cmd
-	inputs := e.CmdIn.Inputs
-	if !domain.NilOrEmpty(inputs) {
-		cmd.Env = inputs.ToStringArray()
-	}
+	e.Command = cmd
 
 	// channel for stdout and stderr
 	stdOutChannel := make(LogChannel, logBufferSize)
@@ -182,6 +179,22 @@ func createExecScripts(e *ShellExecutor) []string {
 	echoEndTerm := fmt.Sprintf("echo %s%s", e.EndTerm, lineBreakLinux)
 	printEnvs := fmt.Sprintf("env%s", lineBreakLinux)
 	return append(e.CmdIn.Scripts, echoEndTerm, printEnvs)
+}
+
+func getWorkDir(cmdIn *domain.CmdIn) string {
+	if util.IsEmptyString(cmdIn.WorkDir) {
+		return "$HOME"
+	}
+
+	return cmdIn.WorkDir
+}
+
+func getInputs(cmdIn *domain.CmdIn) []string {
+	if !domain.NilOrEmpty(cmdIn.Inputs) {
+		return cmdIn.Inputs.ToStringArray()
+	}
+
+	return []string{}
 }
 
 func handleStdIn(scripts []string, stdin io.WriteCloser) {

@@ -120,7 +120,11 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	}
 
 	config := config.GetInstance()
-	in.WorkDir = config.Workspace
+
+	if util.IsEmptyString(in.WorkDir) {
+		in.WorkDir = config.Workspace
+	}
+
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace
 
