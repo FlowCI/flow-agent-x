@@ -116,7 +116,7 @@ func (m *Manager) initSettings() error {
 
 func (m *Manager) initRabbitMQ() error {
 	if m.Settings == nil {
-		return fmt.Errorf("The agent settings not been initialized")
+		return ErrSettingsNotBeenLoaded
 	}
 
 	// get connection
@@ -147,6 +147,32 @@ func (m *Manager) initRabbitMQ() error {
 
 	m.Queue = qc
 	return nil
+}
+
+func (m *Manager) initZookeeper() error {
+	if m.Settings == nil {
+		return ErrSettingsNotBeenLoaded
+	}
+
+	zkConfig := m.Settings.Zookeeper
+
+	// make connection of zk
+	client := new(util.ZkClient)
+	err := client.Connect(zkConfig.Host)
+
+	if err != nil {
+		return err
+	}
+
+	// register agent on zk
+	agentPath := getZkPath(m.Settings)
+	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
+
+	return nodeErr
+}
+
+func getZkPath(s *domain.Settings) string {
+	return s.Zookeeper.Root + "/" + s.Agent.ID
 }
 
 func getVaraibles() (server string, token string, port int) {
