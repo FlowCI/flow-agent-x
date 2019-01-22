@@ -8,6 +8,10 @@ import (
 	"strings"
 )
 
+func HasError(err error) bool {
+	return err != nil
+}
+
 // FailOnError exit program with err
 func FailOnError(err error, msg string) {
 	if err != nil {

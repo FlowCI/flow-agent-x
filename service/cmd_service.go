@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -41,6 +42,7 @@ type CmdService struct {
 func GetCmdService() *CmdService {
 	once.Do(func() {
 		singleton = new(CmdService)
+		singleton.start()
 	})
 	return singleton
 }
@@ -99,6 +101,47 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	return ErrorCmdUnsupportedType
 }
 
+// new thread to consume rabbitmq message
+func (s *CmdService) start() {
+	config := config.GetInstance()
+
+	channel := config.Queue.Channel
+	queue := config.Queue.JobQueue
+
+	msgs, err := channel.Consume(queue.Name, "", true, false, false, false, nil)
+	if util.HasError(err) {
+		util.LogIfError(err)
+		return
+	}
+
+	go func() {
+		defer util.LogDebug("Exit: rabbitmq consumer")
+
+		for {
+			select {
+			case d, ok := <-msgs:
+				if !ok {
+					break
+				}
+
+				util.LogDebug("Received a message: %s", d.Body)
+
+				var cmdIn domain.CmdIn
+				err := json.Unmarshal(d.Body, &cmdIn)
+
+				if util.LogIfError(err) {
+					continue
+				}
+
+				s.Execute(&cmdIn)
+
+			case <-time.After(time.Second * 10):
+				util.LogDebug("No more messages in queue. Timing out...")
+			}
+		}
+	}()
+}
+
 func (s *CmdService) release() {
 	s.executor = nil
 	util.LogDebug("Exit: cmd been executed and service is available !")
@@ -135,7 +178,7 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 
 // Push stdout, stderr log back to server
 func logPushConsumer(channel executor.LogChannel) {
-	defer util.LogDebug("Release: log push consumer")
+	defer util.LogDebug("Exit: log push consumer")
 
 	config := config.GetInstance()
 
@@ -145,8 +188,9 @@ func logPushConsumer(channel executor.LogChannel) {
 			return
 		}
 
+		util.LogDebug(item.String())
+
 		if !config.HasQueue() {
-			util.LogDebug(item.String())
 			continue
 		}
 

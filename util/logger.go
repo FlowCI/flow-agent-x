@@ -18,7 +18,7 @@ func EnableDebugLog() {
 }
 
 func LogIfError(err error) bool {
-	if err != nil {
+	if HasError(err) {
 		logger.Error(err)
 		return true
 	}

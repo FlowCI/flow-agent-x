@@ -251,7 +251,7 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 }
 
 func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total LogChannel) {
-	defer util.LogDebug("Release: Log channel producer exited")
+	defer util.LogDebug("Exit: log channel producer exited")
 
 	var counter uint32
 	var numOfLine int64

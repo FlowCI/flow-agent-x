@@ -37,9 +37,10 @@ type QueueConfig struct {
 
 // Manager to handle server connection and config
 type Manager struct {
-	Settings   *domain.Settings
-	Queue      *QueueConfig
-	Zk         *util.ZkClient
+	Settings *domain.Settings
+	Queue    *QueueConfig
+	Zk       *util.ZkClient
+
 	IsOffline  bool
 	Workspace  string
 	LoggingDir string
@@ -58,24 +59,27 @@ func GetInstance() *Manager {
 	return singleton
 }
 
-func (m *Manager) Init() error {
-	var err = loadSettings(m)
-	if err != nil {
-		toOfflineMode(m)
-		return err
-	}
+func (m *Manager) Init() {
 
-	err = initRabbitMQ(m)
-	if err != nil {
-		toOfflineMode(m)
-	}
+	// load config and init rabbitmq, zookeeper
+	err := func() error {
+		var err = loadSettings(m)
+		if util.HasError(err) {
+			return err
+		}
 
-	err = initZookeeper(m)
-	if err != nil {
-		toOfflineMode(m)
-	}
+		err = initRabbitMQ(m)
+		if util.HasError(err) {
+			return err
+		}
 
-	return err
+		return initZookeeper(m)
+	}()
+
+	if util.HasError(err) {
+		toOfflineMode(m)
+		return
+	}
 }
 
 // HasQueue has rabbit mq connected
