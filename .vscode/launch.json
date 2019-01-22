@@ -10,7 +10,11 @@
             "request": "launch",
             "mode": "auto",
             "program": "${workspaceFolder}/app.go",
-            "env": {},
+            "env": {
+                "FLOWCI_SERVER_URL": "http://127.0.0.1:8080",
+                "FLOWCI_AGENT_TOKEN": "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0",
+                "FLOWCI_AGENT_PORT": "8000",
+            },
             "args": []
         }
     ]

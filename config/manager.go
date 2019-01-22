@@ -39,6 +39,7 @@ type QueueConfig struct {
 type Manager struct {
 	Settings   *domain.Settings
 	Queue      *QueueConfig
+	Zk         *util.ZkClient
 	IsOffline  bool
 	Workspace  string
 	LoggingDir string
@@ -58,24 +59,33 @@ func GetInstance() *Manager {
 }
 
 func (m *Manager) Init() error {
-	var err = m.initSettings()
+	var err = loadSettings(m)
 	if err != nil {
-		util.LogInfo("Model: 'offline'")
-		singleton.IsOffline = true
+		toOfflineMode(m)
 		return err
 	}
 
-	err = m.initRabbitMQ()
+	err = initRabbitMQ(m)
 	if err != nil {
-		return err
+		toOfflineMode(m)
 	}
 
-	return nil
+	err = initZookeeper(m)
+	if err != nil {
+		toOfflineMode(m)
+	}
+
+	return err
 }
 
 // HasQueue has rabbit mq connected
 func (m *Manager) HasQueue() bool {
 	return m.Queue != nil
+}
+
+// HasZookeeper has zookeeper connected
+func (m *Manager) HasZookeeper() bool {
+	return m.Zk != nil
 }
 
 // Close release resources and connections
@@ -84,9 +94,18 @@ func (m *Manager) Close() {
 		m.Queue.Channel.Close()
 		m.Queue.Conn.Close()
 	}
+
+	if m.HasZookeeper() {
+		m.Zk.Close()
+	}
 }
 
-func (m *Manager) initSettings() error {
+func toOfflineMode(m *Manager) {
+	util.LogInfo("Mode: 'offline'")
+	m.IsOffline = true
+}
+
+func loadSettings(m *Manager) error {
 	server, token, port := getVaraibles()
 
 	uri := server + "/agents/connect"
@@ -111,10 +130,11 @@ func (m *Manager) initSettings() error {
 	}
 
 	m.Settings = message.Data
+	util.LogDebug("Settings been loaded from server: %v", m.Settings)
 	return nil
 }
 
-func (m *Manager) initRabbitMQ() error {
+func initRabbitMQ(m *Manager) error {
 	if m.Settings == nil {
 		return ErrSettingsNotBeenLoaded
 	}
@@ -149,7 +169,7 @@ func (m *Manager) initRabbitMQ() error {
 	return nil
 }
 
-func (m *Manager) initZookeeper() error {
+func initZookeeper(m *Manager) error {
 	if m.Settings == nil {
 		return ErrSettingsNotBeenLoaded
 	}
@@ -164,9 +184,16 @@ func (m *Manager) initZookeeper() error {
 		return err
 	}
 
+	m.Zk = client
+
 	// register agent on zk
 	agentPath := getZkPath(m.Settings)
 	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
+
+	if nodeErr == nil {
+		util.LogInfo("The zk node '%s' has been registered", agentPath)
+		return nil
+	}
 
 	return nodeErr
 }
