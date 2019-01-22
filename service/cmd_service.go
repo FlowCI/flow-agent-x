@@ -54,6 +54,8 @@ func (s *CmdService) IsRunning() bool {
 
 // Execute execute cmd accroding the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
+	config := config.GetInstance()
+
 	if in.Type == domain.CmdTypeShell {
 		s.mux.Lock()
 		defer s.mux.Unlock()
@@ -65,8 +67,19 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		verifyAndInitCmdIn(in)
 
 		// git clone required plugin
-		if in.HasPlugin() {
-			// TODO: git clone plugin from server
+		if in.HasPlugin() && !config.IsOffline {
+			plugins := util.NewPlugins(config.PluginDir, config.Server)
+			err := plugins.Load(in.Plugin)
+
+			if util.LogIfError(err) {
+				result := &domain.ExecutedCmd{
+					Status: domain.CmdStatusException,
+					Error:  err.Error(),
+				}
+
+				saveAndPushBack(result)
+				return nil
+			}
 		}
 
 		// init and start executor

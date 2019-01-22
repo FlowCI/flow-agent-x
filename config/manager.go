@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -18,14 +19,15 @@ import (
 
 const (
 	errSettingConnectFail = "Cannot get settings from server"
-	defaultWorkspace      = "${HOME}/.flow.ci.agent"
-	defaultLoggingDir     = defaultWorkspace + "/logs"
-	defaultPluginDir      = defaultWorkspace + "/plugins"
 )
 
 var (
 	singleton *Manager
 	once      sync.Once
+
+	defaultWorkspace  = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent"))
+	defaultLoggingDir = filepath.Join(defaultWorkspace, "logs")
+	defaultPluginDir  = filepath.Join(defaultWorkspace, "plugins")
 )
 
 type QueueConfig struct {
@@ -41,6 +43,10 @@ type Manager struct {
 	Queue    *QueueConfig
 	Zk       *util.ZkClient
 
+	Server string
+	Token  string
+	Port   int
+
 	IsOffline  bool
 	Workspace  string
 	LoggingDir string
@@ -55,11 +61,19 @@ func GetInstance() *Manager {
 		singleton.Workspace = defaultWorkspace
 		singleton.LoggingDir = defaultLoggingDir
 		singleton.PluginDir = defaultPluginDir
+
+		os.MkdirAll(defaultWorkspace, os.ModePerm)
+		os.MkdirAll(defaultLoggingDir, os.ModePerm)
+		os.MkdirAll(defaultPluginDir, os.ModePerm)
 	})
 	return singleton
 }
 
 func (m *Manager) Init() {
+	server, token, port := getVaraibles()
+	m.Server = server
+	m.Token = token
+	m.Port = port
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {
