@@ -85,7 +85,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		// init and start executor
 		s.executor = executor.NewShellExecutor(in)
 		s.executor.LogChannel = make(chan *domain.LogItem, defaultChannelBufferSize)
-		go logPushConsumer(s.executor.LogChannel)
+		go logConsumer(in, s.executor.LogChannel)
 
 		go func() {
 			defer s.release()
@@ -117,6 +117,10 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 // new thread to consume rabbitmq message
 func (s *CmdService) start() {
 	config := config.GetInstance()
+
+	if !config.HasQueue() {
+		return
+	}
 
 	channel := config.Queue.Channel
 	queue := config.Queue.JobQueue
@@ -187,36 +191,6 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	in.Inputs[VarAgentWorkspace] = config.Workspace
 
 	return nil
-}
-
-// Push stdout, stderr log back to server
-func logPushConsumer(channel executor.LogChannel) {
-	defer util.LogDebug("Exit: log push consumer")
-
-	config := config.GetInstance()
-
-	for {
-		item, ok := <-channel
-		if !ok {
-			return
-		}
-
-		util.LogDebug(item.String())
-
-		if !config.HasQueue() {
-			continue
-		}
-
-		logsExchange := config.Settings.LogsExchangeName
-		queue := config.Queue
-
-		msg := amqp.Publishing{
-			ContentType: util.HttpTextPlain,
-			Body:        []byte(item.String()),
-		}
-
-		queue.Channel.Publish(logsExchange, "", false, false, msg)
-	}
 }
 
 // Save result to local database and push it back to server

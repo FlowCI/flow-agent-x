@@ -16,9 +16,8 @@ import (
 )
 
 const (
-	linuxBash      = "/bin/bash"
-	lineBreakLinux = "\n"
-	logBufferSize  = 1000
+	linuxBash     = "/bin/bash"
+	logBufferSize = 1000
 )
 
 type LogChannel chan *domain.LogItem
@@ -176,8 +175,8 @@ func createExecScripts(e *ShellExecutor) []string {
 		return e.CmdIn.Scripts
 	}
 
-	echoEndTerm := fmt.Sprintf("echo %s%s", e.EndTerm, lineBreakLinux)
-	printEnvs := fmt.Sprintf("env%s", lineBreakLinux)
+	echoEndTerm := fmt.Sprintf("echo %s%s", e.EndTerm, util.UnixLineBreakStr)
+	printEnvs := fmt.Sprintf("env%s", util.UnixLineBreakStr)
 	return append(e.CmdIn.Scripts, echoEndTerm, printEnvs)
 }
 
@@ -204,8 +203,8 @@ func handleStdIn(scripts []string, stdin io.WriteCloser) {
 	}()
 
 	for _, script := range scripts {
-		if !strings.HasSuffix(script, lineBreakLinux) {
-			script += lineBreakLinux
+		if !strings.HasSuffix(script, util.UnixLineBreakStr) {
+			script += util.UnixLineBreakStr
 		}
 		io.WriteString(stdin, script)
 	}

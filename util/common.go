@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+const (
+	UnixLineBreak    = '\n'
+	UnixLineBreakStr = "\n"
+)
+
 func HasError(err error) bool {
 	return err != nil
 }
