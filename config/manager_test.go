@@ -59,10 +59,9 @@ func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	defer ts.Close()
 
 	m := GetInstance()
-	err := m.Init()
+	m.Init()
 	defer m.Close()
 
-	assert.Nil(err)
 	assert.NotNil(m.Settings)
 
 	assert.Equal("1", m.Settings.Agent.ID)

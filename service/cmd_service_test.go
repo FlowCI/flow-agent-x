@@ -80,9 +80,6 @@ func init() {
 	os.Setenv("FLOWCI_SERVER_URL", ts.URL)
 	os.Setenv("FLOWCI_AGENT_TOKEN", "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0")
 	os.Setenv("FLOWCI_AGENT_PORT", "8081")
-
-	config := config.GetInstance()
-	config.Init()
 }
 
 func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
@@ -90,6 +87,8 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 
 	// init:
 	config := config.GetInstance()
+	config.Init()
+
 	defer config.Close()
 	assert.True(config.HasQueue())
 

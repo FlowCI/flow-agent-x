@@ -51,17 +51,13 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		EndTerm:        fmt.Sprintf("=====EOF-%s=====", uuid),
 		Result:         result,
 		TimeOutSeconds: time.Duration(cmdIn.Timeout),
+		LogChannel:     make(chan *domain.LogItem, logBufferSize),
 	}
 }
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
-	defer cleanUp(e)
-
-	if e.LogChannel == nil {
-		e.LogChannel = make(chan *domain.LogItem, logBufferSize)
-		go defaultLogChannleConsumer(e.LogChannel)
-	}
+	defer close(e.LogChannel)
 
 	cmd := exec.Command(linuxBash)
 	cmd.Dir = e.CmdIn.WorkDir
@@ -153,21 +149,6 @@ func (e *ShellExecutor) Kill() error {
 	result.Status = domain.CmdStatusKilled
 
 	return err
-}
-
-func defaultLogChannleConsumer(channel LogChannel) {
-	for {
-		item, ok := <-channel
-		if !ok {
-			break
-		}
-
-		util.LogDebug(item.String())
-	}
-}
-
-func cleanUp(e *ShellExecutor) {
-	close(e.LogChannel)
 }
 
 func createExecScripts(e *ShellExecutor) []string {
