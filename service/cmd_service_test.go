@@ -82,8 +82,7 @@ func init() {
 	os.Setenv("FLOWCI_AGENT_PORT", "8081")
 
 	config := config.GetInstance()
-	err := config.Init()
-	util.FailOnError(err, "Cannot init config")
+	config.Init()
 }
 
 func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
