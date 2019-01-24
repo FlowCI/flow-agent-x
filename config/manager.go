@@ -51,6 +51,8 @@ type Manager struct {
 	Workspace  string
 	LoggingDir string
 	PluginDir  string
+
+	Quit chan bool
 }
 
 // GetInstance get singleton of config manager
@@ -61,6 +63,7 @@ func GetInstance() *Manager {
 		singleton.Workspace = defaultWorkspace
 		singleton.LoggingDir = defaultLoggingDir
 		singleton.PluginDir = defaultPluginDir
+		singleton.Quit = make(chan bool)
 
 		os.MkdirAll(defaultWorkspace, os.ModePerm)
 		os.MkdirAll(defaultLoggingDir, os.ModePerm)

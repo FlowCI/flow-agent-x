@@ -18,8 +18,6 @@ type CmdController struct {
 
 	PostExecuteCmd gin.HandlerFunc `path:"/"`
 
-	DeleteKillCmd gin.HandlerFunc `path:"/"`
-
 	cmdService *service.CmdService
 }
 
@@ -57,20 +55,4 @@ func (c *CmdController) PostExecuteCmdImpl(context *gin.Context) {
 	}
 
 	c.responseOk(context, cmd)
-}
-
-// DeleteKillCmdImpl http delete request to kill current running cmd
-func (c *CmdController) DeleteKillCmdImpl(context *gin.Context) {
-	service := c.cmdService
-
-	kill := &domain.CmdIn{
-		Type: domain.CmdTypeKill,
-	}
-
-	err := service.Execute(kill)
-	if c.responseIfError(context, err) {
-		return
-	}
-
-	c.responseOk(context, nil)
 }

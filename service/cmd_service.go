@@ -99,17 +99,22 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		return nil
 	}
 
-	// if in.Type == domain.CmdTypeKill {
-	// 	if s.IsRunning() {
-	// 		return s.executor.Kill()
-	// 	}
+	if in.Type == domain.CmdTypeKill {
+		if s.IsRunning() {
+			return s.executor.Kill()
+		}
 
-	// 	return nil
-	// }
+		return nil
+	}
 
-	// if in.Type == domain.CmdTypeClose {
-	// 	return nil
-	// }
+	if in.Type == domain.CmdTypeClose {
+		if s.IsRunning() {
+			return s.executor.Kill()
+		}
+
+		config.Quit <- true
+		return nil
+	}
 
 	return ErrorCmdUnsupportedType
 }
