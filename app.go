@@ -24,5 +24,6 @@ func main() {
 	// start agent
 	router := gin.Default()
 	controller.NewCmdController(router)
+	controller.NewHealthController(router)
 	router.Run(":8000")
 }
