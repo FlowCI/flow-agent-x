@@ -1,13 +1,11 @@
 # flow-agent-x
 
-## Packages
+## build
 
-- `github.com/streadway/amqp`
-- `github.com/stretchr/testify/assert`
-- `github.com/google/uuid`
-- `github.com/gin-gonic/gin`
-- `github.com/samuel/go-zookeeper/zk`
-- `gopkg.in/src-d/go-git.v4`
+```
+dep ensure
+go build
+```
 
 ## Run Test
 
