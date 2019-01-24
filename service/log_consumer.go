@@ -37,19 +37,17 @@ func logConsumer(cmd *domain.CmdIn, channel executor.LogChannel) {
 
 		if config.HasQueue() {
 			exchangeName := config.Settings.LogsExchangeName
-			channel := config.Queue.Channel
+			channel := config.Queue.LogChannel
 			writeLogToQueue(exchangeName, channel, item)
 		}
 	}
 }
 
 func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogItem) {
-	msg := amqp.Publishing{
+	qChannel.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpTextPlain,
 		Body:        []byte(item.String()),
-	}
-
-	qChannel.Publish(exchange, "", false, false, msg)
+	})
 }
 
 func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {

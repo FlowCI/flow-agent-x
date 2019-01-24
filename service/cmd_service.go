@@ -99,17 +99,17 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 		return nil
 	}
 
-	if in.Type == domain.CmdTypeKill {
-		if s.IsRunning() {
-			return s.executor.Kill()
-		}
+	// if in.Type == domain.CmdTypeKill {
+	// 	if s.IsRunning() {
+	// 		return s.executor.Kill()
+	// 	}
 
-		return nil
-	}
+	// 	return nil
+	// }
 
-	if in.Type == domain.CmdTypeClose {
-		return nil
-	}
+	// if in.Type == domain.CmdTypeClose {
+	// 	return nil
+	// }
 
 	return ErrorCmdUnsupportedType
 }
@@ -196,20 +196,20 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 // Save result to local database and push it back to server
 func saveAndPushBack(r *domain.ExecutedCmd) {
 	config := config.GetInstance()
+	if !config.HasQueue() {
+		return
+	}
 
-	if config.HasQueue() {
-		queue := config.Queue
-		callbackQueue := queue.CallbackQueue
+	queue := config.Queue
+	json, _ := json.Marshal(r)
+	callback := config.Settings.CallbackQueueName
 
-		json, _ := json.Marshal(r)
+	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{
+		ContentType: util.HttpMimeJson,
+		Body:        json,
+	})
 
-		msg := amqp.Publishing{
-			ContentType: util.HttpMimeJson,
-			Body:        json,
-		}
-
-		err := queue.Channel.Publish("", callbackQueue.Name, false, false, msg)
-		util.LogIfError(err)
+	if !util.LogIfError(err) {
 		util.LogDebug("Result of cmd %s been pushed", r.ID)
 	}
 }

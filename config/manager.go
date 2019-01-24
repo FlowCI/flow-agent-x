@@ -31,10 +31,10 @@ var (
 )
 
 type QueueConfig struct {
-	Conn          *amqp.Connection
-	Channel       *amqp.Channel
-	JobQueue      *amqp.Queue
-	CallbackQueue *amqp.Queue
+	Conn       *amqp.Connection
+	Channel    *amqp.Channel
+	LogChannel *amqp.Channel
+	JobQueue   *amqp.Queue
 }
 
 // Manager to handle server connection and config
@@ -110,6 +110,7 @@ func (m *Manager) HasZookeeper() bool {
 func (m *Manager) Close() {
 	if m.HasQueue() {
 		m.Queue.Channel.Close()
+		m.Queue.LogChannel.Close()
 		m.Queue.Conn.Close()
 	}
 
@@ -164,8 +165,14 @@ func initRabbitMQ(m *Manager) error {
 		return err
 	}
 
-	// get channel
+	// create channel for job queue and send back the result
 	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	// create channel for push log to server
+	logCh, err := conn.Channel()
 	if err != nil {
 		return err
 	}
@@ -174,14 +181,11 @@ func initRabbitMQ(m *Manager) error {
 	qc := new(QueueConfig)
 	qc.Conn = conn
 	qc.Channel = ch
+	qc.LogChannel = logCh
 
 	// init queue to receive job
 	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), true, false, false, false, nil)
 	qc.JobQueue = &jobQueue
-
-	// init queue to send callback
-	callbackQueue, err := ch.QueueDeclare(m.Settings.CallbackQueueName, true, false, false, false, nil)
-	qc.CallbackQueue = &callbackQueue
 
 	m.Queue = qc
 	return nil

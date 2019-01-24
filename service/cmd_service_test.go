@@ -61,11 +61,12 @@ var (
 		},
 		Scripts: []string{
 			"set -e",
-			"echo bbb",
-			"sleep 5",
+			"echo bbb 1",
+			"sleep 2",
 			">&2 echo $INPUT_VAR",
 			"export FLOW_VVV=flowci",
 			"export FLOW_AAA=flow...",
+			"echo bbb 2",
 		},
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
 		Timeout:    1800,
@@ -93,33 +94,28 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 	assert.True(config.HasQueue())
 
 	// create queue consumer
-	callbackQueue := config.Queue.CallbackQueue
-	msgs, err := config.Queue.Channel.Consume(callbackQueue.Name, "test", true, false, false, false, nil)
+	callbackQueue := config.Settings.CallbackQueueName
+	ch := config.Queue.Channel
+	ch.QueueDeclare(callbackQueue, false, true, false, false, nil)
+	defer ch.QueueDelete(callbackQueue, false, false, true)
+
+	msgs, err := ch.Consume(callbackQueue, "test", true, false, false, false, nil)
 	assert.Nil(err)
 
-	block := make(chan domain.ExecutedCmd)
-
-	go func() {
-		for d := range msgs {
-			var exectedCmd domain.ExecutedCmd
-			err := json.Unmarshal(d.Body, &exectedCmd)
-			assert.Nil(err)
-
-			block <- exectedCmd
-			util.LogDebug("Result of cmd %s been received", exectedCmd.ID)
-		}
-	}()
-
-	// when: execute cmd
-	cmdService := GetCmdService()
-	err = cmdService.Execute(cmd)
+	service := GetCmdService()
+	err = service.Execute(cmd)
 	assert.Nil(err)
 
-	// then: ensure result been executed and queue received
 	select {
-	case exectued := <-block:
-		assert.Equal(cmd.ID, exectued.ID)
-		assert.Equal(domain.CmdExitCodeSuccess, exectued.Code)
+	case m, _ := <-msgs:
+		util.LogDebug("Result of cmd '%s' been received", m.Body)
+
+		var r domain.ExecutedCmd
+		err := json.Unmarshal(m.Body, &r)
+		assert.Nil(err)
+
+		assert.Equal(r.ID, cmd.ID)
+		assert.Equal(domain.CmdStatusSuccess, r.Status)
 	case <-time.After(10 * time.Second):
 		assert.Fail("timeout..")
 	}
