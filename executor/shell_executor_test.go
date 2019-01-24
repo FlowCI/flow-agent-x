@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -53,14 +54,14 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert.Equal("flow...", result.Output["FLOW_AAA"])
 
 	// then: verify first log output
-	firstLog := <-executor.LogChannel
+	firstLog := <-executor.GetLogChannel()
 	assert.Equal(cmd.ID, firstLog.CmdID)
 	assert.Equal("bbb", firstLog.Content)
 	assert.Equal(int64(1), firstLog.Number)
 	assert.Equal(domain.LogTypeOut, firstLog.Type)
 
 	// then: verify second of log output
-	secondLog := <-executor.LogChannel
+	secondLog := <-executor.GetLogChannel()
 	assert.Equal(cmd.ID, secondLog.CmdID)
 	assert.Equal("aaa", secondLog.Content)
 	assert.Equal(int64(2), secondLog.Number)
@@ -126,4 +127,36 @@ func TestShouldCmdNotFoundErr(t *testing.T) {
 	// then:
 	assert.Equal(127, executor.Result.Code)
 	assert.Equal(domain.CmdStatusException, executor.Result.Status)
+}
+
+func TestShouldWorkOnInteractMode(t *testing.T) {
+	assert := assert.New(t)
+
+	executor := NewShellExecutor(cmd)
+	writeChannel := executor.EnableInteract()
+	logChannel := executor.GetLogChannel()
+
+	go func() {
+		for {
+			item, ok := <-logChannel
+			if !ok {
+				break
+			}
+			log.Debug(item.Content)
+		}
+	}()
+
+	go func() {
+		for i := 0; i < 5; i++ {
+			script := fmt.Sprintf("echo i = %d", i)
+			writeChannel <- script
+			writeChannel <- "echo $?"
+			time.Sleep(1 * time.Second)
+		}
+
+		writeChannel <- "exit"
+	}()
+
+	err := executor.Run()
+	assert.Nil(err)
 }

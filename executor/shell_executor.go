@@ -27,8 +27,13 @@ type ShellExecutor struct {
 	EndTerm        string
 	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
-	LogChannel     LogChannel
-	Command        *exec.Cmd
+
+	logChannel LogChannel
+
+	inter        bool
+	interChannel chan string
+
+	command *exec.Cmd
 }
 
 // NewShellExecutor new instance of shell executor
@@ -51,13 +56,25 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		EndTerm:        fmt.Sprintf("=====EOF-%s=====", uuid),
 		Result:         result,
 		TimeOutSeconds: time.Duration(cmdIn.Timeout),
-		LogChannel:     make(chan *domain.LogItem, logBufferSize),
+		logChannel:     make(LogChannel, logBufferSize),
 	}
+}
+
+// EnableInteract enable interact mode
+func (e *ShellExecutor) EnableInteract() chan<- string {
+	e.inter = true
+	e.interChannel = make(chan string)
+	return e.interChannel
+}
+
+// GetLogChannel receive only log channel
+func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
+	return e.logChannel
 }
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
-	defer close(e.LogChannel)
+	defer close(e.logChannel)
 
 	cmd := exec.Command(linuxBash)
 	cmd.Dir = e.CmdIn.WorkDir
@@ -67,7 +84,7 @@ func (e *ShellExecutor) Run() error {
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 
-	e.Command = cmd
+	e.command = cmd
 
 	// channel for stdout and stderr
 	stdOutChannel := make(LogChannel, logBufferSize)
@@ -83,8 +100,13 @@ func (e *ShellExecutor) Run() error {
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
-	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.LogChannel)
-	go handleStdIn(createExecScripts(e), stdin)
+	if e.inter {
+		go handleStdInFromChannel(e.interChannel, stdin)
+	} else {
+		go handleStdInFromScript(createExecScripts(e), stdin)
+	}
+
+	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.logChannel)
 	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
 	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
 	go func() { done <- cmd.Wait() }()
@@ -137,11 +159,11 @@ func (e *ShellExecutor) Run() error {
 // Kill to kill executing cmd
 // it will jump to 'err := <-done:' on the Run() method
 func (e *ShellExecutor) Kill() error {
-	if e.Command == nil {
+	if e.command == nil {
 		return nil
 	}
 
-	err := e.Command.Process.Kill()
+	err := e.command.Process.Kill()
 
 	result := e.Result
 	result.FinishAt = time.Now()
@@ -177,17 +199,30 @@ func getInputs(cmdIn *domain.CmdIn) []string {
 	return []string{}
 }
 
-func handleStdIn(scripts []string, stdin io.WriteCloser) {
+func handleStdInFromScript(scripts []string, stdin io.WriteCloser) {
 	defer func() {
 		stdin.Close()
 		util.LogDebug("Exit: stdin thread exited")
 	}()
 
 	for _, script := range scripts {
-		if !strings.HasSuffix(script, util.UnixLineBreakStr) {
-			script += util.UnixLineBreakStr
+		io.WriteString(stdin, appendNewLine(script))
+	}
+}
+
+func handleStdInFromChannel(scripts chan string, stdin io.WriteCloser) {
+	defer func() {
+		stdin.Close()
+		close(scripts)
+	}()
+
+	for {
+		str, ok := <-scripts
+		if !ok {
+			break
 		}
-		io.WriteString(stdin, script)
+
+		io.WriteString(stdin, appendNewLine(str))
 	}
 }
 
@@ -268,4 +303,11 @@ func matchEnvFilter(env string, filters []string) bool {
 		}
 	}
 	return false
+}
+
+func appendNewLine(script string) string {
+	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
+		script += util.UnixLineBreakStr
+	}
+	return script
 }

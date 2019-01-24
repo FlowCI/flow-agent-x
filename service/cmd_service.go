@@ -84,8 +84,7 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 		// init and start executor
 		s.executor = executor.NewShellExecutor(in)
-		s.executor.LogChannel = make(chan *domain.LogItem, defaultChannelBufferSize)
-		go logConsumer(in, s.executor.LogChannel)
+		go logConsumer(in, s.executor.GetLogChannel())
 
 		go func() {
 			defer s.release()

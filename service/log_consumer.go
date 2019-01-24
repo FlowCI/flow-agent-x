@@ -7,13 +7,12 @@ import (
 
 	"github.com/flowci/flow-agent-x/config"
 	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/executor"
 	"github.com/flowci/flow-agent-x/util"
 	"github.com/streadway/amqp"
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(cmd *domain.CmdIn, channel executor.LogChannel) {
+func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
 	defer util.LogDebug("Exit: log consumer")
 
 	config := config.GetInstance()
