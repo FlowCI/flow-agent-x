@@ -54,65 +54,20 @@ func (s *CmdService) IsRunning() bool {
 
 // Execute execute cmd accroding the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
-	config := config.GetInstance()
-
 	if in.Type == domain.CmdTypeShell {
-		s.mux.Lock()
-		defer s.mux.Unlock()
-
-		if s.IsRunning() {
-			return ErrorCmdIsRunning
-		}
-
-		verifyAndInitCmdIn(in)
-
-		// git clone required plugin
-		if in.HasPlugin() && !config.IsOffline {
-			plugins := util.NewPlugins(config.PluginDir, config.Server)
-			err := plugins.Load(in.Plugin)
-
-			if util.LogIfError(err) {
-				result := &domain.ExecutedCmd{
-					Status: domain.CmdStatusException,
-					Error:  err.Error(),
-				}
-
-				saveAndPushBack(result)
-				return nil
-			}
-		}
-
-		// init and start executor
-		s.executor = executor.NewShellExecutor(in)
-		go logConsumer(in, s.executor.GetLogChannel())
-
-		go func() {
-			defer s.release()
-			s.executor.Run()
-
-			result := s.executor.Result
-			util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
-			saveAndPushBack(result)
-		}()
-
-		return nil
+		return execShellCmd(s, in)
 	}
 
 	if in.Type == domain.CmdTypeKill {
-		if s.IsRunning() {
-			return s.executor.Kill()
-		}
-
-		return nil
+		return execKillCmd(s, in)
 	}
 
 	if in.Type == domain.CmdTypeClose {
-		if s.IsRunning() {
-			return s.executor.Kill()
-		}
+		return execCloseCmd(s, in)
+	}
 
-		config.Quit <- true
-		return nil
+	if in.Type == domain.CmdTypeSessionOpen {
+
 	}
 
 	return ErrorCmdUnsupportedType
@@ -166,6 +121,69 @@ func (s *CmdService) start() {
 func (s *CmdService) release() {
 	s.executor = nil
 	util.LogDebug("Exit: cmd been executed and service is available !")
+}
+
+func execShellCmd(s *CmdService, in *domain.CmdIn) error {
+	config := config.GetInstance()
+
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	if s.IsRunning() {
+		return ErrorCmdIsRunning
+	}
+
+	verifyAndInitCmdIn(in)
+
+	// git clone required plugin
+	if in.HasPlugin() && !config.IsOffline {
+		plugins := util.NewPlugins(config.PluginDir, config.Server)
+		err := plugins.Load(in.Plugin)
+
+		if util.LogIfError(err) {
+			result := &domain.ExecutedCmd{
+				Status: domain.CmdStatusException,
+				Error:  err.Error(),
+			}
+
+			saveAndPushBack(result)
+			return nil
+		}
+	}
+
+	// init and start executor
+	s.executor = executor.NewShellExecutor(in)
+	go logConsumer(in, s.executor.GetLogChannel())
+
+	go func() {
+		defer s.release()
+		s.executor.Run()
+
+		result := s.executor.Result
+		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
+		saveAndPushBack(result)
+	}()
+
+	return nil
+}
+
+func execKillCmd(s *CmdService, in *domain.CmdIn) error {
+	if s.IsRunning() {
+		return s.executor.Kill()
+	}
+
+	return nil
+}
+
+func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
+	if s.IsRunning() {
+		return s.executor.Kill()
+	}
+
+	config := config.GetInstance()
+	config.Quit <- true
+
+	return nil
 }
 
 func verifyAndInitCmdIn(in *domain.CmdIn) error {

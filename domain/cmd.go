@@ -15,6 +15,15 @@ const (
 
 	// CmdTypeClose close command
 	CmdTypeClose CmdType = "CLOSE"
+
+	// CmdTypeSessionOpen open new session to interact mode
+	CmdTypeSessionOpen CmdType = "SESSION_OPEN"
+
+	// CmdTypeSessionShell send cmd with interact mode
+	CmdTypeSessionShell CmdType = "SESSION_SHELL"
+
+	// CmdTypeSessionClose close session of interact mode
+	CmdTypeSessionClose CmdType = "SESSION_CLOSE"
 )
 
 const (
