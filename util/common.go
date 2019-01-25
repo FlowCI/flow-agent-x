@@ -78,3 +78,11 @@ func ParseString(src string) string {
 
 	return src
 }
+
+func GetEnv(env, def string) string {
+	val, ok := os.LookupEnv(env)
+	if ok {
+		return val
+	}
+	return def
+}

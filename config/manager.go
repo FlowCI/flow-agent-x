@@ -25,6 +25,7 @@ var (
 	singleton *Manager
 	once      sync.Once
 
+	defaultPort       = "8000"
 	defaultWorkspace  = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent"))
 	defaultLoggingDir = filepath.Join(defaultWorkspace, "logs")
 	defaultPluginDir  = filepath.Join(defaultWorkspace, "plugins")
@@ -128,10 +129,11 @@ func toOfflineMode(m *Manager) {
 }
 
 func loadSettings(m *Manager) error {
-	server, token, port := getVaraibles()
-
-	uri := server + "/agents/connect"
-	body, _ := json.Marshal(domain.AgentConnect{Token: token, Port: port})
+	uri := m.Server + "/agents/connect"
+	body, _ := json.Marshal(domain.AgentConnect{
+		Token: m.Token,
+		Port:  m.Port,
+	})
 
 	var message domain.SettingsResponse
 	resp, errFromReq := http.Post(uri, util.HttpMimeJson, bytes.NewBuffer(body))
@@ -230,6 +232,6 @@ func getZkPath(s *domain.Settings) string {
 func getVaraibles() (server string, token string, port int) {
 	server = os.Getenv("FLOWCI_SERVER_URL")
 	token = os.Getenv("FLOWCI_AGENT_TOKEN")
-	port, _ = strconv.Atoi(os.Getenv("FLOWCI_AGENT_PORT"))
+	port, _ = strconv.Atoi(util.GetEnv("FLOWCI_AGENT_PORT", defaultPort))
 	return
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -31,7 +32,7 @@ func main() {
 	controller.NewHealthController(router)
 
 	server := &http.Server{
-		Addr:    ":8000",
+		Addr:    fmt.Sprintf(":%d", config.Port),
 		Handler: router,
 	}
 
