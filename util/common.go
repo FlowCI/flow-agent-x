@@ -11,6 +11,7 @@ import (
 const (
 	UnixLineBreak    = '\n'
 	UnixLineBreakStr = "\n"
+	EmptyStr         = ""
 )
 
 func HasError(err error) bool {

@@ -60,7 +60,6 @@ type Cmd struct {
 	ID           string `json:"id"`
 	AllowFailure bool   `json:"allowFailure"`
 	Plugin       string `json:"plugin"`
-	Session      string `json:"session"`
 }
 
 func (cmd *Cmd) HasPlugin() bool {

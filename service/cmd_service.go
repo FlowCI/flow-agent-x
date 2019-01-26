@@ -206,32 +206,62 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 
 	exec := executor.NewShellExecutor(in)
 	exec.EnableInteract()
+	go logConsumer(in, exec.GetLogChannel())
 
 	// create id for session
-	in.Session = uuid.New().String()
-	s.session[in.Session] = exec
+	in.ID = uuid.New().String()
+	s.session[in.ID] = exec
 
 	// start to run executor by thread
-	go exec.Run()
+	go func() {
+		exec.Run()
+		delete(s.session, in.ID)
+		util.LogDebug("agent: session '%s' is exited", in.ID)
+	}()
 
 	return nil
 }
 
 func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
+	exec, err := verifyAndGetExecutor(s, in)
+
+	if !util.IsNil(err) {
+		return err
+	}
+
+	// ensure scripts array is not empty
+	if len(in.Scripts) == 0 {
+		return ErrorCmdSessionMissingScripts
+	}
+
+	script := in.Scripts[0]
+	channel := exec.GetInteractChannel()
+	channel <- script
 	return nil
 }
 
 func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
-	if util.IsNil(in.Session) {
-		return ErrorCmdMissingSessionID
+	exec, err := verifyAndGetExecutor(s, in)
+
+	if util.IsNil(err) {
+		return exec.Kill()
 	}
 
-	exec := s.session[in.Session]
+	return nil
+}
+
+func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecutor, error) {
+	if util.IsEmptyString(in.ID) {
+		return nil, ErrorCmdMissingSessionID
+	}
+
+	exec := s.session[in.ID]
+
 	if util.IsNil(exec) {
-		return nil
+		return nil, ErrorCmdSessionNotFound
 	}
 
-	return exec.Kill()
+	return exec, nil
 }
 
 func verifyAndInitCmdIn(in *domain.CmdIn) error {
@@ -256,7 +286,6 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	}
 
 	in.WorkDir = util.ParseString(in.WorkDir)
-	in.Session = uuid.New().String()
 
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace
