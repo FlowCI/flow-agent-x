@@ -1,6 +1,6 @@
 # flow-agent-x
 
-## build
+## Build
 
 ```
 dep ensure

@@ -29,6 +29,10 @@ func IsEmptyString(s string) bool {
 	return s == ""
 }
 
+func IsNil(v interface{}) bool {
+	return v == nil
+}
+
 // IsPointerType to check the input v is pointer type
 func IsPointerType(v interface{}) bool {
 	return reflect.ValueOf(v).Kind() == reflect.Ptr

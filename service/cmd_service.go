@@ -32,16 +32,20 @@ var (
 	once      sync.Once
 )
 
+type CmdInteractSession map[string]*executor.ShellExecutor
+
 // CmdService receive and execute cmd
 type CmdService struct {
 	executor *executor.ShellExecutor
 	mux      sync.Mutex
+	session  CmdInteractSession
 }
 
 // GetCmdService get singleton of cmd service
 func GetCmdService() *CmdService {
 	once.Do(func() {
 		singleton = new(CmdService)
+		singleton.session = make(CmdInteractSession, 10)
 		singleton.start()
 	})
 	return singleton
@@ -67,7 +71,15 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 	}
 
 	if in.Type == domain.CmdTypeSessionOpen {
+		return execSessionOpenCmd(s, in)
+	}
 
+	if in.Type == domain.CmdTypeSessionShell {
+		return execSessionShellCmd(s, in)
+	}
+
+	if in.Type == domain.CmdTypeSessionClose {
+		return execSessionCloseCmd(s, in)
 	}
 
 	return ErrorCmdUnsupportedType
@@ -186,18 +198,54 @@ func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	return nil
 }
 
+func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
+	s.mux.Lock()
+	defer s.mux.Unlock()
+
+	// TODO: verify cmd, required timeout
+
+	exec := executor.NewShellExecutor(in)
+	exec.EnableInteract()
+
+	// create id for session
+	in.Session = uuid.New().String()
+	s.session[in.Session] = exec
+
+	// start to run executor by thread
+	go exec.Run()
+
+	return nil
+}
+
+func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
+	return nil
+}
+
+func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
+	if util.IsNil(in.Session) {
+		return ErrorCmdMissingSessionID
+	}
+
+	exec := s.session[in.Session]
+	if util.IsNil(exec) {
+		return nil
+	}
+
+	return exec.Kill()
+}
+
 func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
 
 	// init cmd id if undefined
-	if in.ID == "" {
+	if util.IsEmptyString(in.ID) {
 		in.ID = uuid.New().String()
 	}
 
 	// init inputs if undefined
-	if in.Inputs == nil {
+	if util.IsNil(in.Inputs) {
 		in.Inputs = make(domain.Variables, 10)
 	}
 
@@ -208,6 +256,7 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 	}
 
 	in.WorkDir = util.ParseString(in.WorkDir)
+	in.Session = uuid.New().String()
 
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace

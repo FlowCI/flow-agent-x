@@ -67,6 +67,10 @@ func (e *ShellExecutor) EnableInteract() chan<- string {
 	return e.interChannel
 }
 
+func (e *ShellExecutor) GetInteractChannel() chan<- string {
+	return e.interChannel
+}
+
 // GetLogChannel receive only log channel
 func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 	return e.logChannel
