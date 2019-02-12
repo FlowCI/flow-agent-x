@@ -132,8 +132,10 @@ func TestShouldCmdNotFoundErr(t *testing.T) {
 func TestShouldWorkOnInteractMode(t *testing.T) {
 	assert := assert.New(t)
 
+	// init:
+	cmd.Scripts = nil
 	executor := NewShellExecutor(cmd)
-	writeChannel := executor.EnableInteract()
+	cmdChannel := executor.GetCmdChannel()
 	logChannel := executor.GetLogChannel()
 
 	go func() {
@@ -149,12 +151,12 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 	go func() {
 		for i := 0; i < 5; i++ {
 			script := fmt.Sprintf("echo i = %d", i)
-			writeChannel <- script
-			writeChannel <- "echo $?"
+			cmdChannel <- script
+			cmdChannel <- "echo $?"
 			time.Sleep(1 * time.Second)
 		}
 
-		writeChannel <- "exit"
+		cmdChannel <- ExitCmd
 	}()
 
 	err := executor.Run()

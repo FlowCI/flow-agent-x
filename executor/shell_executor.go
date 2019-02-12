@@ -16,11 +16,18 @@ import (
 )
 
 const (
+	// ExitCmd script 'exit'
+	ExitCmd = "exit"
+
 	linuxBash     = "/bin/bash"
 	logBufferSize = 1000
 )
 
+// LogChannel send out LogItem
 type LogChannel chan *domain.LogItem
+
+// CmdChannel recevie shell script in string
+type CmdChannel chan string
 
 type ShellExecutor struct {
 	CmdIn          *domain.CmdIn
@@ -28,10 +35,10 @@ type ShellExecutor struct {
 	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
 
-	logChannel LogChannel
-
-	inter        bool
-	interChannel chan string
+	channel struct {
+		in  CmdChannel
+		out LogChannel
+	}
 
 	command *exec.Cmd
 }
@@ -51,34 +58,31 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 
 	uuid, _ := uuid.NewRandom()
 
-	return &ShellExecutor{
+	executor := &ShellExecutor{
 		CmdIn:          cmdIn,
 		EndTerm:        fmt.Sprintf("=====EOF-%s=====", uuid),
 		Result:         result,
 		TimeOutSeconds: time.Duration(cmdIn.Timeout),
-		logChannel:     make(LogChannel, logBufferSize),
 	}
+
+	executor.channel.in = make(CmdChannel)
+	executor.channel.out = make(LogChannel, logBufferSize)
+
+	return executor
 }
 
-// EnableInteract enable interact mode
-func (e *ShellExecutor) EnableInteract() chan<- string {
-	e.inter = true
-	e.interChannel = make(chan string)
-	return e.interChannel
-}
-
-func (e *ShellExecutor) GetInteractChannel() chan<- string {
-	return e.interChannel
+func (e *ShellExecutor) GetCmdChannel() chan<- string {
+	return e.channel.in
 }
 
 // GetLogChannel receive only log channel
 func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
-	return e.logChannel
+	return e.channel.out
 }
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
-	defer close(e.logChannel)
+	defer close(e.channel.out)
 
 	cmd := exec.Command(linuxBash)
 	cmd.Dir = e.CmdIn.WorkDir
@@ -104,13 +108,17 @@ func (e *ShellExecutor) Run() error {
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
-	if e.inter {
-		go handleStdInFromChannel(e.interChannel, stdin)
-	} else {
-		go handleStdInFromScript(createExecScripts(e), stdin)
+	if e.CmdIn.HasScripts() {
+		go func() {
+			defer close(e.channel.in)
+			for _, script := range createExecScripts(e) {
+				e.channel.in <- script
+			}
+		}()
 	}
 
-	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.logChannel)
+	go handleCmdChannel(e.channel.in, stdin)
+	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.channel.out)
 	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
 	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
 	go func() { done <- cmd.Wait() }()
@@ -203,26 +211,20 @@ func getInputs(cmdIn *domain.CmdIn) []string {
 	return []string{}
 }
 
-func handleStdInFromScript(scripts []string, stdin io.WriteCloser) {
+func handleCmdChannel(scripts chan string, stdin io.WriteCloser) {
 	defer func() {
 		stdin.Close()
 		util.LogDebug("Exit: stdin thread exited")
 	}()
 
-	for _, script := range scripts {
-		io.WriteString(stdin, appendNewLine(script))
-	}
-}
-
-func handleStdInFromChannel(scripts chan string, stdin io.WriteCloser) {
-	defer func() {
-		stdin.Close()
-		close(scripts)
-	}()
-
 	for {
 		str, ok := <-scripts
 		if !ok {
+			break
+		}
+
+		if str == ExitCmd {
+			close(scripts)
 			break
 		}
 
