@@ -152,7 +152,7 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 		for i := 0; i < 5; i++ {
 			script := fmt.Sprintf("echo i = %d", i)
 			cmdChannel <- script
-			cmdChannel <- "echo $?"
+			cmdChannel <- `echo "\033[0;31m $? \033[0m"`
 			time.Sleep(1 * time.Second)
 		}
 
