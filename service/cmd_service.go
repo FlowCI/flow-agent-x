@@ -203,13 +203,12 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 	defer s.mux.Unlock()
 
 	// TODO: verify cmd, required timeout
+	in.Scripts = nil
+	in.ID = uuid.New().String()
 
 	exec := executor.NewShellExecutor(in)
-	exec.EnableInteract()
 	go logConsumer(in, exec.GetLogChannel())
 
-	// create id for session
-	in.ID = uuid.New().String()
 	s.session[in.ID] = exec
 
 	// start to run executor by thread
@@ -235,7 +234,7 @@ func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	script := in.Scripts[0]
-	channel := exec.GetInteractChannel()
+	channel := exec.GetCmdChannel()
 	channel <- script
 	return nil
 }
