@@ -145,7 +145,9 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 		return ErrorCmdIsRunning
 	}
 
-	verifyAndInitCmdIn(in)
+	if err := verifyAndInitShellCmd(in); util.HasError(err) {
+		return err
+	}
 
 	// git clone required plugin
 	if in.HasPlugin() && !config.IsOffline {
@@ -202,9 +204,9 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
-	// TODO: verify cmd, required timeout
-	in.Scripts = nil
-	in.ID = uuid.New().String()
+	if err := verifyAndInitOpenSessionCmd(in); util.HasError(err) {
+		return err
+	}
 
 	exec := executor.NewShellExecutor(in)
 	go logConsumer(in, exec.GetLogChannel())
@@ -263,7 +265,7 @@ func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecu
 	return exec, nil
 }
 
-func verifyAndInitCmdIn(in *domain.CmdIn) error {
+func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
@@ -288,6 +290,16 @@ func verifyAndInitCmdIn(in *domain.CmdIn) error {
 
 	in.Inputs[VarAgentPluginPath] = config.PluginDir
 	in.Inputs[VarAgentWorkspace] = config.Workspace
+
+	return nil
+}
+
+func verifyAndInitOpenSessionCmd(in *domain.CmdIn) error {
+	if in.HasScripts() {
+		return ErrorCmdScriptIsPersented
+	}
+
+	in.ID = uuid.New().String()
 
 	return nil
 }
