@@ -304,9 +304,12 @@ func verifyAndInitOpenSessionCmd(in *domain.CmdIn) error {
 	return nil
 }
 
-// Save result to local database and push it back to server
+// Save result to local db and send back the result to server
 func saveAndPushBack(r *domain.ExecutedCmd) {
 	config := config.GetInstance()
+
+	// TODO: save to local db
+
 	if !config.HasQueue() {
 		return
 	}
