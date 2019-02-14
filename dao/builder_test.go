@@ -22,7 +22,7 @@ func TestShouldBuildQueryForCreateTable(t *testing.T) {
 		entity: entity,
 	}
 
-	query, err := builder.createQuery()
+	query, err := builder.create()
 	assert.Nil(err)
 
 	expected := "create mock_sub_entity(id text not null primary key,name text,age integer);"

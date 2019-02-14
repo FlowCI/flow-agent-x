@@ -10,7 +10,7 @@ type QueryBuilder struct {
 	entity interface{}
 }
 
-func (builder *QueryBuilder) createQuery() (string, error) {
+func (builder *QueryBuilder) create() (string, error) {
 	t := util.GetType(builder.entity)
 	tableName := FlatCamelString(t.Name())
 
