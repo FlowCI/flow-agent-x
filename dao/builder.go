@@ -12,7 +12,7 @@ type QueryBuilder struct {
 
 func (builder *QueryBuilder) create() (string, error) {
 	t := util.GetType(builder.entity)
-	tableName := FlatCamelString(t.Name())
+	tableName := flatCamelString(t.Name())
 
 	var sql strings.Builder
 	sql.WriteString("create " + tableName)

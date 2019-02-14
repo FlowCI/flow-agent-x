@@ -84,7 +84,7 @@ func parseEntityField(val string) *EntityField {
 		count++
 
 		fieldVal := reflect.ValueOf(entityField).Elem()
-		fieldOfEntityField := fieldVal.FieldByName(CapitalFirstChar(key))
+		fieldOfEntityField := fieldVal.FieldByName(capitalFirstChar(key))
 
 		if fieldOfEntityField.Type().Kind() == reflect.String {
 			fieldOfEntityField.SetString(val)

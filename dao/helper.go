@@ -5,8 +5,8 @@ import (
 	"unicode"
 )
 
-// FlatCamelString change camel string to string with '_'
-func FlatCamelString(v string) string {
+// change camel string to string with '_'
+func flatCamelString(v string) string {
 	var builder strings.Builder
 	builder.Grow(len(v) + 5)
 
@@ -27,7 +27,7 @@ func FlatCamelString(v string) string {
 	return builder.String()
 }
 
-func CapitalFirstChar(v string) string {
+func capitalFirstChar(v string) string {
 	bytes := []byte(v)
 	bytes[0] = byte(unicode.ToUpper(rune(bytes[0])))
 	return string(bytes)

@@ -9,13 +9,13 @@ import (
 func TestShouldFlatCamelString(t *testing.T) {
 	assert := assert.New(t)
 
-	str := FlatCamelString("MockSuperEntity")
+	str := flatCamelString("MockSuperEntity")
 	assert.Equal("mock_super_entity", str)
 }
 
 func TestShouldCapitalFirstChar(t *testing.T) {
 	assert := assert.New(t)
 
-	str := CapitalFirstChar("column")
+	str := capitalFirstChar("column")
 	assert.Equal("Column", str)
 }
