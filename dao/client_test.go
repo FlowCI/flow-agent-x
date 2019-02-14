@@ -11,8 +11,8 @@ import (
 
 type MockSubEntity struct {
 	Entity
-	Name string
-	Age  int
+	Name string `db:"column=name"`
+	Age  int    `db:"column=age"`
 }
 
 func TestShouldCreateTable(t *testing.T) {

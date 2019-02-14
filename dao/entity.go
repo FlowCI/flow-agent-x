@@ -1,9 +1,17 @@
 package dao
 
 import (
+	"reflect"
 	"strings"
 	"time"
-	"unicode"
+)
+
+const (
+	tag          = "db"
+	tagSeparator = ","
+	valSeparator = "="
+
+	keyFieldColumn = "column"
 )
 
 // Entity the base model
@@ -13,24 +21,27 @@ type Entity struct {
 	UpdatedAt time.Time
 }
 
-// FlatCamelString change camel string to string with '_'
-func FlatCamelString(v string) string {
-	var builder strings.Builder
-	builder.Grow(len(v) + 5)
+type EntityField struct {
+	Column string
+}
 
-	for i, c := range v {
-		r := rune(c)
+func ParseEntityField(val string) *EntityField {
+	field := &EntityField{}
 
-		if unicode.IsUpper(r) {
-			r = unicode.ToLower(r)
+	items := strings.Split(val, tagSeparator)
+	for _, item := range items {
+		kv := strings.Split(item, valSeparator)
 
-			if i > 0 {
-				builder.WriteByte('_')
-			}
+		if len(kv) != 2 {
+			continue
 		}
 
-		builder.WriteByte(byte(r))
+		key := kv[0]
+		val := kv[1]
+
+		fieldVal := reflect.ValueOf(field).Elem()
+		fieldVal.FieldByName(CapitalFirstChar(key)).SetString(val)
 	}
 
-	return builder.String()
+	return field
 }

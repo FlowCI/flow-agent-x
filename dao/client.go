@@ -46,7 +46,7 @@ func (c *Client) Close() {
 func (c *Client) Create(entity interface{}) error {
 	t := util.GetType(entity)
 
-	tableName := t.Name()
+	tableName := FlatCamelString(t.Name())
 	fmt.Println(tableName)
 
 	super := initEntityValue(entity)
@@ -54,7 +54,7 @@ func (c *Client) Create(entity interface{}) error {
 
 	for i := 1; i < t.NumField(); i++ {
 		field := t.Field(i)
-		val, ok := field.Tag.Lookup("dao")
+		val, ok := field.Tag.Lookup(tag)
 
 		if !ok {
 			continue

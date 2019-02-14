@@ -6,9 +6,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestShouldFlatCamelString(t *testing.T) {
+func TestShouldParseStringToEntityField(t *testing.T) {
 	assert := assert.New(t)
 
-	str := FlatCamelString("MockSuperEntity")
-	assert.Equal("mock_super_entity", str)
+	field := ParseEntityField("column=name")
+	assert.NotNil(field)
+	assert.Equal("name", field.Column)
 }
