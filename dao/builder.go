@@ -6,8 +6,12 @@ import (
 	"github.com/flowci/flow-agent-x/util"
 )
 
-func toCreateQuery(e interface{}) (string, error) {
-	t := util.GetType(e)
+type QueryBuilder struct {
+	entity interface{}
+}
+
+func (builder *QueryBuilder) createQuery() (string, error) {
+	t := util.GetType(builder.entity)
 	tableName := FlatCamelString(t.Name())
 
 	var sql strings.Builder

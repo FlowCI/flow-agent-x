@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestShouldGenQueryForCreateTable(t *testing.T) {
+func TestShouldBuildQueryForCreateTable(t *testing.T) {
 	assert := assert.New(t)
 
 	entity := &MockSubEntity{
@@ -18,7 +18,11 @@ func TestShouldGenQueryForCreateTable(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	query, err := toCreateQuery(entity)
+	builder := &QueryBuilder{
+		entity: entity,
+	}
+
+	query, err := builder.createQuery()
 	assert.Nil(err)
 
 	expected := "create mock_sub_entity(id text not null primary key,name text,age integer);"
