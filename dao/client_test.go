@@ -9,12 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type MockSubEntity struct {
-	Entity
-	Name string `db:"column=name"`
-	Age  int    `db:"column=age"`
-}
-
 func TestShouldCreateTable(t *testing.T) {
 	assert := assert.New(t)
 
