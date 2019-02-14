@@ -39,11 +39,15 @@ func (c *Client) Close() {
 }
 
 func (c *Client) Create(entity interface{}) error {
+	builder := QueryBuilder{
+		entity: entity,
+	}
 
-	sqlStmt := `
-	create table foo (id integer not null primary key, name text);
-	delete from foo;
-	`
-	_, err := c.db.Exec(sqlStmt)
+	sqlStmt, err := builder.create()
+	if util.HasError(err) {
+		return err
+	}
+
+	_, err = c.db.Exec(sqlStmt)
 	return err
 }

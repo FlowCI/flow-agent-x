@@ -15,8 +15,8 @@ func (builder *QueryBuilder) create() (string, error) {
 	tableName := flatCamelString(t.Name())
 
 	var sql strings.Builder
-	sql.WriteString("create " + tableName)
-	sql.WriteString("(")
+	sql.WriteString("CREATE TABLE " + tableName)
+	sql.WriteString(" (")
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)

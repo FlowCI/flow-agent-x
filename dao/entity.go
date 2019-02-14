@@ -19,8 +19,8 @@ const (
 
 var (
 	typeMapping = map[reflect.Kind]string{
-		reflect.Int:    "integer",
-		reflect.String: "text",
+		reflect.Int:    "INTEGER",
+		reflect.String: "TEXT",
 	}
 )
 
@@ -49,11 +49,11 @@ func (f *EntityField) toQuery() (string, error) {
 	query.WriteString(t)
 
 	if !f.Nullable {
-		query.WriteString(" not null")
+		query.WriteString(" NOT NULL")
 	}
 
 	if f.Pk {
-		query.WriteString(" primary key")
+		query.WriteString(" PRIMARY KEY")
 	}
 
 	return query.String(), nil
