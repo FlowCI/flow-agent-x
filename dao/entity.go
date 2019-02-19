@@ -24,14 +24,14 @@ var (
 	}
 )
 
-type EntityField struct {
+type EntityColumn struct {
 	Column   string
 	Type     reflect.Kind
 	Nullable bool
 	Pk       bool
 }
 
-func (f *EntityField) toQuery() (string, error) {
+func (f *EntityColumn) toQuery() (string, error) {
 	t := typeMapping[f.Type]
 
 	if util.IsNil(t) {
@@ -59,13 +59,13 @@ func (f *EntityField) toQuery() (string, error) {
 	return query.String(), nil
 }
 
-func parseEntityField(val string) *EntityField {
+func parseEntityColumn(val string) *EntityColumn {
 	if util.IsEmptyString(val) {
 		return nil
 	}
 
 	count := 0
-	entityField := &EntityField{
+	entityField := &EntityColumn{
 		Nullable: true,
 		Pk:       false,
 	}

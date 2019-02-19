@@ -8,29 +8,49 @@ import (
 
 type QueryBuilder struct {
 	entity interface{}
+
+	table   string
+	columns []*EntityColumn
 }
 
-func (builder *QueryBuilder) create() (string, error) {
-	t := util.GetType(builder.entity)
-	tableName := flatCamelString(t.Name())
+// init querybuilder with metadata
+func initQueryBuilder(entity interface{}) *QueryBuilder {
+	builder := new(QueryBuilder)
 
-	var sql strings.Builder
-	sql.WriteString("CREATE TABLE " + tableName)
-	sql.WriteString(" (")
+	t := util.GetType(entity)
+	builder.entity = entity
+	builder.table = flatCamelString(t.Name())
+	builder.columns = make([]*EntityColumn, t.NumField())
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 		val := field.Tag.Get(tag)
 
-		entityField := parseEntityField(val)
-		if entityField == nil {
+		column := parseEntityColumn(val)
+		if column == nil {
 			continue
 		}
 
-		entityField.Type = field.Type.Kind()
+		column.Type = field.Type.Kind()
+
+		builder.columns[i] = column
+	}
+
+	return builder
+}
+
+func (builder *QueryBuilder) create() (string, error) {
+	var sql strings.Builder
+	sql.WriteString("CREATE TABLE " + builder.table)
+	sql.WriteString(" (")
+
+	for i, c := range builder.columns {
+		if c == nil {
+			continue
+		}
 
 		// create sql for field
-		q, err := entityField.toQuery()
+		q, err := c.toQuery()
 		if util.HasError(err) {
 			return "", err
 		}

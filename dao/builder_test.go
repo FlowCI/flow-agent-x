@@ -18,10 +18,7 @@ func TestShouldBuildQueryForCreateTable(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	builder := &QueryBuilder{
-		entity: entity,
-	}
-
+	builder := initQueryBuilder(entity)
 	query, err := builder.create()
 	assert.Nil(err)
 

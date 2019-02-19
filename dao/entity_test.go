@@ -10,7 +10,7 @@ import (
 func TestShouldParseStringToEntityField(t *testing.T) {
 	assert := assert.New(t)
 
-	field := parseEntityField("column=name")
+	field := parseEntityColumn("column=name")
 	assert.NotNil(field)
 	assert.Equal("name", field.Column)
 }
@@ -18,7 +18,7 @@ func TestShouldParseStringToEntityField(t *testing.T) {
 func TestShouldPrimaryKeyNotNullForEntityField(t *testing.T) {
 	assert := assert.New(t)
 
-	field := &EntityField{
+	field := &EntityColumn{
 		Column:   "name",
 		Pk:       true,
 		Nullable: true,
@@ -33,7 +33,7 @@ func TestShouldPrimaryKeyNotNullForEntityField(t *testing.T) {
 func TestShouldGenPrimaryKeyQueryForEntityField(t *testing.T) {
 	assert := assert.New(t)
 
-	field := &EntityField{
+	field := &EntityColumn{
 		Column: "name",
 		Pk:     true,
 		Type:   reflect.String,
@@ -41,13 +41,13 @@ func TestShouldGenPrimaryKeyQueryForEntityField(t *testing.T) {
 
 	q, err := field.toQuery()
 	assert.Nil(err)
-	assert.Equal("name text not null primary key", q)
+	assert.Equal("name TEXT NOT NULL PRIMARY KEY", q)
 }
 
 func TestShouldGenColumnQueryForEntityField(t *testing.T) {
 	assert := assert.New(t)
 
-	field := &EntityField{
+	field := &EntityColumn{
 		Column:   "name",
 		Nullable: true,
 		Type:     reflect.String,
@@ -55,5 +55,5 @@ func TestShouldGenColumnQueryForEntityField(t *testing.T) {
 
 	q, err := field.toQuery()
 	assert.Nil(err)
-	assert.Equal("name text", q)
+	assert.Equal("name TEXT", q)
 }
