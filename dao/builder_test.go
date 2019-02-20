@@ -39,8 +39,8 @@ func TestShouldBuildQueryForInsert(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	builder := initQueryBuilder(entity)
-	query, _ := builder.insert()
+	builder := initQueryBuilder(MockSubEntity{})
+	query, _ := builder.insert(entity)
 
 	expected := "INSERT INTO mock_sub_entity ('id','name','age') VALUES ('12345','yang',18);"
 	assert.Equal(expected, query)

@@ -9,7 +9,8 @@ import (
 )
 
 type QueryBuilder struct {
-	entity interface{}
+	entity     interface{}
+	entityType reflect.Type
 
 	table   string
 	columns []*EntityColumn
@@ -17,28 +18,22 @@ type QueryBuilder struct {
 
 // init querybuilder with metadata
 func initQueryBuilder(entity interface{}) *QueryBuilder {
-	builder := new(QueryBuilder)
-
 	t := u.GetType(entity)
+
+	builder := new(QueryBuilder)
+	builder.entityType = t
 	builder.entity = entity
 	builder.table = flatCamelString(t.Name())
 	builder.columns = make([]*EntityColumn, t.NumField())
 
 	numOfNil := 0
-	value := u.GetValue(entity)
 
 	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		val := field.Tag.Get(tag)
-
-		column := parseEntityColumn(val)
+		column := parseEntityColumn(t.Field(i))
 		if column == nil {
 			numOfNil++
 			continue
 		}
-
-		column.Value = value.Field(i)
-		column.Type = field.Type.Kind()
 
 		builder.columns[i-numOfNil] = column
 	}
@@ -79,7 +74,11 @@ func (builder *QueryBuilder) drop() (string, error) {
 	return "DROP TABLE IF EXISTS " + builder.table + ";", nil
 }
 
-func (builder *QueryBuilder) insert() (string, error) {
+func (builder *QueryBuilder) insert(data interface{}) (string, error) {
+	if !isSameType(builder.entityType, data) {
+		return "", ErrorNotEntity
+	}
+
 	var sql strings.Builder
 	sql.WriteString("INSERT INTO ")
 	sql.WriteString(builder.table)
@@ -97,8 +96,9 @@ func (builder *QueryBuilder) insert() (string, error) {
 	sql.WriteString(" VALUES ")
 	sql.WriteString("(")
 
+	value := u.GetValue(data)
 	for i, c := range builder.columns {
-		query, err := toString(c.Value)
+		query, err := toString(value.FieldByName(c.Field.Name))
 		if u.HasError(err) {
 			return u.EmptyStr, err
 		}
@@ -113,6 +113,11 @@ func (builder *QueryBuilder) insert() (string, error) {
 	sql.WriteString(");")
 
 	return sql.String(), nil
+}
+
+func isSameType(source reflect.Type, data interface{}) bool {
+	t := u.GetType(data)
+	return t == source
 }
 
 // from value to sql type

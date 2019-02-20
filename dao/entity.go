@@ -25,15 +25,14 @@ var (
 )
 
 type EntityColumn struct {
+	Field    reflect.StructField
 	Column   string
-	Type     reflect.Kind
 	Nullable bool
 	Pk       bool
-	Value    reflect.Value
 }
 
 func (f *EntityColumn) toQuery() (string, error) {
-	t := typeMapping[f.Type]
+	t := typeMapping[f.Field.Type.Kind()]
 
 	if util.IsNil(t) {
 		return util.EmptyStr, ErrorDBTypeNotAvailable
@@ -60,13 +59,16 @@ func (f *EntityColumn) toQuery() (string, error) {
 	return query.String(), nil
 }
 
-func parseEntityColumn(val string) *EntityColumn {
+func parseEntityColumn(field reflect.StructField) *EntityColumn {
+	val := field.Tag.Get(tag)
+
 	if util.IsEmptyString(val) {
 		return nil
 	}
 
 	count := 0
 	entityField := &EntityColumn{
+		Field:    field,
 		Nullable: true,
 		Pk:       false,
 	}
@@ -85,8 +87,6 @@ func parseEntityColumn(val string) *EntityColumn {
 		count++
 
 		fieldVal := reflect.ValueOf(entityField).Elem()
-		entityField.Value = reflect.ValueOf(entityField)
-
 		fieldOfEntityField := fieldVal.FieldByName(capitalFirstChar(key))
 
 		if fieldOfEntityField.Type().Kind() == reflect.String {

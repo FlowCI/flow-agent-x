@@ -1,28 +1,22 @@
 package dao
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/flowci/flow-agent-x/util"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestShouldParseStringToEntityField(t *testing.T) {
-	assert := assert.New(t)
-
-	field := parseEntityColumn("column=name")
-	assert.NotNil(field)
-	assert.Equal("name", field.Column)
-}
-
 func TestShouldPrimaryKeyNotNullForEntityField(t *testing.T) {
 	assert := assert.New(t)
+	nameField, _ := util.GetType(MockSubEntity{}).FieldByName("Name")
 
 	field := &EntityColumn{
+		Field:    nameField,
 		Column:   "name",
 		Pk:       true,
 		Nullable: true,
-		Type:     reflect.String,
 	}
 
 	_, err := field.toQuery()
@@ -32,11 +26,12 @@ func TestShouldPrimaryKeyNotNullForEntityField(t *testing.T) {
 
 func TestShouldGenPrimaryKeyQueryForEntityField(t *testing.T) {
 	assert := assert.New(t)
+	nameField, _ := util.GetType(MockSubEntity{}).FieldByName("Name")
 
 	field := &EntityColumn{
+		Field:  nameField,
 		Column: "name",
 		Pk:     true,
-		Type:   reflect.String,
 	}
 
 	q, err := field.toQuery()
@@ -46,11 +41,12 @@ func TestShouldGenPrimaryKeyQueryForEntityField(t *testing.T) {
 
 func TestShouldGenColumnQueryForEntityField(t *testing.T) {
 	assert := assert.New(t)
+	nameField, _ := util.GetType(MockSubEntity{}).FieldByName("Name")
 
 	field := &EntityColumn{
+		Field:    nameField,
 		Column:   "name",
 		Nullable: true,
-		Type:     reflect.String,
 	}
 
 	q, err := field.toQuery()
