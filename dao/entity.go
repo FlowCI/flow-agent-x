@@ -29,6 +29,7 @@ type EntityColumn struct {
 	Type     reflect.Kind
 	Nullable bool
 	Pk       bool
+	Value    reflect.Value
 }
 
 func (f *EntityColumn) toQuery() (string, error) {
@@ -84,6 +85,8 @@ func parseEntityColumn(val string) *EntityColumn {
 		count++
 
 		fieldVal := reflect.ValueOf(entityField).Elem()
+		entityField.Value = reflect.ValueOf(entityField)
+
 		fieldOfEntityField := fieldVal.FieldByName(capitalFirstChar(key))
 
 		if fieldOfEntityField.Type().Kind() == reflect.String {

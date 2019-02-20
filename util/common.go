@@ -49,6 +49,16 @@ func GetType(v interface{}) reflect.Type {
 	return reflect.TypeOf(v)
 }
 
+func GetValue(v interface{}) reflect.Value {
+	val := reflect.ValueOf(v)
+
+	if val.Kind() == reflect.Ptr {
+		return val.Elem()
+	}
+
+	return val
+}
+
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
 	if IsEmptyString(src) {
