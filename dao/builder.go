@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/flowci/flow-agent-x/util"
+	u "github.com/flowci/flow-agent-x/util"
 )
 
 type QueryBuilder struct {
@@ -19,13 +19,13 @@ type QueryBuilder struct {
 func initQueryBuilder(entity interface{}) *QueryBuilder {
 	builder := new(QueryBuilder)
 
-	t := util.GetType(entity)
+	t := u.GetType(entity)
 	builder.entity = entity
 	builder.table = flatCamelString(t.Name())
 	builder.columns = make([]*EntityColumn, t.NumField())
 
 	numOfNil := 0
-	value := util.GetValue(entity)
+	value := u.GetValue(entity)
 
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
@@ -60,7 +60,7 @@ func (builder *QueryBuilder) create() (string, error) {
 
 		// create sql for field
 		q, err := c.toQuery()
-		if util.HasError(err) {
+		if u.HasError(err) {
 			return "", err
 		}
 
@@ -98,7 +98,12 @@ func (builder *QueryBuilder) insert() (string, error) {
 	sql.WriteString("(")
 
 	for i, c := range builder.columns {
-		sql.WriteString(toString(c.Value))
+		query, err := toString(c.Value)
+		if u.HasError(err) {
+			return u.EmptyStr, err
+		}
+
+		sql.WriteString(query)
 
 		if i < len(builder.columns)-1 {
 			sql.WriteString(",")
@@ -111,18 +116,18 @@ func (builder *QueryBuilder) insert() (string, error) {
 }
 
 // from value to sql type
-func toString(val reflect.Value) string {
+func toString(val reflect.Value) (string, error) {
 	if val.Kind() == reflect.String {
-		return "'" + val.String() + "'"
+		return "'" + val.String() + "'", nil
 	}
 
 	if val.Kind() == reflect.Bool {
-		return fmt.Sprintf("%t", val.Bool())
+		return fmt.Sprintf("%t", val.Bool()), nil
 	}
 
 	if val.Kind() == reflect.Int {
-		return fmt.Sprintf("%d", val.Int())
+		return fmt.Sprintf("%d", val.Int()), nil
 	}
 
-	return util.EmptyStr
+	return u.EmptyStr, ErrorUnsupporttedDataType
 }
