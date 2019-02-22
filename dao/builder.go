@@ -14,6 +14,7 @@ type QueryBuilder struct {
 
 	table   string
 	columns []*EntityColumn
+	key     *EntityColumn
 }
 
 // init querybuilder with metadata
@@ -30,9 +31,14 @@ func initQueryBuilder(entity interface{}) *QueryBuilder {
 
 	for i := 0; i < t.NumField(); i++ {
 		column := parseEntityColumn(t.Field(i))
+
 		if column == nil {
 			numOfNil++
 			continue
+		}
+
+		if column.Pk {
+			builder.key = column
 		}
 
 		builder.columns[i-numOfNil] = column
@@ -111,6 +117,24 @@ func (builder *QueryBuilder) insert(data interface{}) (string, error) {
 	}
 
 	sql.WriteString(");")
+
+	return sql.String(), nil
+}
+
+func (builder *QueryBuilder) find(id string) (string, error) {
+	var sql strings.Builder
+	sql.WriteString("SELECT ")
+
+	for i, c := range builder.columns {
+		sql.WriteString("'" + c.Column + "'")
+
+		if i < len(builder.columns)-1 {
+			sql.WriteString(",")
+		}
+	}
+
+	sql.WriteString(" FROM " + builder.table)
+	sql.WriteString(fmt.Sprintf(" WHERE %s='%s';", builder.key.Column, id))
 
 	return sql.String(), nil
 }

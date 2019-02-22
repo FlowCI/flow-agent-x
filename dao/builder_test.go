@@ -45,3 +45,13 @@ func TestShouldBuildQueryForInsert(t *testing.T) {
 	expected := "INSERT INTO mock_sub_entity ('id','name','age') VALUES ('12345','yang',18);"
 	assert.Equal(expected, query)
 }
+
+func TestShouldBuildQueryForFindByID(t *testing.T) {
+	assert := assert.New(t)
+
+	builder := initQueryBuilder(MockSubEntity{})
+	query, _ := builder.find("12345")
+
+	expected := "SELECT 'id','name','age' FROM mock_sub_entity WHERE id='12345';"
+	assert.Equal(expected, query)
+}
