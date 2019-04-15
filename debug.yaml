@@ -1,0 +1,13 @@
+## Docker-Compose file is used to start dependent services
+
+version: '3'
+services:
+  zk:
+    image: zookeeper:3.4
+    container_name: flowci-agent-debug-zk
+    network_mode: "host"
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: flowci-agent-debug-rabbitmq
+    network_mode: "host"
