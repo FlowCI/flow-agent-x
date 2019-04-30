@@ -278,27 +278,26 @@ func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total 
 	var counter uint32
 	var numOfLine int64
 
+	push := func(item *domain.LogItem, ok bool) {
+		if !ok {
+			atomic.AddUint32(&counter, 1)
+			return
+		}
+
+		item.CmdID = e.CmdIn.ID
+		item.Number = atomic.AddInt64(&numOfLine, 1)
+		total <- item
+
+		e.Result.LogSize = item.Number
+	}
+
 	for counter < 2 {
 		select {
 		case outLog, ok := <-out:
-			if !ok {
-				atomic.AddUint32(&counter, 1)
-				continue
-			}
-
-			outLog.CmdID = e.CmdIn.ID
-			outLog.Number = atomic.AddInt64(&numOfLine, 1)
-			total <- outLog
+			push(outLog, ok)
 
 		case errLog, ok := <-err:
-			if !ok {
-				atomic.AddUint32(&counter, 1)
-				continue
-			}
-
-			errLog.CmdID = e.CmdIn.ID
-			errLog.Number = atomic.AddInt64(&numOfLine, 1)
-			total <- errLog
+			push(errLog, ok)
 		}
 	}
 }
