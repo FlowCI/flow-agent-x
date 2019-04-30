@@ -1,5 +1,9 @@
 package domain
 
+import (
+	"fmt"
+)
+
 // AgentStatus string of agent status
 type AgentStatus string
 
@@ -53,4 +57,8 @@ func (a *Agent) IsOnline() bool {
 
 func (a *Agent) GetQueueName() string {
 	return "queue.agent." + a.ID
+}
+
+func (a Agent) String() string {
+	return fmt.Sprintf("Agent:[id=%s, name=%s, token=%s]", a.ID, a.Name, a.Token)
 }

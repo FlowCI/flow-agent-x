@@ -23,6 +23,10 @@ type ZookeeperConfig struct {
 	Root string
 }
 
+func (zk ZookeeperConfig) String() string {
+	return fmt.Sprintf("Zk:[host=%s, root=%s]", zk.Host, zk.Root)
+}
+
 // Settings the setting info from server side
 type Settings struct {
 	Agent             *Agent
@@ -30,4 +34,8 @@ type Settings struct {
 	Zookeeper         *ZookeeperConfig
 	CallbackQueueName string
 	LogsExchangeName  string
+}
+
+func (s Settings) String() string {
+	return s.Agent.String()
 }
