@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"flow-agent-x/config"
 	"flow-agent-x/domain"
 	"flow-agent-x/util"
-	"flow-agent-x/config"
 
 	"github.com/stretchr/testify/assert"
 )
