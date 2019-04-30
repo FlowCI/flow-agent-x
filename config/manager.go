@@ -88,7 +88,7 @@ func (m *Manager) Init() {
 		return initZookeeper(m)
 	}()
 
-	if util.HasError(err) {
+	if util.LogIfError(err) {
 		toOfflineMode(m)
 		return
 	}
@@ -132,7 +132,7 @@ func loadSettings(m *Manager) error {
 	var message domain.SettingsResponse
 	resp, errFromReq := http.Post(uri, util.HttpMimeJson, bytes.NewBuffer(body))
 	if errFromReq != nil {
-		return fmt.Errorf(errSettingConnectFail)
+		return fmt.Errorf("%s: %v", errSettingConnectFail, errFromReq)
 	}
 
 	defer resp.Body.Close()

@@ -27,7 +27,7 @@ func main() {
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "url, u",
-			Value:  "127.0.0.1:8080",
+			Value:  "http://127.0.0.1:8080",
 			Usage:  "flow.ci server url",
 			EnvVar: "FLOWCI_SERVER_URL",
 		},
@@ -51,7 +51,7 @@ func main() {
 }
 
 func start(c *cli.Context) error {
-	util.LogInfo("Staring flow.ci Agent...")
+	util.LogInfo("Staring flow.ci agent...")
 
 	// try to load config from server
 	config := config.GetInstance()
