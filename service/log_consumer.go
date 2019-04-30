@@ -5,9 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/flowci/flow-agent-x/config"
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/config"
+	"flow-agent-x/domain"
+	"flow-agent-x/util"
+
 	"github.com/streadway/amqp"
 )
 

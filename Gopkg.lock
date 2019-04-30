@@ -16,7 +16,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/flowci/flow-agent-x"
-  packages = ["config","controller","domain","executor","service","util"]
+  packages = ["config","domain","executor","service","util"]
   revision = "3ca38256f3a18d0bf73f5fee7f48f3e6135dccf3"
 
 [[projects]]
@@ -197,6 +197,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "e9383681ee4bd99d32dbac4aa9a39a700d18abccdeb738ebd86274f310428860"
+  inputs-digest = "0eb9a7ff0511a263a60327a4a6b0ee2fdc206df614ce468d1db7ea7a15ed4cee"
   solver-name = "gps-cdcl"
   solver-version = 1

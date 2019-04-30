@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flowci/flow-agent-x/config"
-	"github.com/flowci/flow-agent-x/controller"
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/config"
+	"flow-agent-x/controller"
+	"flow-agent-x/util"
+
 	"github.com/gin-gonic/gin"
 )
 

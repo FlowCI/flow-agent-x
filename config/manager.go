@@ -13,8 +13,8 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/domain"
+	"flow-agent-x/util"
 )
 
 const (

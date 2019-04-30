@@ -5,7 +5,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/util"
+
 	"github.com/gin-gonic/gin"
 )
 

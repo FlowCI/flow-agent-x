@@ -3,7 +3,8 @@ package dao
 import (
 	"database/sql"
 
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/util"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 

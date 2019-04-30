@@ -9,10 +9,10 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"github.com/flowci/flow-agent-x/config"
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/executor"
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/config"
+	"flow-agent-x/domain"
+	"flow-agent-x/executor"
+	"flow-agent-x/util"
 )
 
 const (

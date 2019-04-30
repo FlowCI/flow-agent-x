@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/flowci/flow-agent-x/domain"
+	"flow-agent-x/domain"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
