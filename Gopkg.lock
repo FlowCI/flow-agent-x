@@ -14,12 +14,6 @@
   version = "v1.12.0"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/flowci/flow-agent-x"
-  packages = ["config","domain","executor","service","util"]
-  revision = "3ca38256f3a18d0bf73f5fee7f48f3e6135dccf3"
-
-[[projects]]
   name = "github.com/gin-contrib/sse"
   packages = ["."]
   revision = "22d885f9ecc78bf4ee5d72b937e4bbcdc58e8cae"
@@ -136,6 +130,12 @@
   revision = "c88ee250d0221a57af388746f5cf03768c21d6e2"
 
 [[projects]]
+  name = "github.com/urfave/cli"
+  packages = ["."]
+  revision = "cfb38830724cc34fedffe9a2a29fb54fa9169cd1"
+  version = "v1.20.0"
+
+[[projects]]
   name = "github.com/xanzy/ssh-agent"
   packages = ["."]
   revision = "640f0ab560aeb89d523bb6ac322b1244d5c3796c"
@@ -197,6 +197,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0eb9a7ff0511a263a60327a4a6b0ee2fdc206df614ce468d1db7ea7a15ed4cee"
+  inputs-digest = "373ba4cceb1ab30b2b8790ba0a208eaa0c1a23601eaf28b3e3aaf0bcf595cd4d"
   solver-name = "gps-cdcl"
   solver-version = 1
