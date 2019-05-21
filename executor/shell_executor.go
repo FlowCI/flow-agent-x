@@ -21,13 +21,13 @@ const (
 	ExitCmd = "exit"
 
 	linuxBash     = "/bin/bash"
-	logBufferSize = 1000
+	logBufferSize = 10000
 )
 
 // LogChannel send out LogItem
 type LogChannel chan *domain.LogItem
 
-// CmdChannel recevie shell script in string
+// CmdChannel receive shell script in string
 type CmdChannel chan string
 
 type ShellExecutor struct {
@@ -76,7 +76,7 @@ func (e *ShellExecutor) GetCmdChannel() chan<- string {
 	return e.channel.in
 }
 
-// GetLogChannel receive only log channel
+// GetLogChannel export log channel for consumer
 func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 	return e.channel.out
 }
