@@ -56,7 +56,7 @@ func (s *CmdService) IsRunning() bool {
 	return s.executor != nil
 }
 
-// Execute execute cmd accroding the type
+// Execute execute cmd according to the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
 	if in.Type == domain.CmdTypeShell {
 		return execShellCmd(s, in)

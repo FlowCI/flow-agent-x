@@ -124,19 +124,21 @@ func toOfflineMode(m *Manager) {
 
 func loadSettings(m *Manager) error {
 	uri := m.Server + "/agents/connect"
-	body, _ := json.Marshal(domain.AgentConnect{
-		Token: m.Token,
-		Port:  m.Port,
-	})
+	body, _ := json.Marshal(domain.AgentConnect{Port: m.Port})
 
-	var message domain.SettingsResponse
-	resp, errFromReq := http.Post(uri, util.HttpMimeJson, bytes.NewBuffer(body))
+	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
+	request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
+	request.Header.Set(util.HttpHeaderAgentToken, m.Token)
+
+	resp, errFromReq := http.DefaultClient.Do(request)
 	if errFromReq != nil {
 		return fmt.Errorf("%s: %v", errSettingConnectFail, errFromReq)
 	}
 
 	defer resp.Body.Close()
 	raw, _ := ioutil.ReadAll(resp.Body)
+
+	var message domain.SettingsResponse
 	errFromJSON := json.Unmarshal(raw, &message)
 
 	if errFromJSON != nil {
