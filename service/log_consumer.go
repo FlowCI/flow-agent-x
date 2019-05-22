@@ -2,6 +2,10 @@ package service
 
 import (
 	"bufio"
+	"bytes"
+	"io"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -43,14 +47,50 @@ func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
 	}
 }
 
+func uploadLog(cmd *domain.ExecutedCmd) error {
+	config := config.GetInstance()
+	logFile := filepath.Join(config.LoggingDir, cmd.ID+".log")
+
+	// read file
+	file, err := os.Open(logFile)
+	if err != nil {
+		return err
+	}
+
+	defer file.Close()
+
+	// construct multi part
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	defer func() {
+		_ = writer.Close()
+	}()
+
+	part, err := writer.CreateFormFile("file", filepath.Base(logFile))
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(part, file)
+
+	// send request
+	url := config.Server + "/agents/logs/upload"
+	request, _ := http.NewRequest("POST", url, body)
+	request.Header.Set(util.HttpHeaderAgentToken, config.Token)
+	request.Header.Set(util.HttpHeaderContentType, writer.FormDataContentType())
+
+	http.DefaultClient.Do(request)
+	//TODO: test
+}
+
 func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogItem) {
-	qChannel.Publish(exchange, "", false, false, amqp.Publishing{
+	_ = qChannel.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpTextPlain,
 		Body:        []byte(item.String()),
 	})
 }
 
 func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {
-	w.WriteString(item.Content)
-	w.WriteByte(util.UnixLineBreak)
+	_, _ = w.WriteString(item.Content)
+	_ = w.WriteByte(util.UnixLineBreak)
 }
