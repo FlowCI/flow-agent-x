@@ -30,7 +30,14 @@ func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
 	defer f.Close()
 
 	writer := bufio.NewWriter(f)
-	defer writer.Flush()
+
+	// upload log after flush!!
+	defer func() {
+		writer.Flush()
+
+		err := uploadLog(cmd)
+		util.LogIfError(err)
+	}()
 
 	for {
 		item, ok := <-channel
@@ -48,9 +55,6 @@ func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
 			writeLogToQueue(exchangeName, channel, item)
 		}
 	}
-
-	err := uploadLog(cmd)
-	util.LogIfError(err)
 }
 
 func uploadLog(cmd *domain.CmdIn) error {
@@ -73,13 +77,15 @@ func uploadLog(cmd *domain.CmdIn) error {
 		return err
 	}
 
-	_, err = io.Copy(part, file)
+	written, err := io.Copy(part, file)
 	if util.HasError(err) {
 		return err
 	}
 
 	// flush file to writer
 	writer.Close()
+
+	util.LogDebug("Buffer length %d: %d", len(body.Bytes()), written)
 
 	// send request
 	url := config.Server + "/agents/logs/upload"
