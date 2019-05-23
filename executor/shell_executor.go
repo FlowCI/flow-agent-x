@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -28,6 +27,8 @@ const (
 // LogChannel send out LogItem
 type LogChannel chan *domain.LogItem
 
+type RawChannel chan string
+
 // CmdChannel receive shell script in string
 type CmdChannel chan string
 
@@ -38,8 +39,9 @@ type ShellExecutor struct {
 	TimeOutSeconds time.Duration
 
 	channel struct {
-		in  CmdChannel
-		out LogChannel
+		in     CmdChannel
+		out    LogChannel
+		outRaw RawChannel
 	}
 
 	command *exec.Cmd
@@ -69,6 +71,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 
 	executor.channel.in = make(CmdChannel)
 	executor.channel.out = make(LogChannel, logBufferSize)
+	executor.channel.outRaw = make(RawChannel, logBufferSize)
 
 	return executor
 }
@@ -84,51 +87,51 @@ func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
-	defer close(e.channel.out)
+	defer func() {
+		close(e.channel.out)
+		close(e.channel.outRaw)
+	}()
 
-	file, _ := os.Create("hello.log")
-	defer file.Close()
+	// ---- start to monitor raw log ----
 
-	monitor, mIn, mOut, mErr := createCommand(e.CmdIn.WorkDir)
-	_ = monitor.Start()
-	_, _ = io.WriteString(mIn, appendNewLine("tail -f hello.log"))
+	//file, _ := os.Create("hello.lo
+	// g")
+	//defer file.Close()
+	//
+	//monitor, mIn, mOut, mErr := createCommand(e.CmdIn.WorkDir)
+	//_ = monitor.Start()
+	//_, _ = io.WriteString(mIn, appendNewLine("tail -f hello.log"))
 
 	// channel for stdout and stderr
-	stdOutChannel := make(LogChannel, logBufferSize)
-	stdErrChannel := make(LogChannel, logBufferSize)
 
-	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.channel.out)
-	go handleStdOut(e, mOut, stdOutChannel, domain.LogTypeOut)
-	go handleStdOut(e, mErr, stdErrChannel, domain.LogTypeErr)
-
-	cmd, stdIn, _, _ := createCommand(e.CmdIn.WorkDir)
-	cmd.Dir = e.CmdIn.WorkDir
+	// ---- start to execute command ----
+	cmd, cmdIn, cmdStdOut, cmdStdErr := createCommand(e.CmdIn)
 	cmd.Env = getInputs(e.CmdIn)
 
-	e.command = cmd
-
-	// channel for cmd wait
 	done := make(chan error)
+	defer close(done)
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
+	e.command = cmd
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
 	if e.CmdIn.HasScripts() {
 		go produceCmd(e.channel.in, e)
 	}
-	go consumeCmd(e.channel.in, stdIn)
 
+	go readStdOut(e, cmdStdOut, e.channel.out)
+	go readStdOut(e, cmdStdErr, e.channel.out)
+
+	go consumeCmd(e.channel.in, cmdIn)
 	go func() { done <- cmd.Wait() }()
 
 	// wait for done
 	select {
 	case err := <-done:
-		defer close(done)
-
 		result := e.Result
 		result.FinishAt = time.Now()
 
@@ -186,13 +189,15 @@ func (e *ShellExecutor) Kill() error {
 	return err
 }
 
-func createCommand(dir string) (command *exec.Cmd, stdIn io.WriteCloser, stdOut io.ReadCloser, stdErr io.ReadCloser) {
+func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
 	command = exec.Command(linuxBash)
-	command.Dir = dir
-	stdIn, _ = command.StdinPipe()
-	stdOut, _ = command.StdoutPipe()
-	stdErr, _ = command.StderrPipe()
-	return command, stdIn, stdOut, stdErr
+	command.Dir = cmdIn.WorkDir
+
+	in, _ = command.StdinPipe()
+	stdout, _ = command.StdoutPipe()
+	stderr, _ = command.StderrPipe()
+
+	return command, in, stdout, stderr
 }
 
 func getInputs(cmdIn *domain.CmdIn) []string {
@@ -247,11 +252,12 @@ func consumeCmd(channel chan string, stdin io.WriteCloser) {
 	}
 }
 
-func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t domain.LogType) {
+func readStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel) {
+	var rows int64
+
 	defer func() {
 		reader.Close()
-		close(channel)
-		util.LogDebug("Exit: stdout thread exited for %s", t)
+		atomic.AddInt64(&e.Result.LogSize, rows)
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -279,40 +285,8 @@ func handleStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel, t 
 		}
 
 		// send log item instance to channel
-		channel <- &domain.LogItem{
-			Type:    t,
-			Content: line,
-		}
-	}
-}
-
-func pushToTotalChannel(e *ShellExecutor, out LogChannel, err LogChannel, total LogChannel) {
-	defer util.LogDebug("Exit: log channel producer exited")
-
-	var counter uint32
-	var numOfLine int64
-
-	push := func(item *domain.LogItem, ok bool) {
-		if !ok {
-			atomic.AddUint32(&counter, 1)
-			return
-		}
-
-		item.CmdID = e.CmdIn.ID
-		item.Number = atomic.AddInt64(&numOfLine, 1)
-		total <- item
-
-		e.Result.LogSize = item.Number
-	}
-
-	for counter < 2 {
-		select {
-		case outLog, ok := <-out:
-			push(outLog, ok)
-
-		case errLog, ok := <-err:
-			push(errLog, ok)
-		}
+		rows++
+		channel <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
 }
 

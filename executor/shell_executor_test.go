@@ -48,6 +48,7 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	// then: verify result of shell executor
 	result := executor.Result
 	assert.NotNil(result)
+	assert.Equal(int64(2), result.LogSize)
 	assert.Equal(0, result.Code)
 	assert.False(result.StartAt.IsZero())
 	assert.False(result.FinishAt.IsZero())
@@ -58,15 +59,11 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	firstLog := <-executor.GetLogChannel()
 	assert.Equal(cmd.ID, firstLog.CmdID)
 	assert.Equal("bbb", firstLog.Content)
-	assert.Equal(int64(1), firstLog.Number)
-	assert.Equal(domain.LogTypeOut, firstLog.Type)
 
 	// then: verify second of log output
 	secondLog := <-executor.GetLogChannel()
 	assert.Equal(cmd.ID, secondLog.CmdID)
 	assert.Equal("aaa", secondLog.Content)
-	assert.Equal(int64(2), secondLog.Number)
-	assert.Equal(domain.LogTypeErr, secondLog.Type)
 }
 
 func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
