@@ -77,15 +77,13 @@ func uploadLog(cmd *domain.CmdIn) error {
 		return err
 	}
 
-	written, err := io.Copy(part, file)
+	_, err = io.Copy(part, file)
 	if util.HasError(err) {
 		return err
 	}
 
 	// flush file to writer
 	writer.Close()
-
-	util.LogDebug("Buffer length %d: %d", len(body.Bytes()), written)
 
 	// send request
 	url := config.Server + "/agents/logs/upload"

@@ -22,5 +22,5 @@ type LogItem struct {
 }
 
 func (item LogItem) String() string {
-	return fmt.Sprintf("%s#%s#%d#%s", item.CmdID, item.Type, item.Number, item.Content)
+	return fmt.Sprintf("%s#%s", item.CmdID, item.Content)
 }
