@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -85,19 +86,26 @@ func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 func (e *ShellExecutor) Run() error {
 	defer close(e.channel.out)
 
-	cmd := exec.Command(linuxBash)
-	cmd.Dir = e.CmdIn.WorkDir
-	cmd.Env = getInputs(e.CmdIn)
+	file, _ := os.Create("hello.log")
+	defer file.Close()
 
-	stdin, _ := cmd.StdinPipe()
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-
-	e.command = cmd
+	monitor, mIn, mOut, mErr := createCommand(e.CmdIn.WorkDir)
+	_ = monitor.Start()
+	_, _ = io.WriteString(mIn, appendNewLine("tail -f hello.log"))
 
 	// channel for stdout and stderr
 	stdOutChannel := make(LogChannel, logBufferSize)
 	stdErrChannel := make(LogChannel, logBufferSize)
+
+	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.channel.out)
+	go handleStdOut(e, mOut, stdOutChannel, domain.LogTypeOut)
+	go handleStdOut(e, mErr, stdErrChannel, domain.LogTypeErr)
+
+	cmd, stdIn, _, _ := createCommand(e.CmdIn.WorkDir)
+	cmd.Dir = e.CmdIn.WorkDir
+	cmd.Env = getInputs(e.CmdIn)
+
+	e.command = cmd
 
 	// channel for cmd wait
 	done := make(chan error)
@@ -112,11 +120,8 @@ func (e *ShellExecutor) Run() error {
 	if e.CmdIn.HasScripts() {
 		go produceCmd(e.channel.in, e)
 	}
-	go consumeCmd(e.channel.in, stdin)
+	go consumeCmd(e.channel.in, stdIn)
 
-	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.channel.out)
-	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
-	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
 	go func() { done <- cmd.Wait() }()
 
 	// wait for done
@@ -179,6 +184,15 @@ func (e *ShellExecutor) Kill() error {
 	result.Status = domain.CmdStatusKilled
 
 	return err
+}
+
+func createCommand(dir string) (command *exec.Cmd, stdIn io.WriteCloser, stdOut io.ReadCloser, stdErr io.ReadCloser) {
+	command = exec.Command(linuxBash)
+	command.Dir = dir
+	stdIn, _ = command.StdinPipe()
+	stdOut, _ = command.StdoutPipe()
+	stdErr, _ = command.StderrPipe()
+	return command, stdIn, stdOut, stdErr
 }
 
 func getInputs(cmdIn *domain.CmdIn) []string {
