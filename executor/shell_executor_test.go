@@ -45,7 +45,7 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	err := executor.Run()
 	assert.Nil(err)
 
-	// then: verfiy result of shell executor
+	// then: verify result of shell executor
 	result := executor.Result
 	assert.NotNil(result)
 	assert.Equal(0, result.Code)

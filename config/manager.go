@@ -24,7 +24,6 @@ var (
 	singleton *Manager
 	once      sync.Once
 
-	defaultPort       = "8000"
 	defaultWorkspace  = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent"))
 	defaultLoggingDir = filepath.Join(defaultWorkspace, "logs")
 	defaultPluginDir  = filepath.Join(defaultWorkspace, "plugins")

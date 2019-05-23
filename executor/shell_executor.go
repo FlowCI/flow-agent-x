@@ -110,15 +110,10 @@ func (e *ShellExecutor) Run() error {
 	e.Result.StartAt = time.Now()
 
 	if e.CmdIn.HasScripts() {
-		go func() {
-			defer close(e.channel.in)
-			for _, script := range createExecScripts(e) {
-				e.channel.in <- script
-			}
-		}()
+		go produceCmd(e.channel.in, e)
 	}
+	go consumeCmd(e.channel.in, stdin)
 
-	go handleCmdChannel(e.channel.in, stdin)
 	go pushToTotalChannel(e, stdOutChannel, stdErrChannel, e.channel.out)
 	go handleStdOut(e, stdout, stdOutChannel, domain.LogTypeOut)
 	go handleStdOut(e, stderr, stdErrChannel, domain.LogTypeErr)
@@ -186,24 +181,6 @@ func (e *ShellExecutor) Kill() error {
 	return err
 }
 
-func createExecScripts(e *ShellExecutor) []string {
-	if len(e.CmdIn.EnvFilters) == 0 {
-		return e.CmdIn.Scripts
-	}
-
-	echoEndTerm := fmt.Sprintf("echo %s%s", e.EndTerm, util.UnixLineBreakStr)
-	printEnvs := fmt.Sprintf("env%s", util.UnixLineBreakStr)
-	return append(e.CmdIn.Scripts, echoEndTerm, printEnvs)
-}
-
-func getWorkDir(cmdIn *domain.CmdIn) string {
-	if util.IsEmptyString(cmdIn.WorkDir) {
-		return "$HOME"
-	}
-
-	return cmdIn.WorkDir
-}
-
 func getInputs(cmdIn *domain.CmdIn) []string {
 	if !domain.NilOrEmpty(cmdIn.Inputs) {
 		return cmdIn.Inputs.ToStringArray()
@@ -212,24 +189,47 @@ func getInputs(cmdIn *domain.CmdIn) []string {
 	return []string{}
 }
 
-func handleCmdChannel(scripts chan string, stdin io.WriteCloser) {
+func produceCmd(channel chan string, e *ShellExecutor) {
+	defer close(channel)
+
+	cmdIn := e.CmdIn
+	endTerm := e.EndTerm
+
+	set := "set -e"
+	if cmdIn.AllowFailure {
+		set = "set +e"
+	}
+
+	channel <- set
+
+	for _, script := range cmdIn.Scripts {
+		channel <- script
+	}
+
+	if len(cmdIn.EnvFilters) > 0 {
+		channel <- fmt.Sprintf("echo %s%s", endTerm, util.UnixLineBreakStr)
+		channel <- fmt.Sprintf("env%s", util.UnixLineBreakStr)
+	}
+}
+
+func consumeCmd(channel chan string, stdin io.WriteCloser) {
 	defer func() {
-		stdin.Close()
+		_ = stdin.Close()
 		util.LogDebug("Exit: stdin thread exited")
 	}()
 
 	for {
-		str, ok := <-scripts
+		str, ok := <-channel
 		if !ok {
 			break
 		}
 
 		if str == ExitCmd {
-			close(scripts)
+			close(channel)
 			break
 		}
 
-		io.WriteString(stdin, appendNewLine(str))
+		_, _ = io.WriteString(stdin, appendNewLine(str))
 	}
 }
 
