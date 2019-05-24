@@ -157,7 +157,6 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 func TestShouldGetRawLog(t *testing.T) {
 	assert := assert.New(t)
 
-	//cmd.Scripts = []string{"tail -f hello.log"}
 	cmd.Scripts = []string{"npm install"}
 
 	executor := NewShellExecutor(cmd)
