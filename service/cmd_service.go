@@ -103,7 +103,7 @@ func (s *CmdService) start() {
 	}
 
 	go func() {
-		defer util.LogDebug("Exit: rabbitmq consumer")
+		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
@@ -132,7 +132,7 @@ func (s *CmdService) start() {
 
 func (s *CmdService) release() {
 	s.executor = nil
-	util.LogDebug("Exit: cmd been executed and service is available !")
+	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
 func execShellCmd(s *CmdService, in *domain.CmdIn) error {
@@ -167,6 +167,8 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	// init and start executor
 	s.executor = executor.NewShellExecutor(in)
+	s.executor.EnableRawLog = true
+
 	go logConsumer(s.executor)
 
 	go func() {

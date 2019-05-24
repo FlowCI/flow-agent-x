@@ -129,7 +129,7 @@ func (e *ShellExecutor) Run() error {
 
 		// create raw log output file
 		rawLogFile, _ := os.Create(e.Path.RawLog)
-		rawLogFile.Close()
+		_ = rawLogFile.Close()
 
 		// tail -f the raw log file
 		monitor, mIn, mOut, _ := createCommand(e.CmdIn)
