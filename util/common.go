@@ -5,14 +5,32 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 )
 
 const (
 	UnixLineBreak    = '\n'
 	UnixLineBreakStr = "\n"
-	EmptyStr         = ""
+
+	EmptyStr = ""
+
+	OSWin   = "windows"
+	OSLinux = "linux"
+	OSMac   = "darwin"
 )
+
+func IsMac() bool {
+	return runtime.GOOS == OSMac
+}
+
+func IsLinux() bool {
+	return runtime.GOOS == OSLinux
+}
+
+func IsWindows() bool {
+	return runtime.GOOS == OSWin
+}
 
 func HasError(err error) bool {
 	return err != nil

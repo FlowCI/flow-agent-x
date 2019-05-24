@@ -158,7 +158,7 @@ func (e *ShellExecutor) Run() error {
 
 	// start to consume input channel
 	if !e.EnableInteractMode {
-		go produceCmd(e, appendNewLine(e.Path.Shell))
+		go produceCmd(e, e.Path.Shell)
 	}
 	go consumeCmd(e, cmdIn)
 
@@ -270,10 +270,20 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 		}
 
 		if e.EnableRawLog {
-			cmdToRun = fmt.Sprintf("script -a -e -f -q -c \"%s\" %s | %s", cmdToRun, e.Path.RawLog, StripColor)
+			if util.IsMac() {
+				cmdToRun = fmt.Sprintf("script -q %s %s | %s", e.Path.RawLog, cmdToRun, StripColor)
+			}
+
+			if util.IsLinux() {
+				cmdToRun = fmt.Sprintf("script -e -f -q -c \"%s\" %s | %s", cmdToRun, e.Path.RawLog, StripColor)
+			}
+
+			if util.IsWindows() {
+				// unsupported
+			}
 		}
 
-		util.LogDebug("[Shell]: %s", cmdToRun)
+		util.LogDebug("[Shell]: {%s}", cmdToRun)
 		_, _ = io.WriteString(stdin, appendNewLine(cmdToRun))
 	}
 }
