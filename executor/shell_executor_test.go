@@ -133,6 +133,7 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 	// init:
 	cmd.Scripts = nil
 	executor := NewShellExecutor(cmd)
+	executor.EnableInteractMode = true
 	cmdChannel := executor.GetCmdChannel()
 	logChannel := executor.GetLogChannel()
 
@@ -153,16 +154,20 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestShouldGetRawPrint(t *testing.T) {
-	//assert := assert.New(t)
+func TestShouldGetRawLog(t *testing.T) {
+	assert := assert.New(t)
 
 	//cmd.Scripts = []string{"tail -f hello.log"}
-	cmd.Scripts = []string{"script -e -f -c \"npm install\" hello.log"}
+	cmd.Scripts = []string{"npm install"}
 
 	executor := NewShellExecutor(cmd)
-	go printLog(executor.GetLogChannel())
+	executor.EnableRawLog = true
 
-	executor.Run()
+	go printLog(executor.GetLogChannel())
+	go printRaw(executor.GetRawChannel())
+
+	err := executor.Run()
+	assert.Nil(err)
 }
 
 func printLog(channel <-chan *domain.LogItem) {
@@ -171,6 +176,16 @@ func printLog(channel <-chan *domain.LogItem) {
 		if !ok {
 			break
 		}
-		log.Debug(item.Content)
+		log.Debug("[LOG]: ", item.Content)
+	}
+}
+
+func printRaw(channel <-chan string) {
+	for {
+		item, ok := <-channel
+		if !ok {
+			break
+		}
+		log.Debug("[RAW]: ", item)
 	}
 }

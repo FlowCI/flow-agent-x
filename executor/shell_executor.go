@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 	"sync/atomic"
@@ -22,6 +23,10 @@ const (
 
 	linuxBash     = "/bin/bash"
 	logBufferSize = 10000
+
+	// s/\x1b\[[0-9;]*m//g
+	// s/\x1b\[[0-9;]*[a-zA-Z]//g
+	StripColor = "perl -pe 's/\\x1b\\[[0-9;]*[a-zA-Z]//g'"
 )
 
 // LogChannel send out LogItem
@@ -37,6 +42,15 @@ type ShellExecutor struct {
 	EndTerm        string
 	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
+
+	EnableRawLog       bool // using 'script' to record raw print out
+	EnableInteractMode bool
+
+	Path struct {
+		Shell  string
+		Log    string
+		RawLog string
+	}
 
 	channel struct {
 		in     CmdChannel
@@ -63,12 +77,20 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	uuid, _ := uuid.NewRandom()
 
 	executor := &ShellExecutor{
-		CmdIn:          cmdIn,
-		EndTerm:        fmt.Sprintf("=====EOF-%s=====", uuid),
-		Result:         result,
-		TimeOutSeconds: time.Duration(cmdIn.Timeout),
+		CmdIn:              cmdIn,
+		EndTerm:            fmt.Sprintf("=====EOF-%s=====", uuid),
+		Result:             result,
+		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
+		EnableRawLog:       false,
+		EnableInteractMode: false,
 	}
 
+	// init path for shell, log and raw log
+	executor.Path.Shell = getShellFilePath(cmdIn.ID)
+	executor.Path.Log = getLogFilePath(cmdIn.ID)
+	executor.Path.RawLog = getRawLogFilePath(cmdIn.ID)
+
+	// init channel
 	executor.channel.in = make(CmdChannel)
 	executor.channel.out = make(LogChannel, logBufferSize)
 	executor.channel.outRaw = make(RawChannel, logBufferSize)
@@ -85,6 +107,10 @@ func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 	return e.channel.out
 }
 
+func (e *ShellExecutor) GetRawChannel() <-chan string {
+	return e.channel.outRaw
+}
+
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
 	defer func() {
@@ -92,17 +118,25 @@ func (e *ShellExecutor) Run() error {
 		close(e.channel.outRaw)
 	}()
 
+	// --- write script into {cmd id}.sh and make it executable
+	err := writeScriptToFile(e)
+	if util.HasError(err) {
+		return err
+	}
+
 	// ---- start to monitor raw log ----
+	if e.EnableRawLog {
 
-	//file, _ := os.Create("hello.lo
-	// g")
-	//defer file.Close()
-	//
-	//monitor, mIn, mOut, mErr := createCommand(e.CmdIn.WorkDir)
-	//_ = monitor.Start()
-	//_, _ = io.WriteString(mIn, appendNewLine("tail -f hello.log"))
+		// create raw log output file
+		rawLogFile, _ := os.Create(e.Path.RawLog)
+		rawLogFile.Close()
 
-	// channel for stdout and stderr
+		// tail -f the raw log file
+		monitor, mIn, mOut, _ := createCommand(e.CmdIn)
+		go readRawOut(e, mOut)
+		_ = monitor.Start()
+		_, _ = io.WriteString(mIn, appendNewLine(fmt.Sprintf("tail -f %s", e.Path.RawLog)))
+	}
 
 	// ---- start to execute command ----
 	cmd, cmdIn, cmdStdOut, cmdStdErr := createCommand(e.CmdIn)
@@ -119,14 +153,16 @@ func (e *ShellExecutor) Run() error {
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
-	if e.CmdIn.HasScripts() {
-		go produceCmd(e.channel.in, e)
+	// start to listen output log
+	go readStdOut(e, cmdStdOut)
+	go readStdOut(e, cmdStdErr)
+
+	// start to consume input channel
+	if !e.EnableInteractMode {
+		go produceCmd(e, appendNewLine(e.Path.Shell))
 	}
+	go consumeCmd(e, cmdIn)
 
-	go readStdOut(e, cmdStdOut, e.channel.out)
-	go readStdOut(e, cmdStdErr, e.channel.out)
-
-	go consumeCmd(e.channel.in, cmdIn)
 	go func() { done <- cmd.Wait() }()
 
 	// wait for done
@@ -208,56 +244,73 @@ func getInputs(cmdIn *domain.CmdIn) []string {
 	return []string{}
 }
 
-func produceCmd(channel chan string, e *ShellExecutor) {
-	defer close(channel)
-
-	cmdIn := e.CmdIn
-	endTerm := e.EndTerm
-
-	set := "set -e"
-	if cmdIn.AllowFailure {
-		set = "set +e"
-	}
-
-	channel <- set
-
-	for _, script := range cmdIn.Scripts {
-		channel <- script
-	}
-
-	if len(cmdIn.EnvFilters) > 0 {
-		channel <- fmt.Sprintf("echo %s%s", endTerm, util.UnixLineBreakStr)
-		channel <- fmt.Sprintf("env%s", util.UnixLineBreakStr)
-	}
+func produceCmd(e *ShellExecutor, script string) {
+	defer close(e.channel.in)
+	e.channel.in <- script
 }
 
-func consumeCmd(channel chan string, stdin io.WriteCloser) {
+func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 	defer func() {
 		_ = stdin.Close()
-		util.LogDebug("Exit: stdin thread exited")
+		util.LogDebug("[Exit]: consumeCmd")
 	}()
 
+	channel := e.channel.in
+
 	for {
-		str, ok := <-channel
+		cmdToRun, ok := <-channel
 		if !ok {
 			break
 		}
 
-		if str == ExitCmd {
+		if cmdToRun == ExitCmd {
 			close(channel)
 			break
 		}
 
-		_, _ = io.WriteString(stdin, appendNewLine(str))
+		if e.EnableRawLog {
+			cmdToRun = fmt.Sprintf("script -a -e -f -q -c \"%s\" %s | %s", cmdToRun, e.Path.RawLog, StripColor)
+		}
+
+		util.LogDebug("[Shell]: %s", cmdToRun)
+		_, _ = io.WriteString(stdin, appendNewLine(cmdToRun))
 	}
 }
 
-func readStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel) {
+func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
 
 	defer func() {
 		reader.Close()
 		atomic.AddInt64(&e.Result.LogSize, rows)
+		util.LogDebug("[Exit]: %s", "readRawOut")
+	}()
+
+	scanner := bufio.NewScanner(reader)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if strings.EqualFold(line, e.EndTerm) {
+			return
+		}
+
+		rows++
+		e.channel.outRaw <- line
+	}
+}
+
+func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
+	var rows int64
+
+	defer func() {
+		reader.Close()
+
+		if !e.EnableRawLog {
+			atomic.AddInt64(&e.Result.LogSize, rows)
+		}
+
+		util.LogDebug("[Exit]: %s", "readStdOut")
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -286,7 +339,7 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser, channel LogChannel) {
 
 		// send log item instance to channel
 		rows++
-		channel <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
+		e.channel.out <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
 }
 
