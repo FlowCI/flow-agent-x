@@ -162,7 +162,13 @@ func (e *ShellExecutor) Run() error {
 	}
 	go consumeCmd(e, cmdIn)
 
-	go func() { done <- cmd.Wait() }()
+	go func() {
+		wait := cmd.Wait()
+
+		// TODO: wait readStdOut, readRawOut routine with max second
+
+		done <- wait
+	}()
 
 	// wait for done
 	select {
