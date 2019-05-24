@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bufio"
 	"flow-agent-x/config"
 	"flow-agent-x/util"
 	"fmt"
@@ -63,4 +64,9 @@ func getLogFilePath(cmdId string) string {
 func getRawLogFilePath(cmdId string) string {
 	c := config.GetInstance()
 	return filepath.Join(c.LoggingDir, cmdId+".raw.log")
+}
+
+func writeLogToFile(w *bufio.Writer, log string) {
+	_, _ = w.WriteString(log)
+	_ = w.WriteByte(util.UnixLineBreak)
 }

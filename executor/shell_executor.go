@@ -74,11 +74,11 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		Output: make(domain.Variables),
 	}
 
-	uuid, _ := uuid.NewRandom()
+	endTermUUID, _ := uuid.NewRandom()
 
 	executor := &ShellExecutor{
 		CmdIn:              cmdIn,
-		EndTerm:            fmt.Sprintf("=====EOF-%s=====", uuid),
+		EndTerm:            fmt.Sprintf("=====EOF-%s=====", endTermUUID),
 		Result:             result,
 		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
 		EnableRawLog:       false,
@@ -143,7 +143,6 @@ func (e *ShellExecutor) Run() error {
 	cmd.Env = getInputs(e.CmdIn)
 
 	done := make(chan error)
-	defer close(done)
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -168,6 +167,8 @@ func (e *ShellExecutor) Run() error {
 	// wait for done
 	select {
 	case err := <-done:
+		defer close(done)
+
 		result := e.Result
 		result.FinishAt = time.Now()
 
@@ -302,9 +303,13 @@ func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 
 func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
+	f, _ := os.Create(e.Path.Log)
+	writer := bufio.NewWriter(f)
 
 	defer func() {
+		_ = writer.Flush()
 		reader.Close()
+		f.Close()
 
 		if !e.EnableRawLog {
 			atomic.AddInt64(&e.Result.LogSize, rows)
@@ -337,8 +342,9 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 			return
 		}
 
-		// send log item instance to channel
+		// write to file and send log item instance to channel
 		rows++
+		writeLogToFile(writer, line)
 		e.channel.out <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
 }

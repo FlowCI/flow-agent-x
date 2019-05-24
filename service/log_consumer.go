@@ -1,9 +1,9 @@
 package service
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
+	"flow-agent-x/executor"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,46 +20,52 @@ import (
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
-	defer util.LogDebug("Exit: log consumer")
-
+func logConsumer(executor *executor.ShellExecutor) {
 	config := config.GetInstance()
-	logFilePath := filepath.Join(config.LoggingDir, cmd.ID+".log")
-
-	f, _ := os.Create(logFilePath)
-	defer f.Close()
-
-	writer := bufio.NewWriter(f)
+	cmd := executor.CmdIn
+	logChannel := executor.GetLogChannel()
+	rawChannel := executor.GetRawChannel()
 
 	// upload log after flush!!
 	defer func() {
-		writer.Flush()
-
-		err := uploadLog(cmd)
+		err := uploadLog(executor.Path.RawLog)
 		util.LogIfError(err)
+
+		err = uploadLog(executor.Path.Log)
+		util.LogIfError(err)
+
+		util.LogDebug("[Exit]: logConsumer")
+	}()
+
+	go func() {
+		for {
+			_, ok := <-logChannel
+			if !ok {
+				break
+			}
+		}
 	}()
 
 	for {
-		item, ok := <-channel
+		raw, ok := <-rawChannel
 		if !ok {
 			break
 		}
 
-		util.LogDebug(item.Content)
-
-		writeLogToFile(writer, item)
+		util.LogDebug("[Raw]: %s", raw)
 
 		if config.HasQueue() {
 			exchangeName := config.Settings.LogsExchangeName
 			channel := config.Queue.LogChannel
-			writeLogToQueue(exchangeName, channel, item)
+
+			logItem := &domain.LogItem{CmdID: cmd.ID, Content: raw}
+			writeLogToQueue(exchangeName, channel, logItem)
 		}
 	}
 }
 
-func uploadLog(cmd *domain.CmdIn) error {
+func uploadLog(logFile string) error {
 	config := config.GetInstance()
-	logFile := filepath.Join(config.LoggingDir, cmd.ID+".log")
 
 	// read file
 	file, err := os.Open(logFile)
@@ -105,7 +111,7 @@ func uploadLog(cmd *domain.CmdIn) error {
 	}
 
 	if message.IsOk() {
-		util.LogDebug("Log for cmd '%s' has been uploaded", cmd.ID)
+		util.LogDebug("[Uploaded]: %s", logFile)
 		return nil
 	}
 
@@ -117,9 +123,4 @@ func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogIt
 		ContentType: util.HttpTextPlain,
 		Body:        []byte(item.String()),
 	})
-}
-
-func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {
-	_, _ = w.WriteString(item.Content)
-	_ = w.WriteByte(util.UnixLineBreak)
 }

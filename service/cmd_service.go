@@ -167,7 +167,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	// init and start executor
 	s.executor = executor.NewShellExecutor(in)
-	go logConsumer(in, s.executor.GetLogChannel())
+	go logConsumer(s.executor)
 
 	go func() {
 		defer s.release()
@@ -208,14 +208,14 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 		return err
 	}
 
-	exec := executor.NewShellExecutor(in)
-	go logConsumer(in, exec.GetLogChannel())
+	shellExecutor := executor.NewShellExecutor(in)
+	go logConsumer(shellExecutor)
 
-	s.session[in.ID] = exec
+	s.session[in.ID] = shellExecutor
 
 	// start to run executor by thread
 	go func() {
-		exec.Run()
+		shellExecutor.Run()
 		delete(s.session, in.ID)
 		util.LogDebug("agent: session '%s' is exited", in.ID)
 	}()
