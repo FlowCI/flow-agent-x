@@ -17,6 +17,10 @@ import (
 	"github.com/google/uuid"
 )
 
+//====================================================================
+//	Const
+//====================================================================
+
 const (
 	// ExitCmd script 'exit'
 	ExitCmd = "exit"
@@ -28,6 +32,10 @@ const (
 	// s/\x1b\[[0-9;]*[a-zA-Z]//g
 	StripColor = "perl -pe 's/\\x1b\\[[0-9;]*[a-zA-Z]//g'"
 )
+
+//====================================================================
+//	Definition
+//====================================================================
 
 // LogChannel send out LogItem
 type LogChannel chan *domain.LogItem
@@ -58,10 +66,16 @@ type ShellExecutor struct {
 		outRaw RawChannel
 	}
 
-	command *exec.Cmd
+	runner struct {
+		monitor *exec.Cmd
+		shell   *exec.Cmd
+	}
 }
 
-// NewShellExecutor new instance of shell executor
+//====================================================================
+//	Create new ShellExecutor
+//====================================================================
+
 func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	result := &domain.ExecutedCmd{
 		Cmd: domain.Cmd{
@@ -98,6 +112,10 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	return executor
 }
 
+//====================================================================
+//	Public
+//====================================================================
+
 func (e *ShellExecutor) GetCmdChannel() chan<- string {
 	return e.channel.in
 }
@@ -133,6 +151,8 @@ func (e *ShellExecutor) Run() error {
 
 		// tail -f the raw log file
 		monitor, mIn, mOut, _ := createCommand(e.CmdIn)
+		e.setMonitorRunner(monitor)
+
 		go readRawOut(e, mOut)
 		_ = monitor.Start()
 		_, _ = io.WriteString(mIn, appendNewLine(fmt.Sprintf("tail -f %s", e.Path.RawLog)))
@@ -148,7 +168,7 @@ func (e *ShellExecutor) Run() error {
 		return err
 	}
 
-	e.command = cmd
+	e.setShellRunner(cmd)
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
@@ -170,7 +190,70 @@ func (e *ShellExecutor) Run() error {
 		done <- wait
 	}()
 
-	// wait for done
+	return waitForDone(e, done)
+}
+
+// Kill to kill executing cmd
+// it will jump to 'err := <-done:' on the Run() method
+func (e *ShellExecutor) Kill() error {
+	shellRunner := e.getShellRunner()
+
+	if util.IsNil(shellRunner) {
+		return nil
+	}
+
+	err := shellRunner.Process.Kill()
+
+	result := e.Result
+	result.FinishAt = time.Now()
+	result.Code = domain.CmdExitCodeKilled
+	result.Status = domain.CmdStatusKilled
+
+	monitorRunner := e.getMonitorRunner()
+	if util.IsNil(monitorRunner) {
+		return err
+	}
+
+	_ = monitorRunner.Process.Kill()
+	return nil
+}
+
+//====================================================================
+//	Private
+//====================================================================
+
+func (e *ShellExecutor) setMonitorRunner(cmd *exec.Cmd) {
+	e.runner.monitor = cmd
+}
+
+func (e *ShellExecutor) getMonitorRunner() *exec.Cmd {
+	return e.runner.monitor
+}
+
+func (e *ShellExecutor) setShellRunner(cmd *exec.Cmd) {
+	e.runner.shell = cmd
+}
+
+func (e *ShellExecutor) getShellRunner() *exec.Cmd {
+	return e.runner.shell
+}
+
+//====================================================================
+//	Utils
+//====================================================================
+
+func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
+	command = exec.Command(linuxBash)
+	command.Dir = cmdIn.WorkDir
+
+	in, _ = command.StdinPipe()
+	stdout, _ = command.StdoutPipe()
+	stderr, _ = command.StderrPipe()
+
+	return command, in, stdout, stderr
+}
+
+func waitForDone(e *ShellExecutor, done chan error) error {
 	select {
 	case err := <-done:
 		defer close(done)
@@ -179,7 +262,7 @@ func (e *ShellExecutor) Run() error {
 		result.FinishAt = time.Now()
 
 		// get wait status
-		ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
+		ws := e.getShellRunner().ProcessState.Sys().(syscall.WaitStatus)
 		result.Code = ws.ExitStatus()
 
 		// success status if no err
@@ -213,34 +296,6 @@ func (e *ShellExecutor) Run() error {
 
 		return err
 	}
-}
-
-// Kill to kill executing cmd
-// it will jump to 'err := <-done:' on the Run() method
-func (e *ShellExecutor) Kill() error {
-	if e.command == nil {
-		return nil
-	}
-
-	err := e.command.Process.Kill()
-
-	result := e.Result
-	result.FinishAt = time.Now()
-	result.Code = domain.CmdExitCodeKilled
-	result.Status = domain.CmdStatusKilled
-
-	return err
-}
-
-func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
-	command = exec.Command(linuxBash)
-	command.Dir = cmdIn.WorkDir
-
-	in, _ = command.StdinPipe()
-	stdout, _ = command.StdoutPipe()
-	stderr, _ = command.StderrPipe()
-
-	return command, in, stdout, stderr
 }
 
 func getInputs(cmdIn *domain.CmdIn) []string {
