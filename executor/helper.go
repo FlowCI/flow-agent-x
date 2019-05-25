@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Write script into file and make it executable
@@ -49,6 +50,22 @@ func writeScriptToFile(e *ShellExecutor) error {
 	}
 
 	return nil
+}
+
+func matchEnvFilter(env string, filters []string) bool {
+	for _, filter := range filters {
+		if strings.HasPrefix(env, filter) {
+			return true
+		}
+	}
+	return false
+}
+
+func appendNewLine(script string) string {
+	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
+		script += util.UnixLineBreakStr
+	}
+	return script
 }
 
 func getShellFilePath(cmdId string) string {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -61,15 +62,17 @@ type ShellExecutor struct {
 	}
 
 	channel struct {
-		in     CmdChannel
-		out    LogChannel
-		outRaw RawChannel
+		in  CmdChannel
+		out LogChannel
+		raw RawChannel
 	}
 
 	runner struct {
 		monitor *exec.Cmd
 		shell   *exec.Cmd
 	}
+
+	waitForLogging sync.WaitGroup
 }
 
 //====================================================================
@@ -107,7 +110,10 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	// init channel
 	executor.channel.in = make(CmdChannel)
 	executor.channel.out = make(LogChannel, logBufferSize)
-	executor.channel.outRaw = make(RawChannel, logBufferSize)
+	executor.channel.raw = make(RawChannel, logBufferSize)
+
+	// init logging wait group
+	executor.waitForLogging.Add(2)
 
 	return executor
 }
@@ -126,14 +132,14 @@ func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 }
 
 func (e *ShellExecutor) GetRawChannel() <-chan string {
-	return e.channel.outRaw
+	return e.channel.raw
 }
 
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
 	defer func() {
 		close(e.channel.out)
-		close(e.channel.outRaw)
+		close(e.channel.raw)
 	}()
 
 	// --- write script into {cmd id}.sh and make it executable
@@ -144,6 +150,7 @@ func (e *ShellExecutor) Run() error {
 
 	// ---- start to monitor raw log ----
 	if e.EnableRawLog {
+		e.waitForLogging.Add(1)
 
 		// create raw log output file
 		rawLogFile, _ := os.Create(e.Path.RawLog)
@@ -183,9 +190,13 @@ func (e *ShellExecutor) Run() error {
 	go consumeCmd(e, cmdIn)
 
 	go func() {
+		// wait for cmd finished
 		wait := cmd.Wait()
+		util.LogDebug("[Done]: Shell for %s", e.CmdIn.ID)
 
-		// TODO: wait readStdOut, readRawOut routine with max second
+		// wait for logging with 5 seconds
+		util.Wait(&e.waitForLogging, 5 * time.Second)
+		util.LogDebug("[Done]: Logging for %s", e.CmdIn.ID)
 
 		done <- wait
 	}()
@@ -198,7 +209,7 @@ func (e *ShellExecutor) Run() error {
 func (e *ShellExecutor) Kill() error {
 	shellRunner := e.getShellRunner()
 
-	if util.IsNil(shellRunner) {
+	if shellRunner == nil {
 		return nil
 	}
 
@@ -210,7 +221,8 @@ func (e *ShellExecutor) Kill() error {
 	result.Status = domain.CmdStatusKilled
 
 	monitorRunner := e.getMonitorRunner()
-	if util.IsNil(monitorRunner) {
+
+	if monitorRunner == nil {
 		return err
 	}
 
@@ -266,7 +278,7 @@ func waitForDone(e *ShellExecutor, done chan error) error {
 		result.Code = ws.ExitStatus()
 
 		// success status if no err
-		if err == nil {
+		if !util.HasError(err) {
 			result.Status = domain.CmdStatusSuccess
 			return nil
 		}
@@ -352,9 +364,10 @@ func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
 
 	defer func() {
-		reader.Close()
+		_ = reader.Close()
 		atomic.AddInt64(&e.Result.LogSize, rows)
 		util.LogDebug("[Exit]: %s", "readRawOut")
+		e.waitForLogging.Done()
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -367,7 +380,7 @@ func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 		}
 
 		rows++
-		e.channel.outRaw <- line
+		e.channel.raw <- line
 	}
 }
 
@@ -378,14 +391,16 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 
 	defer func() {
 		_ = writer.Flush()
-		reader.Close()
-		f.Close()
+		_ = reader.Close()
+		_ = f.Close()
 
 		if !e.EnableRawLog {
 			atomic.AddInt64(&e.Result.LogSize, rows)
+			util.LogDebug("Log size: === %d", e.Result.LogSize)
 		}
 
 		util.LogDebug("[Exit]: %s", "readStdOut")
+		e.waitForLogging.Done()
 	}()
 
 	scanner := bufio.NewScanner(reader)
@@ -417,20 +432,4 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 		writeLogToFile(writer, line)
 		e.channel.out <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
-}
-
-func matchEnvFilter(env string, filters []string) bool {
-	for _, filter := range filters {
-		if strings.HasPrefix(env, filter) {
-			return true
-		}
-	}
-	return false
-}
-
-func appendNewLine(script string) string {
-	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
-		script += util.UnixLineBreakStr
-	}
-	return script
 }

@@ -5,9 +5,12 @@ services:
   zk:
     image: zookeeper:3.4
     container_name: flowci-agent-debug-zk
-    network_mode: "host"
+    ports:
+      - "2181:2181"
 
   rabbitmq:
     image: rabbitmq:3-management
     container_name: flowci-agent-debug-rabbitmq
-    network_mode: "host"
+    ports:
+      - "5672:5672"
+      - "15672:15672"

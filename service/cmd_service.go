@@ -228,7 +228,7 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if !util.IsNil(err) {
+	if !util.HasError(err) {
 		return err
 	}
 
@@ -246,7 +246,7 @@ func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if util.IsNil(err) {
+	if util.HasError(err) {
 		return exec.Kill()
 	}
 
@@ -260,7 +260,7 @@ func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecu
 
 	exec := s.session[in.ID]
 
-	if util.IsNil(exec) {
+	if exec == nil {
 		return nil, ErrorCmdSessionNotFound
 	}
 
@@ -278,7 +278,7 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	// init inputs if undefined
-	if util.IsNil(in.Inputs) {
+	if in.Inputs == nil {
 		in.Inputs = make(domain.Variables, 10)
 	}
 

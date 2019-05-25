@@ -87,7 +87,7 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 	config.Init()
 
 	defer config.Close()
-	assert.True(config.HasQueue())
+	assert.True(config.HasQueue() == true)
 
 	// create queue consumer
 	callbackQueue := config.Settings.CallbackQueueName
