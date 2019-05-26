@@ -32,6 +32,9 @@ const (
 	// s/\x1b\[[0-9;]*m//g
 	// s/\x1b\[[0-9;]*[a-zA-Z]//g
 	StripColor = "perl -pe 's/\\x1b\\[[0-9;]*[a-zA-Z]//g'"
+
+	MacScriptPattern = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
+	LinuxScriptPattern = "script -a -e -f -q -c \"%s\" %s | %s ; exit ${PIPESTATUS[0]}"
 )
 
 //====================================================================
@@ -344,11 +347,11 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 
 		if e.EnableRawLog {
 			if util.IsMac() {
-				cmdToRun = fmt.Sprintf("script -a -F -q %s %s | %s", e.Path.RawLog, cmdToRun, StripColor)
+				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.RawLog, cmdToRun, StripColor)
 			}
 
 			if util.IsLinux() {
-				cmdToRun = fmt.Sprintf("script -a -e -f -q -c \"%s\" %s | %s", cmdToRun, e.Path.RawLog, StripColor)
+				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.RawLog, StripColor)
 			}
 
 			if util.IsWindows() {
