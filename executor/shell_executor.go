@@ -194,14 +194,19 @@ func (e *ShellExecutor) Run() error {
 
 	go func() {
 		// wait for cmd finished
-		wait := cmd.Wait()
+		err := cmd.Wait()
 		util.LogDebug("[Done]: Shell for %s", e.CmdIn.ID)
 
+		loggingTimeout := 5 * time.Second
+		if util.HasError(err) {
+			loggingTimeout = 0
+		}
+
 		// wait for logging with 5 seconds
-		util.Wait(&e.waitForLogging, 5 * time.Second)
+		util.Wait(&e.waitForLogging, loggingTimeout)
 		util.LogDebug("[Done]: Logging for %s", e.CmdIn.ID)
 
-		done <- wait
+		done <- err
 	}()
 
 	return waitForDone(e, done)
