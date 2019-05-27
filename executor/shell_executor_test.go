@@ -157,7 +157,7 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 func TestShouldGetRawLog(t *testing.T) {
 	assert := assert.New(t)
 
-	cmd.Scripts = []string{"npm install"}
+	cmd.Scripts = []string{"rm aa"}
 
 	executor := NewShellExecutor(cmd)
 	executor.EnableRawLog = true
@@ -167,6 +167,9 @@ func TestShouldGetRawLog(t *testing.T) {
 
 	err := executor.Run()
 	assert.Nil(err)
+
+	assert.Equal(executor.Result.Status, domain.CmdStatusException)
+	assert.True(executor.Result.Code > 0)
 }
 
 func printLog(channel <-chan *domain.LogItem) {
