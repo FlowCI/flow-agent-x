@@ -17,7 +17,6 @@ func Wait(group *sync.WaitGroup, timeout time.Duration) bool {
 	case <- c:
 		return true
 	case <-time.After(timeout):
-		defer close(c)
 		return false
 	}
 }
