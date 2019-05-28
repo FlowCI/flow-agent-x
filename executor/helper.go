@@ -3,12 +3,30 @@ package executor
 import (
 	"bufio"
 	"flow-agent-x/config"
+	"flow-agent-x/domain"
 	"flow-agent-x/util"
-	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
+
+const (
+	linuxBash = "/bin/bash"
+	linuxBashShebang = "#!/bin/bash"
+)
+
+func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
+	command = exec.Command(linuxBash)
+	command.Dir = cmdIn.WorkDir
+
+	in, _ = command.StdinPipe()
+	stdout, _ = command.StdoutPipe()
+	stderr, _ = command.StderrPipe()
+
+	return command, in, stdout, stderr
+}
 
 // Write script into file and make it executable
 func writeScriptToFile(e *ShellExecutor) error {
@@ -18,6 +36,8 @@ func writeScriptToFile(e *ShellExecutor) error {
 	if !e.CmdIn.HasScripts() {
 		return nil
 	}
+
+	_, _ = shellFile.WriteString(appendNewLine(linuxBashShebang))
 
 	cmdIn := e.CmdIn
 	endTerm := e.EndTerm
@@ -40,8 +60,8 @@ func writeScriptToFile(e *ShellExecutor) error {
 
 	// write for end term
 	if len(cmdIn.EnvFilters) > 0 {
-		_, _ = shellFile.WriteString(fmt.Sprintf("echo %s%s", endTerm, util.UnixLineBreakStr))
-		_, _ = shellFile.WriteString(fmt.Sprintf("env%s", util.UnixLineBreakStr))
+		_, _ = shellFile.WriteString(appendNewLine("echo " + endTerm))
+		_, _ = shellFile.WriteString(appendNewLine("env"))
 	}
 
 	err := shellFile.Chmod(0777)

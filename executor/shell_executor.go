@@ -26,7 +26,6 @@ const (
 	// ExitCmd script 'exit'
 	ExitCmd = "exit"
 
-	linuxBash     = "/bin/bash"
 	logBufferSize = 10000
 
 	// s/\x1b\[[0-9;]*m//g
@@ -261,17 +260,6 @@ func (e *ShellExecutor) getShellRunner() *exec.Cmd {
 //====================================================================
 //	Utils
 //====================================================================
-
-func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
-	command = exec.Command(linuxBash)
-	command.Dir = cmdIn.WorkDir
-
-	in, _ = command.StdinPipe()
-	stdout, _ = command.StdoutPipe()
-	stderr, _ = command.StderrPipe()
-
-	return command, in, stdout, stderr
-}
 
 func waitForDone(e *ShellExecutor, done chan error) error {
 	select {
