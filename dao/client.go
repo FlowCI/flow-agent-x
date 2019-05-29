@@ -34,7 +34,7 @@ func NewInstance(path string) (*Client, error) {
 }
 
 func (c *Client) Close() {
-	if !util.IsNil(c.db) {
+	if c.db != nil {
 		c.db.Close()
 	}
 }

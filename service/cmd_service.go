@@ -103,7 +103,7 @@ func (s *CmdService) start() {
 	}
 
 	go func() {
-		defer util.LogDebug("Exit: rabbitmq consumer")
+		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
@@ -132,7 +132,7 @@ func (s *CmdService) start() {
 
 func (s *CmdService) release() {
 	s.executor = nil
-	util.LogDebug("Exit: cmd been executed and service is available !")
+	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
 func execShellCmd(s *CmdService, in *domain.CmdIn) error {
@@ -166,8 +166,10 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	// init and start executor
-	s.executor = executor.NewShellExecutor(in)
-	go logConsumer(in, s.executor.GetLogChannel())
+	s.executor = executor.NewShellExecutor(in, config.LoggingDir)
+	s.executor.EnableRawLog = true
+
+	go logConsumer(s.executor)
 
 	go func() {
 		defer s.release()
@@ -208,14 +210,14 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 		return err
 	}
 
-	exec := executor.NewShellExecutor(in)
-	go logConsumer(in, exec.GetLogChannel())
+	shellExecutor := executor.NewShellExecutor(in, config.GetInstance().LoggingDir)
+	go logConsumer(shellExecutor)
 
-	s.session[in.ID] = exec
+	s.session[in.ID] = shellExecutor
 
 	// start to run executor by thread
 	go func() {
-		exec.Run()
+		shellExecutor.Run()
 		delete(s.session, in.ID)
 		util.LogDebug("agent: session '%s' is exited", in.ID)
 	}()
@@ -226,7 +228,7 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if !util.IsNil(err) {
+	if !util.HasError(err) {
 		return err
 	}
 
@@ -244,7 +246,7 @@ func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if util.IsNil(err) {
+	if util.HasError(err) {
 		return exec.Kill()
 	}
 
@@ -258,7 +260,7 @@ func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecu
 
 	exec := s.session[in.ID]
 
-	if util.IsNil(exec) {
+	if exec == nil {
 		return nil, ErrorCmdSessionNotFound
 	}
 
@@ -276,7 +278,7 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	// init inputs if undefined
-	if util.IsNil(in.Inputs) {
+	if in.Inputs == nil {
 		in.Inputs = make(domain.Variables, 10)
 	}
 

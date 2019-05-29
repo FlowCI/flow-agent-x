@@ -20,7 +20,7 @@ func TestRabbitMQConfigConnectionString(t *testing.T) {
 	assert.Equal("amqp://guest:guest@aaa:1234", mq.GetConnectionString())
 }
 
-func TestSettringsShouldParseFromJson(t *testing.T) {
+func TestSettingsShouldParseFromJson(t *testing.T) {
 	// init:
 	assert := assert.New(t)
 

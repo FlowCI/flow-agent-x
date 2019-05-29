@@ -5,14 +5,32 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 )
 
 const (
 	UnixLineBreak    = '\n'
 	UnixLineBreakStr = "\n"
-	EmptyStr         = ""
+
+	EmptyStr = ""
+
+	OSWin   = "windows"
+	OSLinux = "linux"
+	OSMac   = "darwin"
 )
+
+func IsMac() bool {
+	return runtime.GOOS == OSMac
+}
+
+func IsLinux() bool {
+	return runtime.GOOS == OSLinux
+}
+
+func IsWindows() bool {
+	return runtime.GOOS == OSWin
+}
 
 func HasError(err error) bool {
 	return err != nil
@@ -28,10 +46,6 @@ func FailOnError(err error, msg string) {
 // IsEmptyString to check input s is empty
 func IsEmptyString(s string) bool {
 	return s == ""
-}
-
-func IsNil(v interface{}) bool {
-	return v == nil
 }
 
 // IsPointerType to check the input v is pointer type
