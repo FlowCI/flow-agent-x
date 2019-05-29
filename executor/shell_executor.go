@@ -148,7 +148,9 @@ func (e *ShellExecutor) Run() error {
 	defer func() {
 		close(e.channel.out)
 		close(e.channel.raw)
+
 		_ = os.Remove(e.Path.Tmp)
+		_ = os.Remove(e.Path.Shell)
 	}()
 
 	// --- write script into {cmd id}.sh and make it executable
