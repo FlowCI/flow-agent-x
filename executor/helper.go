@@ -2,13 +2,11 @@ package executor
 
 import (
 	"bufio"
-	"flow-agent-x/config"
 	"flow-agent-x/domain"
 	"flow-agent-x/util"
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -86,21 +84,6 @@ func appendNewLine(script string) string {
 		script += util.UnixLineBreakStr
 	}
 	return script
-}
-
-func getShellFilePath(cmdId string) string {
-	c := config.GetInstance()
-	return filepath.Join(c.LoggingDir, cmdId+".sh")
-}
-
-func getLogFilePath(cmdId string) string {
-	c := config.GetInstance()
-	return filepath.Join(c.LoggingDir, cmdId+".log")
-}
-
-func getRawLogFilePath(cmdId string) string {
-	c := config.GetInstance()
-	return filepath.Join(c.LoggingDir, cmdId+".raw.log")
 }
 
 func writeLogToFile(w *bufio.Writer, log string) {

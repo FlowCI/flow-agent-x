@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"flow-agent-x/config"
 	"fmt"
 	"os"
 	"testing"
@@ -41,7 +42,7 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	assert := assert.New(t)
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -73,7 +74,7 @@ func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
 	cmd.Timeout = 1
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -96,7 +97,7 @@ func TestShouldRunLinuxShellButKilled(t *testing.T) {
 	cmd.Timeout = 18000
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -118,7 +119,7 @@ func TestShouldCmdNotFoundErr(t *testing.T) {
 	cmd.Scripts = []string{"set -e", "notCommand"}
 
 	// when:
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -132,7 +133,7 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 
 	// init:
 	cmd.Scripts = nil
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 	executor.EnableInteractMode = true
 	cmdChannel := executor.GetCmdChannel()
 	logChannel := executor.GetLogChannel()
@@ -159,7 +160,7 @@ func TestShouldGetRawLog(t *testing.T) {
 
 	cmd.Scripts = []string{"rm aa"}
 
-	executor := NewShellExecutor(cmd)
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
 	executor.EnableRawLog = true
 
 	go printLog(executor.GetLogChannel())

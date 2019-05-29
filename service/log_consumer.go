@@ -28,7 +28,7 @@ func logConsumer(executor *executor.ShellExecutor) {
 
 	// upload log after flush!!
 	defer func() {
-		err := uploadLog(executor.Path.RawLog)
+		err := uploadLog(executor.Path.Raw)
 		util.LogIfError(err)
 
 		err = uploadLog(executor.Path.Log)

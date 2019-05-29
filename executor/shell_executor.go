@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,7 +33,7 @@ const (
 	// s/\x1b\[[0-9;]*[a-zA-Z]//g
 	StripColor = "perl -pe 's/\\x1b\\[[0-9;]*[a-zA-Z]//g'"
 
-	MacScriptPattern = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
+	MacScriptPattern   = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
 	LinuxScriptPattern = "script -a -e -f -q -c \"%s\" %s | %s ; exit ${PIPESTATUS[0]}"
 )
 
@@ -53,14 +54,16 @@ type ShellExecutor struct {
 	EndTerm        string
 	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
+	LogDir         string
 
 	EnableRawLog       bool // using 'script' to record raw print out
 	EnableInteractMode bool
 
 	Path struct {
-		Shell  string
-		Log    string
-		RawLog string
+		Shell string
+		Log   string
+		Raw   string
+		Tmp   string
 	}
 
 	channel struct {
@@ -81,7 +84,7 @@ type ShellExecutor struct {
 //	Create new ShellExecutor
 //====================================================================
 
-func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
+func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 	result := &domain.ExecutedCmd{
 		Cmd: domain.Cmd{
 			ID:           cmdIn.ID,
@@ -102,12 +105,15 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
 		EnableRawLog:       false,
 		EnableInteractMode: false,
+		LogDir:             logDir,
 	}
 
 	// init path for shell, log and raw log
-	executor.Path.Shell = getShellFilePath(cmdIn.ID)
-	executor.Path.Log = getLogFilePath(cmdIn.ID)
-	executor.Path.RawLog = getRawLogFilePath(cmdIn.ID)
+	cmdId := executor.CmdIn.ID
+	executor.Path.Shell = filepath.Join(executor.LogDir, cmdId+".sh")
+	executor.Path.Log = filepath.Join(executor.LogDir, cmdId+".log")
+	executor.Path.Raw = filepath.Join(executor.LogDir, cmdId+".raw.log")
+	executor.Path.Tmp = filepath.Join(executor.LogDir, cmdId+".raw.tmp")
 
 	// init channel
 	executor.channel.in = make(CmdChannel)
@@ -142,6 +148,7 @@ func (e *ShellExecutor) Run() error {
 	defer func() {
 		close(e.channel.out)
 		close(e.channel.raw)
+		_ = os.Remove(e.Path.Tmp)
 	}()
 
 	// --- write script into {cmd id}.sh and make it executable
@@ -154,9 +161,9 @@ func (e *ShellExecutor) Run() error {
 	if e.EnableRawLog {
 		e.waitForLogging.Add(1)
 
-		// create raw log output file
-		rawLogFile, _ := os.Create(e.Path.RawLog)
-		_ = rawLogFile.Close()
+		// create tmp log output file
+		tmpLogFile, _ := os.Create(e.Path.Tmp)
+		_ = tmpLogFile.Close()
 
 		// tail -f the raw log file
 		monitor, mIn, mOut, _ := createCommand(e.CmdIn)
@@ -164,7 +171,7 @@ func (e *ShellExecutor) Run() error {
 
 		go readRawOut(e, mOut)
 		_ = monitor.Start()
-		_, _ = io.WriteString(mIn, appendNewLine(fmt.Sprintf("tail -f %s", e.Path.RawLog)))
+		_, _ = io.WriteString(mIn, appendNewLine(fmt.Sprintf("tail -f %s", tmpLogFile.Name())))
 	}
 
 	// ---- start to execute command ----
@@ -340,11 +347,11 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 
 		if e.EnableRawLog {
 			if util.IsMac() {
-				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.RawLog, cmdToRun, StripColor)
+				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.Raw, cmdToRun, StripColor)
 			}
 
 			if util.IsLinux() {
-				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.RawLog, StripColor)
+				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.Raw, StripColor)
 			}
 
 			if util.IsWindows() {
@@ -358,9 +365,14 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 
 func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
+	f, _ := os.Create(e.Path.Raw)
+	writer := bufio.NewWriter(f)
 
 	defer func() {
+		_ = writer.Flush()
 		_ = reader.Close()
+		_ = f.Close()
+
 		atomic.AddInt64(&e.Result.LogSize, rows)
 		util.LogDebug("[Exit]: %s", "readRawOut")
 		e.waitForLogging.Done()
@@ -376,6 +388,7 @@ func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
 		}
 
 		rows++
+		writeLogToFile(writer, line)
 		e.channel.raw <- line
 	}
 }

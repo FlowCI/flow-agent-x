@@ -166,7 +166,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	// init and start executor
-	s.executor = executor.NewShellExecutor(in)
+	s.executor = executor.NewShellExecutor(in, config.LoggingDir)
 	s.executor.EnableRawLog = true
 
 	go logConsumer(s.executor)
@@ -210,7 +210,7 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 		return err
 	}
 
-	shellExecutor := executor.NewShellExecutor(in)
+	shellExecutor := executor.NewShellExecutor(in, config.GetInstance().LoggingDir)
 	go logConsumer(shellExecutor)
 
 	s.session[in.ID] = shellExecutor
