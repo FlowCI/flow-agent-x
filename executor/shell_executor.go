@@ -347,11 +347,11 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 
 		if e.EnableRawLog {
 			if util.IsMac() {
-				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.Raw, cmdToRun, StripColor)
+				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.Tmp, cmdToRun, StripColor)
 			}
 
 			if util.IsLinux() {
-				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.Raw, StripColor)
+				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.Tmp, StripColor)
 			}
 
 			if util.IsWindows() {
