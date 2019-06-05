@@ -150,7 +150,7 @@ func (e *ShellExecutor) Run() error {
 		close(e.channel.raw)
 
 		_ = os.Remove(e.Path.Tmp)
-		_ = os.Remove(e.Path.Shell)
+		//_ = os.Remove(e.Path.Shell)
 	}()
 
 	// --- write script into {cmd id}.sh and make it executable

@@ -80,13 +80,13 @@ func matchEnvFilter(env string, filters []string) bool {
 }
 
 func appendNewLine(script string) string {
-	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
-		script += util.UnixLineBreakStr
+	if !strings.HasSuffix(script, util.UnixLineBreak) {
+		script += util.UnixLineBreak
 	}
 	return script
 }
 
 func writeLogToFile(w *bufio.Writer, log string) {
 	_, _ = w.WriteString(log)
-	_ = w.WriteByte(util.UnixLineBreak)
+	_, _ = w.WriteString(util.CRLF)
 }
