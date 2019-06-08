@@ -19,9 +19,10 @@ const (
 )
 
 // AgentConnect request data to get settings from server
-type AgentConnect struct {
+type AgentInit struct {
 	Token string `json:"token"`
 	Port  int    `json:"port"`
+	Os    string `json:"os"`
 }
 
 // Agent Class

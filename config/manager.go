@@ -123,7 +123,10 @@ func toOfflineMode(m *Manager) {
 
 func loadSettings(m *Manager) error {
 	uri := m.Server + "/agents/connect"
-	body, _ := json.Marshal(domain.AgentConnect{Port: m.Port})
+	body, _ := json.Marshal(domain.AgentInit{
+		Port: m.Port,
+		Os:   util.OS(),
+	})
 
 	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
 	request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)

@@ -20,6 +20,22 @@ const (
 	OSMac   = "darwin"
 )
 
+func OS () string {
+	if IsMac() {
+		return "MAC"
+	}
+
+	if IsWindows() {
+		return "WIN"
+	}
+
+	if IsLinux() {
+		return "LINUX"
+	}
+
+	return "UNKNOWN"
+}
+
 func IsMac() bool {
 	return runtime.GOOS == OSMac
 }
