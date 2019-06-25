@@ -15,18 +15,6 @@ import (
 	"flow-agent-x/util"
 )
 
-const (
-	// VarAgentWorkspace default var
-	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
-
-	// VarAgentPluginPath default var
-	VarAgentPluginPath = "FLOWCI_AGENT_PLUGIN_PATH"
-)
-
-const (
-	defaultChannelBufferSize = 1000
-)
-
 var (
 	singleton *CmdService
 	once      sync.Once
@@ -289,10 +277,6 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	in.WorkDir = util.ParseString(in.WorkDir)
-
-	in.Inputs[VarAgentPluginPath] = config.PluginDir
-	in.Inputs[VarAgentWorkspace] = config.Workspace
-
 	return nil
 }
 

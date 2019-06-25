@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"flow-agent-x/config"
@@ -44,6 +45,27 @@ func main() {
 			Usage:  "Port for agent",
 			EnvVar: "FLOWCI_AGENT_PORT",
 		},
+
+		cli.StringFlag{
+			Name:   "workspace, w",
+			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
+			Usage:  "Agent working directory",
+			EnvVar: "FLOWCI_AGENT_WORKSPACE",
+		},
+
+		cli.StringFlag{
+			Name:   "plugindir, pd",
+			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "plugins"),
+			Usage:  "Directory for plugin",
+			EnvVar: "FLOWCI_AGENT_PLUGIN_DIR",
+		},
+
+		cli.StringFlag{
+			Name:   "logdir, ld",
+			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "logs"),
+			Usage:  "Directory for plugin",
+			EnvVar: "FLOWCI_AGENT_LOG_DIR",
+		},
 	}
 
 	err := app.Run(os.Args)
@@ -58,6 +80,9 @@ func start(c *cli.Context) error {
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = c.Int("port")
+	config.Workspace = c.String("workspace")
+	config.PluginDir = c.String("plugindir")
+	config.LoggingDir = c.String("logdir")
 	config.Init()
 
 	defer config.Close()

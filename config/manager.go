@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 
 	"flow-agent-x/domain"
@@ -23,10 +22,6 @@ const (
 var (
 	singleton *Manager
 	once      sync.Once
-
-	defaultWorkspace  = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent"))
-	defaultLoggingDir = filepath.Join(defaultWorkspace, "logs")
-	defaultPluginDir  = filepath.Join(defaultWorkspace, "plugins")
 )
 
 type QueueConfig struct {
@@ -59,19 +54,17 @@ func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
 		singleton.IsOffline = false
-		singleton.Workspace = defaultWorkspace
-		singleton.LoggingDir = defaultLoggingDir
-		singleton.PluginDir = defaultPluginDir
 		singleton.Quit = make(chan bool)
-
-		_ = os.MkdirAll(defaultWorkspace, os.ModePerm)
-		_ = os.MkdirAll(defaultLoggingDir, os.ModePerm)
-		_ = os.MkdirAll(defaultPluginDir, os.ModePerm)
 	})
 	return singleton
 }
 
 func (m *Manager) Init() {
+	// init dir
+	_ = os.MkdirAll(util.ParseString(m.Workspace), os.ModePerm)
+	_ = os.MkdirAll(util.ParseString(m.LoggingDir), os.ModePerm)
+	_ = os.MkdirAll(util.ParseString(m.PluginDir), os.ModePerm)
+
 	// load config and init rabbitmq, zookeeper
 	err := func() error {
 		var err = loadSettings(m)
