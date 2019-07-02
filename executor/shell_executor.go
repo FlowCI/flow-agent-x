@@ -91,7 +91,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 			AllowFailure: cmdIn.AllowFailure,
 			Plugin:       cmdIn.Plugin,
 		},
-		Code:   domain.CmdExitCodeUnknow,
+		Code:   domain.CmdExitCodeUnknown,
 		Status: domain.CmdStatusPending,
 		Output: make(domain.Variables),
 	}
@@ -156,7 +156,7 @@ func (e *ShellExecutor) Run() error {
 	// --- write script into {cmd id}.sh and make it executable
 	err := writeScriptToFile(e)
 	if util.HasError(err) {
-		return err
+		return e.toErrorStatus(err)
 	}
 
 	// ---- start to monitor raw log ----
@@ -183,10 +183,12 @@ func (e *ShellExecutor) Run() error {
 	done := make(chan error)
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return e.toErrorStatus(err)
 	}
 
 	e.setShellRunner(cmd)
+
+	e.Result.Status = domain.CmdStatusRunning
 	e.Result.ProcessId = cmd.Process.Pid
 	e.Result.StartAt = time.Now()
 
@@ -266,6 +268,12 @@ func (e *ShellExecutor) getShellRunner() *exec.Cmd {
 	return e.runner.shell
 }
 
+func (e *ShellExecutor) toErrorStatus(err error) error {
+	e.Result.Status = domain.CmdStatusException
+	e.Result.Error = err.Error()
+	return err
+}
+
 //====================================================================
 //	Utils
 //====================================================================
@@ -294,14 +302,12 @@ func waitForDone(e *ShellExecutor, done chan error) error {
 		}
 
 		exitError, ok := err.(*exec.ExitError)
-		result.Status = domain.CmdStatusException
-		result.Error = err.Error()
 
 		if ok {
 			return nil
 		}
 
-		return exitError
+		return e.toErrorStatus(exitError)
 
 	case <-time.After(e.TimeOutSeconds * time.Second):
 		util.LogDebug("Cmd killed since timeout")
