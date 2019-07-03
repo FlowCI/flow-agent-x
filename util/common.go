@@ -91,6 +91,17 @@ func GetValue(v interface{}) reflect.Value {
 
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
+	return parseVariablesFrom(src, os.Getenv)
+}
+
+func ParseStringWithSource(src string, source map[string]string) string {
+	return parseVariablesFrom(src, func(env string) string {
+		return source[env]
+	})
+}
+
+// replace ${VAR} with actual variable value
+func parseVariablesFrom(src string, getVariable func(string)string) string {
 	if IsEmptyString(src) {
 		return src
 	}
@@ -113,7 +124,12 @@ func ParseString(src string) string {
 			}
 
 			env := src[lIndex+1 : rIndex]
-			val := os.Getenv(env)
+			val := getVariable(env)
+
+			// do not replace if no value found
+			if IsEmptyString(val) {
+				break
+			}
 
 			src = strings.Replace(src, fmt.Sprintf("${%s}", env), val, -1)
 			i = rIndex
