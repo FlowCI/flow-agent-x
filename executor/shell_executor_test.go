@@ -169,7 +169,7 @@ func TestShouldGetRawLog(t *testing.T) {
 	err := executor.Run()
 	assert.Nil(err)
 
-	assert.Equal(executor.Result.Status, domain.CmdStatusException)
+	assert.Equal(domain.CmdStatusException, executor.Result.Status)
 	assert.True(executor.Result.Code > 0)
 }
 

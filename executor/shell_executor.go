@@ -302,12 +302,13 @@ func waitForDone(e *ShellExecutor, done chan error) error {
 		}
 
 		exitError, ok := err.(*exec.ExitError)
+		_ = e.toErrorStatus(exitError)
 
 		if ok {
 			return nil
 		}
 
-		return e.toErrorStatus(exitError)
+		return exitError
 
 	case <-time.After(e.TimeOutSeconds * time.Second):
 		util.LogDebug("Cmd killed since timeout")
