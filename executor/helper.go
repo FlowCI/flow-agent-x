@@ -11,19 +11,32 @@ import (
 )
 
 const (
-	linuxBash = "/bin/bash"
+	linuxBash        = "/bin/bash"
 	linuxBashShebang = "#!/bin/bash"
 )
 
-func createCommand(cmdIn *domain.CmdIn) (command *exec.Cmd, in io.WriteCloser, stdout io.ReadCloser, stderr io.ReadCloser) {
-	command = exec.Command(linuxBash)
+// CmdInstance: command with stdin, stdout and stderr
+type CmdInstance struct {
+	command *exec.Cmd
+	stdIn   io.WriteCloser
+	stdOut  io.ReadCloser
+	stdErr  io.ReadCloser
+}
+
+func createCommand(cmdIn *domain.CmdIn) *CmdInstance {
+	command := exec.Command(linuxBash)
 	command.Dir = cmdIn.WorkDir
 
-	in, _ = command.StdinPipe()
-	stdout, _ = command.StdoutPipe()
-	stderr, _ = command.StderrPipe()
+	stdin, _ := command.StdinPipe()
+	stdout, _ := command.StdoutPipe()
+	stderr, _ := command.StderrPipe()
 
-	return command, in, stdout, stderr
+	return &CmdInstance{
+		command: command,
+		stdIn:   stdin,
+		stdOut:  stdout,
+		stdErr:  stderr,
+	}
 }
 
 // Write script into file and make it executable

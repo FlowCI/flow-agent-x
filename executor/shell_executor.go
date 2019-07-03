@@ -72,9 +72,9 @@ type ShellExecutor struct {
 		raw RawChannel
 	}
 
-	runner struct {
-		monitor *exec.Cmd
-		shell   *exec.Cmd
+	instance struct {
+		monitor *CmdInstance
+		shell   *CmdInstance
 	}
 
 	waitForLogging sync.WaitGroup
@@ -168,43 +168,44 @@ func (e *ShellExecutor) Run() error {
 		_ = tmpLogFile.Close()
 
 		// tail -f the raw log file
-		monitor, mIn, mOut, _ := createCommand(e.CmdIn)
-		e.setMonitorRunner(monitor)
+		monitorInstance := createCommand(e.CmdIn)
+		e.instance.monitor = monitorInstance
 
-		go readRawOut(e, mOut)
-		_ = monitor.Start()
-		_, _ = io.WriteString(mIn, appendNewLine(fmt.Sprintf("tail -f %s", tmpLogFile.Name())))
+		go readRawOut(e, monitorInstance.stdOut)
+		_ = monitorInstance.command.Start()
+		_, _ = io.WriteString(monitorInstance.stdIn, appendNewLine(fmt.Sprintf("tail -f %s", tmpLogFile.Name())))
 	}
 
 	// ---- start to execute command ----
-	cmd, cmdIn, cmdStdOut, cmdStdErr := createCommand(e.CmdIn)
-	cmd.Env = getInputs(e.CmdIn)
+	shellInstance := createCommand(e.CmdIn)
+	shellInstance.command.Env = getInputs(e.CmdIn)
 
 	done := make(chan error)
 
-	if err := cmd.Start(); err != nil {
+	if err := shellInstance.command.Start(); err != nil {
 		return e.toErrorStatus(err)
 	}
 
-	e.setShellRunner(cmd)
-
+	e.instance.shell = shellInstance
 	e.Result.Status = domain.CmdStatusRunning
-	e.Result.ProcessId = cmd.Process.Pid
+	e.Result.ProcessId = shellInstance.command.Process.Pid
 	e.Result.StartAt = time.Now()
 
 	// start to listen output log
-	go readStdOut(e, cmdStdOut)
-	go readStdOut(e, cmdStdErr)
+	go readStdOut(e, shellInstance.stdOut)
+	go readStdOut(e, shellInstance.stdErr)
 
 	// start to consume input channel
 	if !e.EnableInteractMode {
 		go produceCmd(e, e.Path.Shell)
 	}
-	go consumeCmd(e, cmdIn)
+
+	go consumeCmd(e, shellInstance.stdIn)
 
 	go func() {
 		// wait for cmd finished
-		err := cmd.Wait()
+		err := shellInstance.command.Wait()
+		e.stopMonitorInstance()
 		util.LogDebug("[Done]: Shell for %s", e.CmdIn.ID)
 
 		loggingTimeout := 5 * time.Second
@@ -213,8 +214,8 @@ func (e *ShellExecutor) Run() error {
 		}
 
 		// wait for logging with 5 seconds
-		util.Wait(&e.waitForLogging, loggingTimeout)
-		util.LogDebug("[Done]: Logging for %s", e.CmdIn.ID)
+		isSuccess := util.Wait(&e.waitForLogging, loggingTimeout)
+		util.LogDebug("[Done]: Logging for %s, timeout: %t", e.CmdIn.ID, !isSuccess)
 
 		done <- err
 	}()
@@ -225,47 +226,35 @@ func (e *ShellExecutor) Run() error {
 // Kill to kill executing cmd
 // it will jump to 'err := <-done:' on the Run() method
 func (e *ShellExecutor) Kill() error {
-	shellRunner := e.getShellRunner()
+	shellInstance := e.instance.shell
 
-	if shellRunner == nil {
+	if shellInstance == nil {
 		return nil
 	}
 
-	err := shellRunner.Process.Kill()
+	err := shellInstance.command.Process.Kill()
+	e.stopMonitorInstance()
 
 	result := e.Result
 	result.FinishAt = time.Now()
 	result.Code = domain.CmdExitCodeKilled
 	result.Status = domain.CmdStatusKilled
-
-	monitorRunner := e.getMonitorRunner()
-
-	if monitorRunner == nil {
-		return err
-	}
-
-	_ = monitorRunner.Process.Kill()
-	return nil
+	return err
 }
 
 //====================================================================
 //	Private
 //====================================================================
 
-func (e *ShellExecutor) setMonitorRunner(cmd *exec.Cmd) {
-	e.runner.monitor = cmd
-}
+func (e *ShellExecutor) stopMonitorInstance() {
+	monitorInstance := e.instance.monitor
 
-func (e *ShellExecutor) getMonitorRunner() *exec.Cmd {
-	return e.runner.monitor
-}
+	if monitorInstance == nil {
+		return
+	}
 
-func (e *ShellExecutor) setShellRunner(cmd *exec.Cmd) {
-	e.runner.shell = cmd
-}
-
-func (e *ShellExecutor) getShellRunner() *exec.Cmd {
-	return e.runner.shell
+	_ = monitorInstance.stdIn.Close()
+	_ = monitorInstance.stdOut.Close()
 }
 
 func (e *ShellExecutor) toErrorStatus(err error) error {
@@ -287,7 +276,7 @@ func waitForDone(e *ShellExecutor, done chan error) error {
 		result.FinishAt = time.Now()
 
 		// get wait status
-		ws := e.getShellRunner().ProcessState.Sys().(syscall.WaitStatus)
+		ws := e.instance.shell.command.ProcessState.Sys().(syscall.WaitStatus)
 		result.Code = ws.ExitStatus()
 
 		// success status if no err

@@ -112,7 +112,7 @@ func (s *CmdService) start() {
 				s.Execute(&cmdIn)
 
 			case <-time.After(time.Second * 10):
-				util.LogDebug("No more messages in queue. Timing out...")
+				util.LogDebug("...")
 			}
 		}
 	}()

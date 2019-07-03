@@ -2,8 +2,10 @@ package executor
 
 import (
 	"flow-agent-x/config"
+	"flow-agent-x/util"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -36,6 +38,9 @@ func init() {
 	log.SetFormatter(&log.JSONFormatter{})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
+
+	configInstance := config.GetInstance()
+	configInstance.LoggingDir = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent", "logs"))
 }
 
 func TestShouldRunLinuxShell(t *testing.T) {
@@ -101,7 +106,7 @@ func TestShouldRunLinuxShellButKilled(t *testing.T) {
 
 	go func() {
 		time.Sleep(5 * time.Second)
-		executor.Kill()
+		_ = executor.Kill()
 	}()
 
 	err := executor.Run()
@@ -155,7 +160,25 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestShouldGetRawLog(t *testing.T) {
+func TestShouldGetRawLogWithSuccessStatus(t *testing.T) {
+	assert := assert.New(t)
+
+	cmd.Scripts = []string{"echo hello"}
+
+	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor.EnableRawLog = true
+
+	go printLog(executor.GetLogChannel())
+	go printRaw(executor.GetRawChannel())
+
+	err := executor.Run()
+	assert.Nil(err)
+
+	assert.Equal(domain.CmdStatusSuccess, executor.Result.Status)
+	assert.True(executor.Result.Code == 0)
+}
+
+func TestShouldGetRawLogWithExceptionStatus(t *testing.T) {
 	assert := assert.New(t)
 
 	cmd.Scripts = []string{"rm aa"}
