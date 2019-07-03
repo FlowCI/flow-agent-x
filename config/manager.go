@@ -61,9 +61,9 @@ func GetInstance() *Manager {
 
 func (m *Manager) Init() {
 	// init dir
-	_ = os.MkdirAll(util.ParseString(m.Workspace), os.ModePerm)
-	_ = os.MkdirAll(util.ParseString(m.LoggingDir), os.ModePerm)
-	_ = os.MkdirAll(util.ParseString(m.PluginDir), os.ModePerm)
+	_ = os.MkdirAll(m.Workspace, os.ModePerm)
+	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
+	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {

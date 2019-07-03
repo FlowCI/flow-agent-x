@@ -161,7 +161,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	go func() {
 		defer s.release()
-		s.executor.Run()
+		_ = s.executor.Run()
 
 		result := s.executor.Result
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)

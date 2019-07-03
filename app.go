@@ -80,9 +80,9 @@ func start(c *cli.Context) error {
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = c.Int("port")
-	config.Workspace = c.String("workspace")
-	config.PluginDir = c.String("plugindir")
-	config.LoggingDir = c.String("logdir")
+	config.Workspace = util.ParseString(c.String("workspace"))
+	config.PluginDir = util.ParseString(c.String("plugindir"))
+	config.LoggingDir = util.ParseString(c.String("logdir"))
 	config.Init()
 
 	defer config.Close()
