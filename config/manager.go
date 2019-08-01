@@ -180,7 +180,7 @@ func initRabbitMQ(m *Manager) error {
 	qc.LogChannel = logCh
 
 	// init queue to receive job
-	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), true, false, false, false, nil)
+	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
 	qc.JobQueue = &jobQueue
 
 	m.Queue = qc
