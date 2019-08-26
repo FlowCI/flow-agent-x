@@ -54,7 +54,6 @@ type ShellExecutor struct {
 	EndTerm        string
 	Result         *domain.ExecutedCmd
 	TimeOutSeconds time.Duration
-	LogDir         string
 
 	EnableRawLog       bool // using 'script' to record raw print out
 	EnableInteractMode bool
@@ -105,15 +104,14 @@ func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
 		EnableRawLog:       false,
 		EnableInteractMode: false,
-		LogDir:             logDir,
 	}
 
 	// init path for shell, log and raw log
 	cmdId := executor.CmdIn.ID
-	executor.Path.Shell = filepath.Join(executor.LogDir, cmdId+".sh")
-	executor.Path.Log = filepath.Join(executor.LogDir, cmdId+".log")
-	executor.Path.Raw = filepath.Join(executor.LogDir, cmdId+".raw.log")
-	executor.Path.Tmp = filepath.Join(executor.LogDir, cmdId+".raw.tmp")
+	executor.Path.Shell = filepath.Join(logDir, cmdId+".sh")
+	executor.Path.Log = filepath.Join(logDir, cmdId+".log")
+	executor.Path.Raw = filepath.Join(logDir, cmdId+".raw.log")
+	executor.Path.Tmp = filepath.Join(logDir, cmdId+".raw.tmp")
 
 	// init channel
 	executor.channel.in = make(CmdChannel)
@@ -122,7 +120,6 @@ func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 
 	// init logging wait group
 	executor.waitForLogging.Add(2)
-
 	return executor
 }
 
@@ -153,8 +150,14 @@ func (e *ShellExecutor) Run() error {
 		//_ = os.Remove(e.Path.Shell)
 	}()
 
+	// init work dir
+	err := os.MkdirAll(e.CmdIn.WorkDir, os.ModePerm)
+	if util.HasError(err) {
+		return e.toErrorStatus(err)
+	}
+
 	// --- write script into {cmd id}.sh and make it executable
-	err := writeScriptToFile(e)
+	err = writeScriptToFile(e)
 	if util.HasError(err) {
 		return e.toErrorStatus(err)
 	}

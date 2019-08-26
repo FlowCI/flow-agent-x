@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -271,12 +272,7 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	config := config.GetInstance()
-
-	if util.IsEmptyString(in.WorkDir) {
-		in.WorkDir = config.Workspace
-	}
-
-	in.WorkDir = util.ParseString(in.WorkDir)
+	in.WorkDir = filepath.Join(config.Workspace, util.ParseString(in.WorkDir))
 	return nil
 }
 
