@@ -55,7 +55,7 @@ func logConsumer(executor *executor.ShellExecutor) {
 		util.LogDebug("[Raw]: %s", raw)
 
 		if config.HasQueue() {
-			exchangeName := config.Settings.LogsExchangeName
+			exchangeName := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
 
 			logItem := &domain.LogItem{CmdID: cmd.ID, Content: raw}

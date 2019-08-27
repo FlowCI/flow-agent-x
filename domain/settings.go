@@ -6,15 +6,14 @@ import (
 
 // RabbitMQConfig the mq config data
 type RabbitMQConfig struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
+	Uri          string
+	Callback     string
+	LogsExchange string
 }
 
 // GetConnectionString rabbitmq server connection string
 func (c *RabbitMQConfig) GetConnectionString() string {
-	return fmt.Sprintf("amqp://%s:%s@%s:%d", c.Username, c.Password, c.Host, c.Port)
+	return c.Uri
 }
 
 // ZookeeperConfig the zookeeper config data
@@ -29,11 +28,9 @@ func (zk ZookeeperConfig) String() string {
 
 // Settings the setting info from server side
 type Settings struct {
-	Agent             *Agent
-	Queue             *RabbitMQConfig
-	Zookeeper         *ZookeeperConfig
-	CallbackQueueName string
-	LogsExchangeName  string
+	Agent     *Agent
+	Queue     *RabbitMQConfig
+	Zookeeper *ZookeeperConfig
 }
 
 func (s Settings) String() string {

@@ -298,7 +298,7 @@ func saveAndPushBack(r *domain.ExecutedCmd) {
 
 	queue := config.Queue
 	json, _ := json.Marshal(r)
-	callback := config.Settings.CallbackQueueName
+	callback := config.Settings.Queue.Callback
 
 	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{
 		ContentType: util.HttpMimeJson,

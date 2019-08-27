@@ -22,7 +22,6 @@ func (v Variables) ToStringArray() []string {
 		envs[key] = val
 	}
 
-
 	array := make([]string, len(v))
 	index := 0
 	for key, val := range envs {
