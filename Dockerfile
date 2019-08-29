@@ -4,7 +4,9 @@ RUN rm /bin/sh && ln -s /bin/bash /bin/sh
 
 ## basic ##
 RUN apt update \
-    && apt install git curl -y
+    && apt install git curl -y \
+    && apt install apt-transport-https ca-certificates -y \
+    && apt install gnupg-agent software-properties-common -y
 
 ## nvm & node ##
 ENV NVM_VERSION=v0.34.0
@@ -36,7 +38,18 @@ RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linu
     && tar -xzf /usr/local/go.tar.gz \
     && rm -f /usr/local/go.tar.gz
 
-## docker & docker-compose ##
+## docker ##
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - \
+    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+       $(lsb_release -cs) \
+       stable" \
+    apt-get update \
+    apt-get install docker-ce docker-ce-cli containerd.io
+
+## docker compose ##
+RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose \
+    chmod +x /usr/local/bin/docker-compose \
+    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
 ## set PATH ##
 RUN echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
