@@ -39,17 +39,15 @@ RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linu
     && rm -f /usr/local/go.tar.gz
 
 ## docker ##
-RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add - \
-    add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
-       $(lsb_release -cs) \
-       stable" \
-    apt-get update \
-    apt-get install docker-ce docker-ce-cli containerd.io
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
+RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+RUN apt-get update
+RUN apt-get install docker-ce docker-ce-cli containerd.io -y
 
 ## docker compose ##
 RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose \
-    chmod +x /usr/local/bin/docker-compose \
-    ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+    && chmod +x /usr/local/bin/docker-compose \
+    && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
 ## set PATH ##
 RUN echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
