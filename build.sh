@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
-dep ensure
-go build -o flow-agent-x
+# build within golang docker
+docker run -it --rm \
+-v "$PWD":/go/src/flow-agent-x \
+-w /go/src/flow-agent-x golang \
+/bin/bash -c "curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && dep ensure && go build"
 
 docker build -f ./Dockerfile -t flowci/agent:latest .
 
