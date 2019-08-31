@@ -16,6 +16,10 @@ func (c *RabbitMQConfig) GetConnectionString() string {
 	return c.Uri
 }
 
+func (c *RabbitMQConfig) String() string {
+	return fmt.Sprintf("RABBIT:[uri=%s, callback=%s, logsExchange=%s]", c.Uri, c.Callback, c.LogsExchange)
+}
+
 // ZookeeperConfig the zookeeper config data
 type ZookeeperConfig struct {
 	Host string
@@ -23,7 +27,7 @@ type ZookeeperConfig struct {
 }
 
 func (zk ZookeeperConfig) String() string {
-	return fmt.Sprintf("Zk:[host=%s, root=%s]", zk.Host, zk.Root)
+	return fmt.Sprintf("ZK:[host=%s, root=%s]", zk.Host, zk.Root)
 }
 
 // Settings the setting info from server side
@@ -34,5 +38,5 @@ type Settings struct {
 }
 
 func (s Settings) String() string {
-	return s.Agent.String()
+	return fmt.Sprintf("%s\n%s\n%s", s.Agent.String(), s.Zookeeper.String(), s.Queue.String())
 }

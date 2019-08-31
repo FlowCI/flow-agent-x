@@ -145,7 +145,7 @@ func loadSettings(m *Manager) error {
 	}
 
 	m.Settings = message.Data
-	util.LogDebug("Settings been loaded from server: %v", m.Settings)
+	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
 	return nil
 }
 
