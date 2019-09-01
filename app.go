@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"flow-agent-x/config"
@@ -41,7 +44,6 @@ func main() {
 
 		cli.StringFlag{
 			Name:   "port, p",
-			Value:  "8088",
 			Usage:  "Port for agent",
 			EnvVar: "FLOWCI_AGENT_PORT",
 		},
@@ -79,7 +81,7 @@ func start(c *cli.Context) error {
 	config := config.GetInstance()
 	config.Server = c.String("url")
 	config.Token = c.String("token")
-	config.Port = c.Int("port")
+	config.Port = getPort(c.String("port"))
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = util.ParseString(c.String("plugindir"))
 	config.LoggingDir = util.ParseString(c.String("logdir"))
@@ -116,4 +118,23 @@ func start(c *cli.Context) error {
 
 	util.LogInfo("Agent stopped")
 	return nil
+}
+
+func getPort(strPort string) int {
+	if util.IsEmptyString(strPort) {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		util.FailOnError(err, "Cannot start listen localhost")
+		defer func() {
+			_ = listener.Close()
+		}()
+
+		addressAndPort := listener.Addr().String()
+
+		strPort = addressAndPort[strings.Index(addressAndPort, ":")+1:]
+		util.LogDebug("Port = " + strPort)
+	}
+
+	i, err := strconv.Atoi(strPort)
+	util.FailOnError(err, "Invalid port format")
+	return i
 }
