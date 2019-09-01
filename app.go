@@ -19,6 +19,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+const version = "0.19.35"
+
 func init() {
 	util.LogInit()
 	util.EnableDebugLog()
@@ -28,6 +30,7 @@ func main() {
 	app := cli.NewApp()
 	app.Name = "Agent of flow.ci"
 	app.Action = start
+	app.Version = version
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
 			Name:   "url, u",
