@@ -1,5 +1,9 @@
 package domain
 
+import (
+	"fmt"
+)
+
 // AgentStatus string of agent status
 type AgentStatus string
 
@@ -15,9 +19,10 @@ const (
 )
 
 // AgentConnect request data to get settings from server
-type AgentConnect struct {
+type AgentInit struct {
 	Token string `json:"token"`
 	Port  int    `json:"port"`
+	Os    string `json:"os"`
 }
 
 // Agent Class
@@ -53,4 +58,8 @@ func (a *Agent) IsOnline() bool {
 
 func (a *Agent) GetQueueName() string {
 	return "queue.agent." + a.ID
+}
+
+func (a Agent) String() string {
+	return fmt.Sprintf("Agent:[id=%s, name=%s, token=%s]", a.ID, a.Name, a.Token)
 }

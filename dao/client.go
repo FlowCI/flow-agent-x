@@ -3,7 +3,8 @@ package dao
 import (
 	"database/sql"
 
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/util"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -33,7 +34,7 @@ func NewInstance(path string) (*Client, error) {
 }
 
 func (c *Client) Close() {
-	if !util.IsNil(c.db) {
+	if c.db != nil {
 		c.db.Close()
 	}
 }

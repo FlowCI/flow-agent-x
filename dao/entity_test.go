@@ -3,7 +3,7 @@ package dao
 import (
 	"testing"
 
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/util"
 
 	"github.com/stretchr/testify/assert"
 )

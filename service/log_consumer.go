@@ -1,55 +1,126 @@
 package service
 
 import (
-	"bufio"
+	"bytes"
+	"encoding/json"
+	"flow-agent-x/executor"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"mime/multipart"
+	"net/http"
 	"os"
 	"path/filepath"
 
-	"github.com/flowci/flow-agent-x/config"
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/config"
+	"flow-agent-x/domain"
+	"flow-agent-x/util"
+
 	"github.com/streadway/amqp"
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(cmd *domain.CmdIn, channel <-chan *domain.LogItem) {
-	defer util.LogDebug("Exit: log consumer")
-
+func logConsumer(executor *executor.ShellExecutor) {
 	config := config.GetInstance()
-	logFilePath := filepath.Join(config.LoggingDir, cmd.ID+".log")
+	cmd := executor.CmdIn
+	logChannel := executor.GetLogChannel()
+	rawChannel := executor.GetRawChannel()
 
-	f, _ := os.Create(logFilePath)
-	defer f.Close()
+	// upload log after flush!!
+	defer func() {
+		err := uploadLog(executor.Path.Raw)
+		util.LogIfError(err)
 
-	writer := bufio.NewWriter(f)
-	defer writer.Flush()
+		err = uploadLog(executor.Path.Log)
+		util.LogIfError(err)
+
+		util.LogDebug("[Exit]: logConsumer")
+	}()
+
+	go func() {
+		for {
+			_, ok := <-logChannel
+			if !ok {
+				break
+			}
+		}
+	}()
 
 	for {
-		item, ok := <-channel
+		raw, ok := <-rawChannel
 		if !ok {
-			return
+			break
 		}
 
-		util.LogDebug(item.Content)
-
-		writeLogToFile(writer, item)
+		util.LogDebug("[Raw]: %s", raw)
 
 		if config.HasQueue() {
-			exchangeName := config.Settings.LogsExchangeName
+			exchangeName := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
-			writeLogToQueue(exchangeName, channel, item)
+
+			logItem := &domain.LogItem{CmdID: cmd.ID, Content: raw}
+			writeLogToQueue(exchangeName, channel, logItem)
 		}
 	}
 }
 
+func uploadLog(logFile string) error {
+	config := config.GetInstance()
+
+	// read file
+	file, err := os.Open(logFile)
+	if util.HasError(err) {
+		return err
+	}
+	defer file.Close()
+
+	// construct multi part
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile("file", filepath.Base(logFile))
+	if util.HasError(err) {
+		return err
+	}
+
+	_, err = io.Copy(part, file)
+	if util.HasError(err) {
+		return err
+	}
+
+	// flush file to writer
+	writer.Close()
+
+	// send request
+	url := config.Server + "/agents/logs/upload"
+	request, _ := http.NewRequest("POST", url, body)
+	request.Header.Set(util.HttpHeaderAgentToken, config.Token)
+	request.Header.Set(util.HttpHeaderContentType, writer.FormDataContentType())
+
+	response, err := http.DefaultClient.Do(request)
+	if util.HasError(err) {
+		return err
+	}
+
+	// get response data
+	raw, _ := ioutil.ReadAll(response.Body)
+	var message domain.Response
+	err = json.Unmarshal(raw, &message)
+	if util.HasError(err) {
+		return err
+	}
+
+	if message.IsOk() {
+		util.LogDebug("[Uploaded]: %s", logFile)
+		return nil
+	}
+
+	return fmt.Errorf(message.Message)
+}
+
 func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogItem) {
-	qChannel.Publish(exchange, "", false, false, amqp.Publishing{
+	_ = qChannel.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpTextPlain,
 		Body:        []byte(item.String()),
 	})
-}
-
-func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {
-	w.WriteString(item.Content)
-	w.WriteByte(util.UnixLineBreak)
 }

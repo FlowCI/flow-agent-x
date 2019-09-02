@@ -7,20 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRabbitMQConfigConnectionString(t *testing.T) {
-	assert := assert.New(t)
-
-	mq := &RabbitMQConfig{
-		Host:     "aaa",
-		Port:     1234,
-		Username: "guest",
-		Password: "guest",
-	}
-
-	assert.Equal("amqp://guest:guest@aaa:1234", mq.GetConnectionString())
-}
-
-func TestSettringsShouldParseFromJson(t *testing.T) {
+func TestSettingsShouldParseFromJson(t *testing.T) {
 	// init:
 	assert := assert.New(t)
 
@@ -37,19 +24,15 @@ func TestSettringsShouldParseFromJson(t *testing.T) {
 		},
 
 		"queue": {
-			"host": "127.0.0.1",
-			"port": 15671,
-			"username": "guest",
-			"password": "guest"
+			"uri": "amqp://guest:guest@127.0.0.1:5671",
+			"callback": "callback-q",
+			"logsExchange": "logs-exchange"
 		},
 
 		"zookeeper": {
 			"host": "127.0.0.1:2181",
 			"root": "/flow-x"
-		},
-
-		"callbackQueueName": "callback-q",
-		"logsExchangeName": "logs-exchange"
+		}
 	}`)
 
 	// when: parse
@@ -59,16 +42,11 @@ func TestSettringsShouldParseFromJson(t *testing.T) {
 	assert.Nil(err)
 	assert.NotNil(settings)
 
-	// then: verify settings data
-	assert.Equal("callback-q", settings.CallbackQueueName)
-	assert.Equal("logs-exchange", settings.LogsExchangeName)
-
 	// then: verify queue data
 	assert.NotNil(settings.Queue)
-	assert.Equal("127.0.0.1", settings.Queue.Host)
-	assert.Equal(15671, settings.Queue.Port)
-	assert.Equal("guest", settings.Queue.Username)
-	assert.Equal("guest", settings.Queue.Password)
+	assert.Equal("amqp://guest:guest@127.0.0.1:5671", settings.Queue.Uri)
+	assert.Equal("callback-q", settings.Queue.Callback)
+	assert.Equal("logs-exchange", settings.Queue.LogsExchange)
 
 	// then: verify zookeeper data
 	assert.NotNil(settings.Zookeeper)

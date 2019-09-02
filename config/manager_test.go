@@ -3,7 +3,6 @@ package config
 import (
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,17 +47,14 @@ var (
 	}))
 )
 
-func init() {
-	os.Setenv("FLOWCI_SERVER_URL", ts.URL)
-	os.Setenv("FLOWCI_AGENT_TOKEN", "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0")
-	os.Setenv("FLOWCI_AGENT_PORT", "8081")
-}
-
 func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	assert := assert.New(t)
 	defer ts.Close()
 
 	m := GetInstance()
+	m.Server = ts.URL
+	m.Token = "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0"
+	m.Port = 8081
 	m.Init()
 	defer m.Close()
 

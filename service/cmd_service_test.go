@@ -4,17 +4,14 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 	"time"
 
-	"github.com/flowci/flow-agent-x/domain"
+	"flow-agent-x/config"
+	"flow-agent-x/domain"
+	"flow-agent-x/util"
 
 	"github.com/stretchr/testify/assert"
-
-	"github.com/flowci/flow-agent-x/util"
-
-	"github.com/flowci/flow-agent-x/config"
 )
 
 var (
@@ -51,7 +48,7 @@ var (
 
 	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/agents/connect" {
-			w.Write(rBody)
+			_, _ = w.Write(rBody)
 		}
 	}))
 
@@ -77,10 +74,6 @@ var (
 
 func init() {
 	util.EnableDebugLog()
-
-	os.Setenv("FLOWCI_SERVER_URL", ts.URL)
-	os.Setenv("FLOWCI_AGENT_TOKEN", "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0")
-	os.Setenv("FLOWCI_AGENT_PORT", "8081")
 }
 
 func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
@@ -88,15 +81,18 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 
 	// init:
 	config := config.GetInstance()
+	config.Server = ts.URL
+	config.Token = "ca9b8be2-c0e5-4b86-8fdc-b92d921597a0"
+	config.Port = 8081
 	config.Init()
 
 	defer config.Close()
-	assert.True(config.HasQueue())
+	assert.True(config.HasQueue() == true)
 
 	// create queue consumer
 	callbackQueue := config.Settings.CallbackQueueName
 	ch := config.Queue.Channel
-	ch.QueueDeclare(callbackQueue, false, true, false, false, nil)
+	_, _ = ch.QueueDeclare(callbackQueue, false, true, false, false, nil)
 	defer ch.QueueDelete(callbackQueue, false, false, true)
 
 	msgs, err := ch.Consume(callbackQueue, "test", true, false, false, false, nil)

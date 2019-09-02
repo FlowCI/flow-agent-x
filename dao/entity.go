@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flowci/flow-agent-x/util"
+	"flow-agent-x/util"
 )
 
 const (
@@ -34,7 +34,7 @@ type EntityColumn struct {
 func (f *EntityColumn) toQuery() (string, error) {
 	t := typeMapping[f.Field.Type.Kind()]
 
-	if util.IsNil(t) {
+	if util.IsEmptyString(t) {
 		return util.EmptyStr, ErrorDBTypeNotAvailable
 	}
 

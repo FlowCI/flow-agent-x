@@ -43,8 +43,8 @@ const (
 )
 
 const (
-	// CmdExitCodeUnknow default exit code
-	CmdExitCodeUnknow = -1
+	// CmdExitCodeUnknown default exit code
+	CmdExitCodeUnknown = -1
 
 	// CmdExitCodeTimeOut exit code for timeout
 	CmdExitCodeTimeOut = -100
@@ -52,7 +52,7 @@ const (
 	// CmdExitCodeKilled exit code for killed
 	CmdExitCodeKilled = -1
 
-	// CmdExitCodeSuccess exit code for command executed successfuly
+	// CmdExitCodeSuccess exit code for command executed successfully
 	CmdExitCodeSuccess = 0
 )
 

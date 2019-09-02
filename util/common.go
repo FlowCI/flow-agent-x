@@ -5,14 +5,48 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"runtime"
 	"strings"
 )
 
 const (
-	UnixLineBreak    = '\n'
-	UnixLineBreakStr = "\n"
-	EmptyStr         = ""
+	CRLF          = "\r\n"
+	UnixLineBreak = "\n"
+
+	EmptyStr = ""
+
+	OSWin   = "windows"
+	OSLinux = "linux"
+	OSMac   = "darwin"
 )
+
+func OS () string {
+	if IsMac() {
+		return "MAC"
+	}
+
+	if IsWindows() {
+		return "WIN"
+	}
+
+	if IsLinux() {
+		return "LINUX"
+	}
+
+	return "UNKNOWN"
+}
+
+func IsMac() bool {
+	return runtime.GOOS == OSMac
+}
+
+func IsLinux() bool {
+	return runtime.GOOS == OSLinux
+}
+
+func IsWindows() bool {
+	return runtime.GOOS == OSWin
+}
 
 func HasError(err error) bool {
 	return err != nil
@@ -28,10 +62,6 @@ func FailOnError(err error, msg string) {
 // IsEmptyString to check input s is empty
 func IsEmptyString(s string) bool {
 	return s == ""
-}
-
-func IsNil(v interface{}) bool {
-	return v == nil
 }
 
 // IsPointerType to check the input v is pointer type
@@ -61,6 +91,17 @@ func GetValue(v interface{}) reflect.Value {
 
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
+	return parseVariablesFrom(src, os.Getenv)
+}
+
+func ParseStringWithSource(src string, source map[string]string) string {
+	return parseVariablesFrom(src, func(env string) string {
+		return source[env]
+	})
+}
+
+// replace ${VAR} with actual variable value
+func parseVariablesFrom(src string, getVariable func(string)string) string {
 	if IsEmptyString(src) {
 		return src
 	}
@@ -83,7 +124,12 @@ func ParseString(src string) string {
 			}
 
 			env := src[lIndex+1 : rIndex]
-			val := os.Getenv(env)
+			val := getVariable(env)
+
+			// do not replace if no value found
+			if IsEmptyString(val) {
+				break
+			}
 
 			src = strings.Replace(src, fmt.Sprintf("${%s}", env), val, -1)
 			i = rIndex

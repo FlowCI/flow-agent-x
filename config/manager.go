@@ -7,14 +7,12 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
 	"sync"
 
-	"github.com/streadway/amqp"
+	"flow-agent-x/domain"
+	"flow-agent-x/util"
 
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/util"
+	"github.com/streadway/amqp"
 )
 
 const (
@@ -24,11 +22,6 @@ const (
 var (
 	singleton *Manager
 	once      sync.Once
-
-	defaultPort       = "8000"
-	defaultWorkspace  = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent"))
-	defaultLoggingDir = filepath.Join(defaultWorkspace, "logs")
-	defaultPluginDir  = filepath.Join(defaultWorkspace, "plugins")
 )
 
 type QueueConfig struct {
@@ -61,23 +54,16 @@ func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
 		singleton.IsOffline = false
-		singleton.Workspace = defaultWorkspace
-		singleton.LoggingDir = defaultLoggingDir
-		singleton.PluginDir = defaultPluginDir
 		singleton.Quit = make(chan bool)
-
-		os.MkdirAll(defaultWorkspace, os.ModePerm)
-		os.MkdirAll(defaultLoggingDir, os.ModePerm)
-		os.MkdirAll(defaultPluginDir, os.ModePerm)
 	})
 	return singleton
 }
 
 func (m *Manager) Init() {
-	server, token, port := getVaraibles()
-	m.Server = server
-	m.Token = token
-	m.Port = port
+	// init dir
+	_ = os.MkdirAll(m.Workspace, os.ModePerm)
+	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
+	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {
@@ -94,7 +80,7 @@ func (m *Manager) Init() {
 		return initZookeeper(m)
 	}()
 
-	if util.HasError(err) {
+	if util.LogIfError(err) {
 		toOfflineMode(m)
 		return
 	}
@@ -113,9 +99,9 @@ func (m *Manager) HasZookeeper() bool {
 // Close release resources and connections
 func (m *Manager) Close() {
 	if m.HasQueue() {
-		m.Queue.Channel.Close()
-		m.Queue.LogChannel.Close()
-		m.Queue.Conn.Close()
+		_ = m.Queue.Channel.Close()
+		_ = m.Queue.LogChannel.Close()
+		_ = m.Queue.Conn.Close()
 	}
 
 	if m.HasZookeeper() {
@@ -130,19 +116,24 @@ func toOfflineMode(m *Manager) {
 
 func loadSettings(m *Manager) error {
 	uri := m.Server + "/agents/connect"
-	body, _ := json.Marshal(domain.AgentConnect{
-		Token: m.Token,
-		Port:  m.Port,
+	body, _ := json.Marshal(domain.AgentInit{
+		Port: m.Port,
+		Os:   util.OS(),
 	})
 
-	var message domain.SettingsResponse
-	resp, errFromReq := http.Post(uri, util.HttpMimeJson, bytes.NewBuffer(body))
+	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
+	request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
+	request.Header.Set(util.HttpHeaderAgentToken, m.Token)
+
+	resp, errFromReq := http.DefaultClient.Do(request)
 	if errFromReq != nil {
-		return fmt.Errorf(errSettingConnectFail)
+		return fmt.Errorf("%s: %v", errSettingConnectFail, errFromReq)
 	}
 
 	defer resp.Body.Close()
 	raw, _ := ioutil.ReadAll(resp.Body)
+
+	var message domain.SettingsResponse
 	errFromJSON := json.Unmarshal(raw, &message)
 
 	if errFromJSON != nil {
@@ -154,7 +145,7 @@ func loadSettings(m *Manager) error {
 	}
 
 	m.Settings = message.Data
-	util.LogDebug("Settings been loaded from server: %v", m.Settings)
+	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
 	return nil
 }
 
@@ -189,7 +180,7 @@ func initRabbitMQ(m *Manager) error {
 	qc.LogChannel = logCh
 
 	// init queue to receive job
-	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), true, false, false, false, nil)
+	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
 	qc.JobQueue = &jobQueue
 
 	m.Queue = qc
@@ -227,11 +218,4 @@ func initZookeeper(m *Manager) error {
 
 func getZkPath(s *domain.Settings) string {
 	return s.Zookeeper.Root + "/" + s.Agent.ID
-}
-
-func getVaraibles() (server string, token string, port int) {
-	server = os.Getenv("FLOWCI_SERVER_URL")
-	token = os.Getenv("FLOWCI_AGENT_TOKEN")
-	port, _ = strconv.Atoi(util.GetEnv("FLOWCI_AGENT_PORT", defaultPort))
-	return
 }

@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -9,22 +10,10 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"github.com/flowci/flow-agent-x/config"
-	"github.com/flowci/flow-agent-x/domain"
-	"github.com/flowci/flow-agent-x/executor"
-	"github.com/flowci/flow-agent-x/util"
-)
-
-const (
-	// VarAgentWorkspace default var
-	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
-
-	// VarAgentPluginPath default var
-	VarAgentPluginPath = "FLOWCI_AGENT_PLUGIN_PATH"
-)
-
-const (
-	defaultChannelBufferSize = 1000
+	"flow-agent-x/config"
+	"flow-agent-x/domain"
+	"flow-agent-x/executor"
+	"flow-agent-x/util"
 )
 
 var (
@@ -56,7 +45,7 @@ func (s *CmdService) IsRunning() bool {
 	return s.executor != nil
 }
 
-// Execute execute cmd accroding the type
+// Execute execute cmd according to the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
 	if in.Type == domain.CmdTypeShell {
 		return execShellCmd(s, in)
@@ -103,7 +92,7 @@ func (s *CmdService) start() {
 	}
 
 	go func() {
-		defer util.LogDebug("Exit: rabbitmq consumer")
+		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
@@ -124,7 +113,7 @@ func (s *CmdService) start() {
 				s.Execute(&cmdIn)
 
 			case <-time.After(time.Second * 10):
-				util.LogDebug("No more messages in queue. Timing out...")
+				util.LogDebug("...")
 			}
 		}
 	}()
@@ -132,7 +121,7 @@ func (s *CmdService) start() {
 
 func (s *CmdService) release() {
 	s.executor = nil
-	util.LogDebug("Exit: cmd been executed and service is available !")
+	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
 func execShellCmd(s *CmdService, in *domain.CmdIn) error {
@@ -166,12 +155,14 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	// init and start executor
-	s.executor = executor.NewShellExecutor(in)
-	go logConsumer(in, s.executor.GetLogChannel())
+	s.executor = executor.NewShellExecutor(in, config.LoggingDir)
+	s.executor.EnableRawLog = true
+
+	go logConsumer(s.executor)
 
 	go func() {
 		defer s.release()
-		s.executor.Run()
+		_ = s.executor.Run()
 
 		result := s.executor.Result
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
@@ -208,14 +199,14 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 		return err
 	}
 
-	exec := executor.NewShellExecutor(in)
-	go logConsumer(in, exec.GetLogChannel())
+	shellExecutor := executor.NewShellExecutor(in, config.GetInstance().LoggingDir)
+	go logConsumer(shellExecutor)
 
-	s.session[in.ID] = exec
+	s.session[in.ID] = shellExecutor
 
 	// start to run executor by thread
 	go func() {
-		exec.Run()
+		shellExecutor.Run()
 		delete(s.session, in.ID)
 		util.LogDebug("agent: session '%s' is exited", in.ID)
 	}()
@@ -226,7 +217,7 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if !util.IsNil(err) {
+	if !util.HasError(err) {
 		return err
 	}
 
@@ -244,7 +235,7 @@ func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
 func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	exec, err := verifyAndGetExecutor(s, in)
 
-	if util.IsNil(err) {
+	if util.HasError(err) {
 		return exec.Kill()
 	}
 
@@ -258,7 +249,7 @@ func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecu
 
 	exec := s.session[in.ID]
 
-	if util.IsNil(exec) {
+	if exec == nil {
 		return nil, ErrorCmdSessionNotFound
 	}
 
@@ -276,21 +267,12 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	// init inputs if undefined
-	if util.IsNil(in.Inputs) {
+	if in.Inputs == nil {
 		in.Inputs = make(domain.Variables, 10)
 	}
 
 	config := config.GetInstance()
-
-	if util.IsEmptyString(in.WorkDir) {
-		in.WorkDir = config.Workspace
-	}
-
-	in.WorkDir = util.ParseString(in.WorkDir)
-
-	in.Inputs[VarAgentPluginPath] = config.PluginDir
-	in.Inputs[VarAgentWorkspace] = config.Workspace
-
+	in.WorkDir = filepath.Join(config.Workspace, util.ParseString(in.WorkDir))
 	return nil
 }
 
@@ -316,7 +298,7 @@ func saveAndPushBack(r *domain.ExecutedCmd) {
 
 	queue := config.Queue
 	json, _ := json.Marshal(r)
-	callback := config.Settings.CallbackQueueName
+	callback := config.Settings.Queue.Callback
 
 	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{
 		ContentType: util.HttpMimeJson,
