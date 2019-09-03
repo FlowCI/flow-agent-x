@@ -16,21 +16,21 @@ ENV NODE_VERSION=v10.16.3
 RUN curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.sh | bash \
     && source $DEFAULT_NVM_DIR/nvm.sh \
     && nvm install $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && nvm use default \
     && echo "" >> /root/.bashrc \
-    && echo "source ~/.nvm/nvm.sh" >> /root/.bashrc
+    && echo "source ~/.nvm/nvm.sh" >> /root/.bashrc \
+    && echo "nvm alias default $NODE_VERSION" >> /root/.bashrc \
+    && echo "nvm use default" >> /root/.bashrc
 
 ## java & maven ##
 ENV JAVA_VERSION=openjdk-8-jdk
 ENV JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
-ENV MAVEN_VERSION=3.6.1
+ENV MAVEN_VERSION=3.5.4
 ENV MAVEN_HOME=/usr/local/apache-maven-$MAVEN_VERSION
 ENV M2_HOME=$MAVEN_HOME
 
-RUN apt install $JAVA_VERSION -y
-#    && curl -o /usr/local/maven.tar.gz http://apache.mirrors.spacedump.net/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
-#    && tar -C /usr/local -xzf /usr/local/maven.tar.gz
+RUN apt install $JAVA_VERSION -y \
+    && curl -o /usr/local/maven.tar.gz http://apache.mirrors.spacedump.net/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
+    && tar -C /usr/local -xzf /usr/local/maven.tar.gz
 
 ## docker ##
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
