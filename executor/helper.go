@@ -12,7 +12,7 @@ import (
 
 const (
 	linuxBash        = "/bin/bash"
-	linuxBashShebang = "#!/bin/bash"
+	linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
 )
 
 // CmdInstance: command with stdin, stdout and stderr

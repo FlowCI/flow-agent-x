@@ -17,7 +17,9 @@ RUN curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.s
     && source $DEFAULT_NVM_DIR/nvm.sh \
     && nvm install $NODE_VERSION \
     && nvm alias default $NODE_VERSION \
-    && nvm use default
+    && nvm use default \
+    && echo "" >> /root/.bashrc \
+    && echo "source ~/.nvm/nvm.sh" >> /root/.bashrc
 
 ## java & maven ##
 ENV JAVA_VERSION=openjdk-8-jdk
@@ -26,17 +28,9 @@ ENV MAVEN_VERSION=3.6.1
 ENV MAVEN_HOME=/usr/local/apache-maven-$MAVEN_VERSION
 ENV M2_HOME=$MAVEN_HOME
 
-RUN apt install $JAVA_VERSION -y \
-    && curl -o /usr/local/maven.tar.gz http://apache.mirrors.spacedump.net/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
-    && tar -C /usr/local -xzf /usr/local/maven.tar.gz
-
-## go ##
-ENV GOLANG_VERSION=1.12.9
-ENV GOLANG_HOME=/usr/local/go
-
-RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linux-amd64.tar.gz \
-    && tar -xzf /usr/local/go.tar.gz \
-    && rm -f /usr/local/go.tar.gz
+RUN apt install $JAVA_VERSION -y
+#    && curl -o /usr/local/maven.tar.gz http://apache.mirrors.spacedump.net/maven/maven-3/$MAVEN_VERSION/binaries/apache-maven-$MAVEN_VERSION-bin.tar.gz \
+#    && tar -C /usr/local -xzf /usr/local/maven.tar.gz
 
 ## docker ##
 RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
@@ -49,8 +43,16 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
     && chmod +x /usr/local/bin/docker-compose \
     && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
+## go ##
+ENV GOLANG_VERSION=1.12.9
+ENV GOLANG_HOME=/usr/local/go
+
+RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linux-amd64.tar.gz \
+    && tar  -C /usr/local -xzf /usr/local/go.tar.gz
+
 ## set PATH ##
-RUN echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
+RUN echo "" >> /root/.bashrc \
+    && echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
 
 ENV TARGET_DIR=/flow.ci.agent
 ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
