@@ -151,13 +151,15 @@ func (e *ShellExecutor) Run() error {
 	}()
 
 	// init work dir
-	err := os.MkdirAll(e.CmdIn.WorkDir, os.ModePerm)
-	if util.HasError(err) {
-		return e.toErrorStatus(err)
+	if !util.IsEmptyString(e.CmdIn.WorkDir) {
+		err := os.MkdirAll(e.CmdIn.WorkDir, os.ModePerm)
+		if util.HasError(err) {
+			return e.toErrorStatus(err)
+		}
 	}
 
 	// --- write script into {cmd id}.sh and make it executable
-	err = writeScriptToFile(e)
+	err := writeScriptToFile(e)
 	if util.HasError(err) {
 		return e.toErrorStatus(err)
 	}

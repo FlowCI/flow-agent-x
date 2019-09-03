@@ -16,10 +16,9 @@ ENV NODE_VERSION=v10.16.3
 RUN curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.sh | bash \
     && source $DEFAULT_NVM_DIR/nvm.sh \
     && nvm install $NODE_VERSION \
-    && echo "" >> /root/.bashrc \
-    && echo "source ~/.nvm/nvm.sh" >> /root/.bashrc \
-    && echo "nvm alias default $NODE_VERSION" >> /root/.bashrc \
-    && echo "nvm use default" >> /root/.bashrc
+    && nvm alias default $NODE_VERSION \
+    && nvm use default \
+    && echo "source $DEFAULT_NVM_DIR/nvm.sh" >> /root/.bashrc
 
 ## java & maven ##
 ENV JAVA_VERSION=openjdk-8-jdk
