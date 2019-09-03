@@ -53,7 +53,7 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
 RUN echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
 
 ENV TARGET_DIR=/flow.ci.agent
-ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspacke
+ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
 
 RUN mkdir -p $TARGET_DIR \
     && mkdir -p $FLOWCI_AGENT_WORKSPACE
