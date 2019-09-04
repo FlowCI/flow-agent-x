@@ -1,7 +1,5 @@
 FROM ubuntu:18.04
 
-RUN rm /bin/sh && ln -s /bin/bash /bin/sh
-
 ## basic ##
 RUN apt update \
     && apt install git curl -y \
@@ -13,11 +11,12 @@ ENV NVM_VERSION=v0.34.0
 ENV DEFAULT_NVM_DIR=/root/.nvm
 ENV NODE_VERSION=v10.16.3
 
-RUN curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.sh | bash \
-    && source $DEFAULT_NVM_DIR/nvm.sh \
-    && nvm install $NODE_VERSION \
-    && nvm alias default $NODE_VERSION \
-    && nvm use default \
+RUN bash -c 'curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.sh | bash'
+RUN bash -c 'source $DEFAULT_NVM_DIR/nvm.sh && \
+    nvm install $NODE_VERSION && \
+    nvm alias default $NODE_VERSION && \
+    nvm use default'
+RUN echo "" >> /root/.bashrc
     && echo "source $DEFAULT_NVM_DIR/nvm.sh" >> /root/.bashrc
 
 ## java & maven ##
