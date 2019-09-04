@@ -2,22 +2,23 @@ FROM ubuntu:18.04
 
 ## basic ##
 RUN apt update \
-    && apt install git curl -y \
+    && apt install git curl vim -y \
     && apt install apt-transport-https ca-certificates -y \
     && apt install gnupg-agent software-properties-common -y
 
 ## nvm & node ##
 ENV NVM_VERSION=v0.34.0
-ENV DEFAULT_NVM_DIR=/root/.nvm
+ENV NVM_DIR=/usr/local/nvm
 ENV NODE_VERSION=v10.16.3
 
+RUN mkdir $NVM_DIR
 RUN bash -c 'curl https://raw.githubusercontent.com/creationix/nvm/$NVM_VERSION/install.sh | bash'
-RUN bash -c 'source $DEFAULT_NVM_DIR/nvm.sh && \
-    nvm install $NODE_VERSION && \
-    nvm alias default $NODE_VERSION && \
-    nvm use default'
-RUN echo "" >> /root/.bashrc \
-    && echo "source $DEFAULT_NVM_DIR/nvm.sh" >> /root/.bashrc
+RUN bash -c 'source $NVM_DIR/nvm.sh \
+    && nvm install $NODE_VERSION \
+    && nvm alias default $NODE_VERSION \
+    && nvm use default'
+
+ENV NODE_PATH=$NVM_DIR/$NODE_VERSION/lib/node_modules
 
 ## java & maven ##
 ENV JAVA_VERSION=openjdk-8-jdk
@@ -50,7 +51,7 @@ RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linu
 
 ## set PATH ##
 RUN echo "" >> /root/.bashrc \
-    && echo "export PATH=$PATH:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
+    && echo "export PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
 
 ENV TARGET_DIR=/flow.ci.agent
 ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
