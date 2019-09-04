@@ -16,7 +16,7 @@ RUN bash -c 'source $DEFAULT_NVM_DIR/nvm.sh && \
     nvm install $NODE_VERSION && \
     nvm alias default $NODE_VERSION && \
     nvm use default'
-RUN echo "" >> /root/.bashrc
+RUN echo "" >> /root/.bashrc \
     && echo "source $DEFAULT_NVM_DIR/nvm.sh" >> /root/.bashrc
 
 ## java & maven ##
