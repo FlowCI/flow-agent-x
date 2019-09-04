@@ -176,6 +176,7 @@ func TestShouldGetRawLogWithSuccessStatus(t *testing.T) {
 
 	assert.Equal(domain.CmdStatusSuccess, executor.Result.Status)
 	assert.True(executor.Result.Code == 0)
+	assert.Equal(int64(1), executor.Result.LogSize)
 }
 
 func TestShouldGetRawLogWithExceptionStatus(t *testing.T) {
