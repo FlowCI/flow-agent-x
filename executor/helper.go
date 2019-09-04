@@ -5,7 +5,6 @@ import (
 	"flow-agent-x/domain"
 	"flow-agent-x/util"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 )
@@ -37,50 +36,6 @@ func createCommand(cmdIn *domain.CmdIn) *CmdInstance {
 		stdOut:  stdout,
 		stdErr:  stderr,
 	}
-}
-
-// Write script into file and make it executable
-func writeScriptToFile(e *ShellExecutor) error {
-	shellFile, _ := os.Create(e.Path.Shell)
-	defer shellFile.Close()
-
-	if !e.CmdIn.HasScripts() {
-		return nil
-	}
-
-	_, _ = shellFile.WriteString(appendNewLine(linuxBashShebang))
-
-	cmdIn := e.CmdIn
-	endTerm := e.EndTerm
-
-	// setup allow failure
-	set := "set -e"
-	if cmdIn.AllowFailure {
-		set = "set +e"
-	}
-	_, _ = shellFile.WriteString(appendNewLine(set))
-
-	// write scripts
-	for _, script := range cmdIn.Scripts {
-		_, err := shellFile.WriteString(appendNewLine(script))
-
-		if util.HasError(err) {
-			return err
-		}
-	}
-
-	// write for end term
-	if len(cmdIn.EnvFilters) > 0 {
-		_, _ = shellFile.WriteString(appendNewLine("echo " + endTerm))
-		_, _ = shellFile.WriteString(appendNewLine("env"))
-	}
-
-	err := shellFile.Chmod(0777)
-	if util.HasError(err) {
-		return err
-	}
-
-	return nil
 }
 
 func matchEnvFilter(env string, filters []string) bool {

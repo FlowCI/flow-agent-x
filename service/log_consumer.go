@@ -22,44 +22,29 @@ import (
 // Push stdout, stderr log back to server
 func logConsumer(executor *executor.ShellExecutor) {
 	config := config.GetInstance()
-	cmd := executor.CmdIn
 	logChannel := executor.GetLogChannel()
-	rawChannel := executor.GetRawChannel()
 
 	// upload log after flush!!
 	defer func() {
-		err := uploadLog(executor.Path.Raw)
-		util.LogIfError(err)
-
-		err = uploadLog(executor.Path.Log)
+		err := uploadLog(executor.Path.Log)
 		util.LogIfError(err)
 
 		util.LogDebug("[Exit]: logConsumer")
 	}()
 
-	go func() {
-		for {
-			_, ok := <-rawChannel
-			if !ok {
-				break
-			}
-		}
-	}()
-
 	for {
-		raw, ok := <-logChannel
+		item, ok := <-logChannel
 		if !ok {
 			break
 		}
 
-		util.LogDebug("[LOG]: %s", raw)
+		util.LogDebug("[LOG]: %s", item)
 
 		if config.HasQueue() {
 			exchangeName := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
 
-			logItem := &domain.LogItem{CmdID: cmd.ID, Content: raw}
-			writeLogToQueue(exchangeName, channel, logItem)
+			writeLogToQueue(exchangeName, channel, item)
 		}
 	}
 }
