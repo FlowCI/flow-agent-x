@@ -156,7 +156,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	// init and start executor
 	s.executor = executor.NewShellExecutor(in, config.LoggingDir)
-	s.executor.EnableRawLog = true
+	s.executor.EnableRawLog = false
 
 	go logConsumer(s.executor)
 

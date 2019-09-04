@@ -39,7 +39,7 @@ func logConsumer(executor *executor.ShellExecutor) {
 
 	go func() {
 		for {
-			_, ok := <-logChannel
+			_, ok := <-rawChannel
 			if !ok {
 				break
 			}
@@ -47,12 +47,12 @@ func logConsumer(executor *executor.ShellExecutor) {
 	}()
 
 	for {
-		raw, ok := <-rawChannel
+		raw, ok := <-logChannel
 		if !ok {
 			break
 		}
 
-		util.LogDebug("[Raw]: %s", raw)
+		util.LogDebug("[LOG]: %s", raw)
 
 		if config.HasQueue() {
 			exchangeName := config.Settings.Queue.LogsExchange
