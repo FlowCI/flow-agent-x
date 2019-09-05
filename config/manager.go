@@ -24,30 +24,32 @@ var (
 	once      sync.Once
 )
 
-type QueueConfig struct {
-	Conn       *amqp.Connection
-	Channel    *amqp.Channel
-	LogChannel *amqp.Channel
-	JobQueue   *amqp.Queue
-}
+type (
+	QueueConfig struct {
+		Conn       *amqp.Connection
+		Channel    *amqp.Channel
+		LogChannel *amqp.Channel
+		JobQueue   *amqp.Queue
+	}
 
-// Manager to handle server connection and config
-type Manager struct {
-	Settings *domain.Settings
-	Queue    *QueueConfig
-	Zk       *util.ZkClient
+	// Manager to handle server connection and config
+	Manager struct {
+		Settings *domain.Settings
+		Queue    *QueueConfig
+		Zk       *util.ZkClient
 
-	Server string
-	Token  string
-	Port   int
+		Server string
+		Token  string
+		Port   int
 
-	IsOffline  bool
-	Workspace  string
-	LoggingDir string
-	PluginDir  string
+		IsOffline  bool
+		Workspace  string
+		LoggingDir string
+		PluginDir  string
 
-	Quit chan bool
-}
+		Quit chan bool
+	}
+)
 
 // GetInstance get singleton of config manager
 func GetInstance() *Manager {

@@ -30,19 +30,15 @@ var (
 			},
 	
 			"queue": {
-				"host": "127.0.0.1",
-				"port": 5672,
-				"username": "guest",
-				"password": "guest"
+				"uri": "amqp://guest:guest@127.0.0.1:5672",
+				"callback": "callback-q-ut",
+				"logsExchange": "logs-exchange-ut"
 			},
 	
 			"zookeeper": {
 				"host": "127.0.0.1:2181",
 				"root": "/flow-x"
-			},
-	
-			"callbackQueueName": "callback-q-ut",
-			"logsExchangeName": "logs-exchange-ut"
+			}
 		}
 	}`)
 
@@ -90,7 +86,7 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 	assert.True(config.HasQueue() == true)
 
 	// create queue consumer
-	callbackQueue := config.Settings.CallbackQueueName
+	callbackQueue := config.Settings.Queue.Callback
 	ch := config.Queue.Channel
 	_, _ = ch.QueueDeclare(callbackQueue, false, true, false, false, nil)
 	defer ch.QueueDelete(callbackQueue, false, false, true)

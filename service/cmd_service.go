@@ -21,14 +21,16 @@ var (
 	once      sync.Once
 )
 
-type CmdInteractSession map[string]*executor.ShellExecutor
-
-// CmdService receive and execute cmd
-type CmdService struct {
-	executor *executor.ShellExecutor
-	mux      sync.Mutex
-	session  CmdInteractSession
-}
+type (
+	CmdInteractSession map[string]*executor.ShellExecutor
+	
+	// CmdService receive and execute cmd
+	CmdService struct {
+		executor *executor.ShellExecutor
+		mux      sync.Mutex
+		session  CmdInteractSession
+	}
+)
 
 // GetCmdService get singleton of cmd service
 func GetCmdService() *CmdService {
@@ -155,10 +157,9 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	// init and start executor
-	s.executor = executor.NewShellExecutor(in, config.LoggingDir)
-	s.executor.EnableRawLog = true
+	s.executor = executor.NewShellExecutor(in)
 
-	go logConsumer(s.executor)
+	go logConsumer(s.executor, config.LoggingDir)
 
 	go func() {
 		defer s.release()
@@ -199,8 +200,8 @@ func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
 		return err
 	}
 
-	shellExecutor := executor.NewShellExecutor(in, config.GetInstance().LoggingDir)
-	go logConsumer(shellExecutor)
+	shellExecutor := executor.NewShellExecutor(in)
+	go logConsumer(shellExecutor, config.GetInstance().LoggingDir)
 
 	s.session[in.ID] = shellExecutor
 

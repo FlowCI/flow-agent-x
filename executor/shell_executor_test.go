@@ -43,11 +43,25 @@ func init() {
 	configInstance.LoggingDir = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent", "logs"))
 }
 
+func TestShouldPrintHomePath(t *testing.T) {
+	assert := assert.New(t)
+
+	cmd.Scripts = []string{"echo $HOME"}
+
+	executor := NewShellExecutor(cmd)
+
+	err := executor.Run()
+	assert.Nil(err)
+
+	item, _ := <- executor.GetLogChannel()
+	assert.NotEmpty(item.Content)
+}
+
 func TestShouldRunLinuxShell(t *testing.T) {
 	assert := assert.New(t)
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor := NewShellExecutor(cmd)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -79,7 +93,7 @@ func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
 	cmd.Timeout = 1
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor := NewShellExecutor(cmd)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -102,7 +116,7 @@ func TestShouldRunLinuxShellButKilled(t *testing.T) {
 	cmd.Timeout = 18000
 
 	// when: new shell executor and run
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor := NewShellExecutor(cmd)
 
 	go func() {
 		time.Sleep(5 * time.Second)
@@ -124,7 +138,7 @@ func TestShouldCmdNotFoundErr(t *testing.T) {
 	cmd.Scripts = []string{"set -e", "notCommand"}
 
 	// when:
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor := NewShellExecutor(cmd)
 	err := executor.Run()
 	assert.Nil(err)
 
@@ -138,7 +152,7 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 
 	// init:
 	cmd.Scripts = nil
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
+	executor := NewShellExecutor(cmd)
 	executor.EnableInteractMode = true
 	cmdChannel := executor.GetCmdChannel()
 	logChannel := executor.GetLogChannel()
@@ -160,42 +174,6 @@ func TestShouldWorkOnInteractMode(t *testing.T) {
 	assert.Nil(err)
 }
 
-func TestShouldGetRawLogWithSuccessStatus(t *testing.T) {
-	assert := assert.New(t)
-
-	cmd.Scripts = []string{"echo hello"}
-
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
-	executor.EnableRawLog = true
-
-	go printLog(executor.GetLogChannel())
-	go printRaw(executor.GetRawChannel())
-
-	err := executor.Run()
-	assert.Nil(err)
-
-	assert.Equal(domain.CmdStatusSuccess, executor.Result.Status)
-	assert.True(executor.Result.Code == 0)
-}
-
-func TestShouldGetRawLogWithExceptionStatus(t *testing.T) {
-	assert := assert.New(t)
-
-	cmd.Scripts = []string{"rm aa"}
-
-	executor := NewShellExecutor(cmd, config.GetInstance().LoggingDir)
-	executor.EnableRawLog = true
-
-	go printLog(executor.GetLogChannel())
-	go printRaw(executor.GetRawChannel())
-
-	err := executor.Run()
-	assert.Nil(err)
-
-	assert.Equal(domain.CmdStatusException, executor.Result.Status)
-	assert.True(executor.Result.Code > 0)
-}
-
 func printLog(channel <-chan *domain.LogItem) {
 	for {
 		item, ok := <-channel
@@ -203,15 +181,5 @@ func printLog(channel <-chan *domain.LogItem) {
 			break
 		}
 		log.Debug("[LOG]: ", item.Content)
-	}
-}
-
-func printRaw(channel <-chan string) {
-	for {
-		item, ok := <-channel
-		if !ok {
-			break
-		}
-		log.Debug("[RAW]: ", item)
 	}
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -18,10 +17,6 @@ import (
 
 	"github.com/google/uuid"
 )
-
-//====================================================================
-//	Const
-//====================================================================
 
 const (
 	// ExitCmd script 'exit'
@@ -35,55 +30,48 @@ const (
 
 	MacScriptPattern   = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
 	LinuxScriptPattern = "script -a -e -f -q -c \"%s\" %s | %s ; exit ${PIPESTATUS[0]}"
+
+	SetPS1 = "PS1='$ '"
+	SourceBashrc = "source ~/.bashrc 2> /dev/null"
+	SourceBashProfile = "source ~!/.bash_profile 2> /dev/null"
 )
 
-//====================================================================
-//	Definition
-//====================================================================
+type (
+	// LogChannel send out LogItem
+	LogChannel chan *domain.LogItem
 
-// LogChannel send out LogItem
-type LogChannel chan *domain.LogItem
+	RawChannel chan string
 
-type RawChannel chan string
+	// CmdChannel receive shell script in string
+	CmdChannel chan string
 
-// CmdChannel receive shell script in string
-type CmdChannel chan string
+	ShellExecutor struct {
+		CmdIn          *domain.CmdIn
+		EndTerm        string
+		Result         *domain.ExecutedCmd
+		TimeOutSeconds time.Duration
 
-type ShellExecutor struct {
-	CmdIn          *domain.CmdIn
-	EndTerm        string
-	Result         *domain.ExecutedCmd
-	TimeOutSeconds time.Duration
+		EnableInteractMode bool
 
-	EnableRawLog       bool // using 'script' to record raw print out
-	EnableInteractMode bool
+		channel struct {
+			in  CmdChannel
+			out LogChannel
+		}
 
-	Path struct {
-		Shell string
-		Log   string
-		Raw   string
-		Tmp   string
+		instance struct {
+			monitor *CmdInstance
+			shell   *CmdInstance
+		}
+
+		waitForLogging sync.WaitGroup
 	}
-
-	channel struct {
-		in  CmdChannel
-		out LogChannel
-		raw RawChannel
-	}
-
-	instance struct {
-		monitor *CmdInstance
-		shell   *CmdInstance
-	}
-
-	waitForLogging sync.WaitGroup
-}
+)
 
 //====================================================================
 //	Create new ShellExecutor
 //====================================================================
 
-func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
+func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	result := &domain.ExecutedCmd{
 		Cmd: domain.Cmd{
 			ID:           cmdIn.ID,
@@ -102,21 +90,12 @@ func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 		EndTerm:            fmt.Sprintf("=====EOF-%s=====", endTermUUID),
 		Result:             result,
 		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
-		EnableRawLog:       false,
 		EnableInteractMode: false,
 	}
-
-	// init path for shell, log and raw log
-	cmdId := executor.CmdIn.ID
-	executor.Path.Shell = filepath.Join(logDir, cmdId+".sh")
-	executor.Path.Log = filepath.Join(logDir, cmdId+".log")
-	executor.Path.Raw = filepath.Join(logDir, cmdId+".raw.log")
-	executor.Path.Tmp = filepath.Join(logDir, cmdId+".raw.tmp")
 
 	// init channel
 	executor.channel.in = make(CmdChannel)
 	executor.channel.out = make(LogChannel, logBufferSize)
-	executor.channel.raw = make(RawChannel, logBufferSize)
 
 	// init logging wait group
 	executor.waitForLogging.Add(2)
@@ -136,52 +115,23 @@ func (e *ShellExecutor) GetLogChannel() <-chan *domain.LogItem {
 	return e.channel.out
 }
 
-func (e *ShellExecutor) GetRawChannel() <-chan string {
-	return e.channel.raw
-}
-
 // Run run shell scripts
 func (e *ShellExecutor) Run() error {
 	defer func() {
 		close(e.channel.out)
-		close(e.channel.raw)
-
-		_ = os.Remove(e.Path.Tmp)
-		//_ = os.Remove(e.Path.Shell)
 	}()
 
 	// init work dir
-	err := os.MkdirAll(e.CmdIn.WorkDir, os.ModePerm)
-	if util.HasError(err) {
-		return e.toErrorStatus(err)
-	}
-
-	// --- write script into {cmd id}.sh and make it executable
-	err = writeScriptToFile(e)
-	if util.HasError(err) {
-		return e.toErrorStatus(err)
-	}
-
-	// ---- start to monitor raw log ----
-	if e.EnableRawLog {
-		e.waitForLogging.Add(1)
-
-		// create tmp log output file
-		tmpLogFile, _ := os.Create(e.Path.Tmp)
-		_ = tmpLogFile.Close()
-
-		// tail -f the raw log file
-		monitorInstance := createCommand(e.CmdIn)
-		e.instance.monitor = monitorInstance
-
-		go readRawOut(e, monitorInstance.stdOut)
-		_ = monitorInstance.command.Start()
-		_, _ = io.WriteString(monitorInstance.stdIn, appendNewLine(fmt.Sprintf("tail -f %s", tmpLogFile.Name())))
+	if !util.IsEmptyString(e.CmdIn.WorkDir) {
+		err := os.MkdirAll(e.CmdIn.WorkDir, os.ModePerm)
+		if util.HasError(err) {
+			return e.toErrorStatus(err)
+		}
 	}
 
 	// ---- start to execute command ----
 	shellInstance := createCommand(e.CmdIn)
-	shellInstance.command.Env = getInputs(e.CmdIn)
+	_ = append(shellInstance.command.Env, getInputs(e.CmdIn)...)
 
 	done := make(chan error)
 
@@ -200,7 +150,7 @@ func (e *ShellExecutor) Run() error {
 
 	// start to consume input channel
 	if !e.EnableInteractMode {
-		go produceCmd(e, e.Path.Shell)
+		go produceCmd(e)
 	}
 
 	go consumeCmd(e, shellInstance.stdIn)
@@ -322,9 +272,34 @@ func getInputs(cmdIn *domain.CmdIn) []string {
 	return []string{}
 }
 
-func produceCmd(e *ShellExecutor, script string) {
+func produceCmd(e *ShellExecutor) {
 	defer close(e.channel.in)
-	e.channel.in <- script
+
+	cmdIn := e.CmdIn
+	endTerm := e.EndTerm
+
+	// setup allow failure
+	set := "set -e"
+	if cmdIn.AllowFailure {
+		set = "set +e"
+	}
+
+	// setup bash env
+	e.channel.in <- SetPS1
+	e.channel.in <- SourceBashrc
+	e.channel.in <- SourceBashProfile
+	e.channel.in <- set
+
+	// write scripts
+	for _, script := range e.CmdIn.Scripts {
+		e.channel.in <- script
+	}
+
+	// write for end term
+	if len(cmdIn.EnvFilters) > 0 {
+		e.channel.in <- "echo " + endTerm
+		e.channel.in <- "env"
+	}
 }
 
 func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
@@ -346,68 +321,18 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 			break
 		}
 
-		if e.EnableRawLog {
-			if util.IsMac() {
-				cmdToRun = fmt.Sprintf(MacScriptPattern, e.Path.Tmp, cmdToRun, StripColor)
-			}
-
-			if util.IsLinux() {
-				cmdToRun = fmt.Sprintf(LinuxScriptPattern, cmdToRun, e.Path.Tmp, StripColor)
-			}
-
-			if util.IsWindows() {
-				// unsupported
-			}
-		}
-
 		_, _ = io.WriteString(stdin, appendNewLine(cmdToRun))
-	}
-}
-
-func readRawOut(e *ShellExecutor, reader io.ReadCloser) {
-	var rows int64
-	f, _ := os.Create(e.Path.Raw)
-	writer := bufio.NewWriter(f)
-
-	defer func() {
-		_ = writer.Flush()
-		_ = reader.Close()
-		_ = f.Close()
-
-		atomic.AddInt64(&e.Result.LogSize, rows)
-		util.LogDebug("[Exit]: %s", "readRawOut")
-		e.waitForLogging.Done()
-	}()
-
-	scanner := bufio.NewScanner(reader)
-
-	for scanner.Scan() {
-		line := scanner.Text()
-
-		if strings.EqualFold(line, e.EndTerm) {
-			return
-		}
-
-		rows++
-		writeLogToFile(writer, line)
-		e.channel.raw <- line
 	}
 }
 
 func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
-	f, _ := os.Create(e.Path.Log)
-	writer := bufio.NewWriter(f)
 
 	defer func() {
-		_ = writer.Flush()
 		_ = reader.Close()
-		_ = f.Close()
 
-		if !e.EnableRawLog {
-			atomic.AddInt64(&e.Result.LogSize, rows)
-			util.LogDebug("Log size: === %d", e.Result.LogSize)
-		}
+		atomic.AddInt64(&e.Result.LogSize, rows)
+		util.LogDebug("Log size: === %d", e.Result.LogSize)
 
 		util.LogDebug("[Exit]: %s", "readStdOut")
 		e.waitForLogging.Done()
@@ -437,9 +362,8 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 			return
 		}
 
-		// write to file and send log item instance to channel
+		// send log item instance to channel
 		rows++
-		writeLogToFile(writer, line)
 		e.channel.out <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
 }
