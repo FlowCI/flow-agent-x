@@ -43,6 +43,20 @@ func init() {
 	configInstance.LoggingDir = util.ParseString(filepath.Join("${HOME}", ".flow.ci.agent", "logs"))
 }
 
+func TestShouldPrintHomePath(t *testing.T) {
+	assert := assert.New(t)
+
+	cmd.Scripts = []string{"echo $HOME"}
+
+	executor := NewShellExecutor(cmd)
+
+	err := executor.Run()
+	assert.Nil(err)
+
+	item, _ := <- executor.GetLogChannel()
+	assert.NotEmpty(item.Content)
+}
+
 func TestShouldRunLinuxShell(t *testing.T) {
 	assert := assert.New(t)
 
