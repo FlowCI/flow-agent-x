@@ -21,14 +21,16 @@ var (
 	once      sync.Once
 )
 
-type CmdInteractSession map[string]*executor.ShellExecutor
-
-// CmdService receive and execute cmd
-type CmdService struct {
-	executor *executor.ShellExecutor
-	mux      sync.Mutex
-	session  CmdInteractSession
-}
+type (
+	CmdInteractSession map[string]*executor.ShellExecutor
+	
+	// CmdService receive and execute cmd
+	CmdService struct {
+		executor *executor.ShellExecutor
+		mux      sync.Mutex
+		session  CmdInteractSession
+	}
+)
 
 // GetCmdService get singleton of cmd service
 func GetCmdService() *CmdService {

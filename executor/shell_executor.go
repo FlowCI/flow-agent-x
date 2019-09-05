@@ -18,10 +18,6 @@ import (
 	"github.com/google/uuid"
 )
 
-//====================================================================
-//	Const
-//====================================================================
-
 const (
 	// ExitCmd script 'exit'
 	ExitCmd = "exit"
@@ -34,40 +30,42 @@ const (
 
 	MacScriptPattern   = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
 	LinuxScriptPattern = "script -a -e -f -q -c \"%s\" %s | %s ; exit ${PIPESTATUS[0]}"
+
+	SetPS1 = "PS1='$ '"
+	SourceBashrc = "source ~/.bashrc 2> /dev/null"
+	SourceBashProfile = "source ~!/.bash_profile 2> /dev/null"
 )
 
-//====================================================================
-//	Definition
-//====================================================================
+type (
+	// LogChannel send out LogItem
+	LogChannel chan *domain.LogItem
 
-// LogChannel send out LogItem
-type LogChannel chan *domain.LogItem
+	RawChannel chan string
 
-type RawChannel chan string
+	// CmdChannel receive shell script in string
+	CmdChannel chan string
 
-// CmdChannel receive shell script in string
-type CmdChannel chan string
+	ShellExecutor struct {
+		CmdIn          *domain.CmdIn
+		EndTerm        string
+		Result         *domain.ExecutedCmd
+		TimeOutSeconds time.Duration
 
-type ShellExecutor struct {
-	CmdIn          *domain.CmdIn
-	EndTerm        string
-	Result         *domain.ExecutedCmd
-	TimeOutSeconds time.Duration
+		EnableInteractMode bool
 
-	EnableInteractMode bool
+		channel struct {
+			in  CmdChannel
+			out LogChannel
+		}
 
-	channel struct {
-		in  CmdChannel
-		out LogChannel
+		instance struct {
+			monitor *CmdInstance
+			shell   *CmdInstance
+		}
+
+		waitForLogging sync.WaitGroup
 	}
-
-	instance struct {
-		monitor *CmdInstance
-		shell   *CmdInstance
-	}
-
-	waitForLogging sync.WaitGroup
-}
+)
 
 //====================================================================
 //	Create new ShellExecutor
@@ -287,8 +285,10 @@ func produceCmd(e *ShellExecutor) {
 		set = "set +e"
 	}
 
-	e.channel.in <- "PS1='$ '"
-	e.channel.in <- "source ~/.bashrc 2> /dev/null"
+	// setup bash env
+	e.channel.in <- SetPS1
+	e.channel.in <- SourceBashrc
+	e.channel.in <- SourceBashProfile
 	e.channel.in <- set
 
 	// write scripts
