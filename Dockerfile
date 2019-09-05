@@ -44,14 +44,14 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
 
 ## go ##
 ENV GOLANG_VERSION=1.12.9
-ENV GOLANG_HOME=/usr/local/go
+ENV GOROOT=/usr/local/go
 
 RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linux-amd64.tar.gz \
     && tar  -C /usr/local -xzf /usr/local/go.tar.gz
 
 ## set PATH ##
 RUN echo "" >> /root/.bashrc \
-    && echo "export PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOLANG_HOME/bin" >> /root/.bashrc
+    && echo "export PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOROOT/bin" >> /root/.bashrc
 
 ENV TARGET_DIR=/flow.ci.agent
 ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
