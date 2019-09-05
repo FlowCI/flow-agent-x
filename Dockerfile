@@ -49,8 +49,12 @@ ENV GOROOT=/usr/local/go
 RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linux-amd64.tar.gz \
     && tar  -C /usr/local -xzf /usr/local/go.tar.gz
 
-## set PATH ##
+## set PATH and Env ##
 RUN echo "" >> /root/.bashrc \
+    && echo "export GOROOT=$GOROOT" >> /root/.bashrc \
+    && echo "export JAVA_HOME=$JAVA_HOME" >> /root/.bashrc \
+    && echo "export MAVEN_HOME=$MAVEN_HOME" >> /root/.bashrc \
+    && echo "export M2_HOME=$M2_HOME" >> /root/.bashrc \
     && echo "export PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOROOT/bin" >> /root/.bashrc
 
 ENV TARGET_DIR=/flow.ci.agent
