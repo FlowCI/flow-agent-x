@@ -134,6 +134,7 @@ func (e *ShellExecutor) Run() error {
 	// ---- start to execute command ----
 	shellInstance := createCommand(e.CmdIn)
 	shellInstance.command.Env = getInputs(e.CmdIn)
+	shellInstance.command.Env = append(shellInstance.command.Env, "PS1='$ '")
 
 	done := make(chan error)
 
@@ -286,6 +287,8 @@ func produceCmd(e *ShellExecutor) {
 		set = "set +e"
 	}
 
+	e.channel.in <- "PS1='$ '"
+	e.channel.in <- "source ~/.bashrc"
 	e.channel.in <- set
 
 	// write scripts
