@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bufio"
 	"flow-agent-x/domain"
 	"flow-agent-x/util"
 	"io"
@@ -52,9 +51,4 @@ func appendNewLine(script string) string {
 		script += util.UnixLineBreak
 	}
 	return script
-}
-
-func writeLogToFile(w *bufio.Writer, log string) {
-	_, _ = w.WriteString(log)
-	_, _ = w.WriteString(util.CRLF)
 }

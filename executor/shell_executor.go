@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -57,10 +56,6 @@ type ShellExecutor struct {
 
 	EnableInteractMode bool
 
-	Path struct {
-		Log string
-	}
-
 	channel struct {
 		in  CmdChannel
 		out LogChannel
@@ -78,7 +73,7 @@ type ShellExecutor struct {
 //	Create new ShellExecutor
 //====================================================================
 
-func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
+func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	result := &domain.ExecutedCmd{
 		Cmd: domain.Cmd{
 			ID:           cmdIn.ID,
@@ -99,10 +94,6 @@ func NewShellExecutor(cmdIn *domain.CmdIn, logDir string) *ShellExecutor {
 		TimeOutSeconds:     time.Duration(cmdIn.Timeout),
 		EnableInteractMode: false,
 	}
-
-	// init path for shell, log and raw log
-	cmdId := executor.CmdIn.ID
-	executor.Path.Log = filepath.Join(logDir, cmdId+".log")
 
 	// init channel
 	executor.channel.in = make(CmdChannel)
@@ -334,13 +325,9 @@ func consumeCmd(e *ShellExecutor, stdin io.WriteCloser) {
 
 func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 	var rows int64
-	f, _ := os.Create(e.Path.Log)
-	writer := bufio.NewWriter(f)
 
 	defer func() {
-		_ = writer.Flush()
 		_ = reader.Close()
-		_ = f.Close()
 
 		atomic.AddInt64(&e.Result.LogSize, rows)
 		util.LogDebug("Log size: === %d", e.Result.LogSize)
@@ -373,9 +360,8 @@ func readStdOut(e *ShellExecutor, reader io.ReadCloser) {
 			return
 		}
 
-		// write to file and send log item instance to channel
+		// send log item instance to channel
 		rows++
-		writeLogToFile(writer, line)
 		e.channel.out <- &domain.LogItem{CmdID: e.CmdIn.ID, Content: line}
 	}
 }

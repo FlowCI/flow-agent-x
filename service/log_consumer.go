@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"flow-agent-x/executor"
@@ -20,13 +21,21 @@ import (
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(executor *executor.ShellExecutor) {
+func logConsumer(executor *executor.ShellExecutor, logDir string) {
 	config := config.GetInstance()
 	logChannel := executor.GetLogChannel()
 
+	// init path for shell, log and raw log
+	logPath := filepath.Join(logDir, executor.CmdIn.ID+".log")
+	f, _ := os.Create(logPath)
+	writer := bufio.NewWriter(f)
+
 	// upload log after flush!!
 	defer func() {
-		err := uploadLog(executor.Path.Log)
+		_ = writer.Flush()
+		_ = f.Close()
+
+		err := uploadLog(logPath)
 		util.LogIfError(err)
 
 		util.LogDebug("[Exit]: logConsumer")
@@ -40,6 +49,10 @@ func logConsumer(executor *executor.ShellExecutor) {
 
 		util.LogDebug("[LOG]: %s", item)
 
+		// write to file
+		writeLogToFile(writer, item)
+
+		// send to queue
 		if config.HasQueue() {
 			exchangeName := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
@@ -101,6 +114,11 @@ func uploadLog(logFile string) error {
 	}
 
 	return fmt.Errorf(message.Message)
+}
+
+func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {
+	_, _ = w.WriteString(item.Content)
+	_, _ = w.WriteString(util.CRLF)
 }
 
 func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogItem) {
