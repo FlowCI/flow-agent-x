@@ -288,7 +288,7 @@ func produceCmd(e *ShellExecutor) {
 	}
 
 	e.channel.in <- "PS1='$ '"
-	e.channel.in <- "source ~/.bashrc"
+	e.channel.in <- "source ~/.bashrc 2> /dev/null"
 	e.channel.in <- set
 
 	// write scripts
