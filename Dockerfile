@@ -42,6 +42,9 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
     && chmod +x /usr/local/bin/docker-compose \
     && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
+## start docker ##
+
+
 ## go ##
 ENV GOLANG_VERSION=1.12.9
 ENV GOROOT=/usr/local/go
@@ -61,4 +64,4 @@ RUN mkdir -p $TARGET_DIR \
 WORKDIR $TARGET_DIR
 COPY flow-agent-x $TARGET_DIR
 
-CMD ./flow-agent-x
+CMD service docker start && ./flow-agent-x
