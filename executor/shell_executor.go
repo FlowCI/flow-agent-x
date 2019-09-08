@@ -131,7 +131,7 @@ func (e *ShellExecutor) Run() error {
 
 	// ---- start to execute command ----
 	shellInstance := createCommand(e.CmdIn)
-	_ = append(shellInstance.command.Env, getInputs(e.CmdIn)...)
+	shellInstance.command.Env = append(os.Environ(), getInputs(e.CmdIn)...)
 
 	done := make(chan error)
 
