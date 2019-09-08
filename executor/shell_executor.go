@@ -31,8 +31,8 @@ const (
 	MacScriptPattern   = "script -a -F -q %s %s | %s ; exit ${PIPESTATUS[0]}"
 	LinuxScriptPattern = "script -a -e -f -q -c \"%s\" %s | %s ; exit ${PIPESTATUS[0]}"
 
-	SetPS1 = "PS1='$ '"
-	SourceBashrc = "source ~/.bashrc 2> /dev/null"
+	SetPS1            = "PS1='$ '"
+	SourceBashrc      = "source ~/.bashrc 2> /dev/null"
 	SourceBashProfile = "source ~!/.bash_profile 2> /dev/null"
 )
 
@@ -46,6 +46,7 @@ type (
 	CmdChannel chan string
 
 	ShellExecutor struct {
+		Inputs         *domain.Variables
 		CmdIn          *domain.CmdIn
 		EndTerm        string
 		Result         *domain.ExecutedCmd
@@ -86,6 +87,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	endTermUUID, _ := uuid.NewRandom()
 
 	executor := &ShellExecutor{
+		Inputs:             &domain.Variables{},
 		CmdIn:              cmdIn,
 		EndTerm:            fmt.Sprintf("=====EOF-%s=====", endTermUUID),
 		Result:             result,
@@ -132,6 +134,7 @@ func (e *ShellExecutor) Run() error {
 	// ---- start to execute command ----
 	shellInstance := createCommand(e.CmdIn)
 	shellInstance.command.Env = append(os.Environ(), getInputs(e.CmdIn)...)
+	shellInstance.command.Env = append(shellInstance.command.Env, e.Inputs.ToStringArray()...)
 
 	done := make(chan error)
 

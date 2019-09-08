@@ -5,6 +5,15 @@ import (
 	"fmt"
 )
 
+const (
+	VarServerUrl      = "FLOWCI_SERVER_URL"
+	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
+	VarAgentPort      = "FLOWCI_AGENT_PORT"
+	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
+	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
+	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
+)
+
 // Variables applied for environment variable as key, value
 type Variables map[string]string
 
