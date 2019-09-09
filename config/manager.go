@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
 	"sync"
 
 	"flow-agent-x/domain"
@@ -42,6 +43,9 @@ type (
 		Token  string
 		Port   int
 
+		// app vars settings
+		Vars *domain.Variables
+
 		IsOffline  bool
 		Workspace  string
 		LoggingDir string
@@ -66,6 +70,15 @@ func (m *Manager) Init() {
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
 	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
+
+	m.Vars = &domain.Variables{
+		domain.VarServerUrl: m.Server,
+		domain.VarAgentToken: m.Token,
+		domain.VarAgentPort: strconv.Itoa(m.Port),
+		domain.VarAgentWorkspace: m.Workspace,
+		domain.VarAgentPluginDir: m.PluginDir,
+		domain.VarAgentLogDir: m.LoggingDir,
+	}
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {

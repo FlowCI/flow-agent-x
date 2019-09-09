@@ -55,6 +55,11 @@ RUN curl -o /usr/local/go.tar.gz https://dl.google.com/go/go$GOLANG_VERSION.linu
 ## set PATH ##
 ENV PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOROOT/bin
 
+## ssh config
+RUN mkdir -p $HOME/.ssh
+RUN echo "StrictHostKeyChecking=no" >> $HOME/.ssh/config
+
+## default work dir
 ENV TARGET_DIR=/flow.ci.agent
 ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
 

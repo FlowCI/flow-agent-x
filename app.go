@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flow-agent-x/domain"
 	"fmt"
 	"net"
 	"net/http"
@@ -36,40 +37,40 @@ func main() {
 			Name:   "url, u",
 			Value:  "http://127.0.0.1:8080",
 			Usage:  "flow.ci server url",
-			EnvVar: "FLOWCI_SERVER_URL",
+			EnvVar: domain.VarServerUrl,
 		},
 
 		cli.StringFlag{
 			Name:   "token, t",
 			Usage:  "Token for agent",
-			EnvVar: "FLOWCI_AGENT_TOKEN",
+			EnvVar: domain.VarAgentToken,
 		},
 
 		cli.StringFlag{
 			Name:   "port, p",
 			Usage:  "Port for agent",
-			EnvVar: "FLOWCI_AGENT_PORT",
+			EnvVar: domain.VarAgentPort,
 		},
 
 		cli.StringFlag{
 			Name:   "workspace, w",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
 			Usage:  "Agent working directory",
-			EnvVar: "FLOWCI_AGENT_WORKSPACE",
+			EnvVar: domain.VarAgentWorkspace,
 		},
 
 		cli.StringFlag{
 			Name:   "plugindir, pd",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "plugins"),
 			Usage:  "Directory for plugin",
-			EnvVar: "FLOWCI_AGENT_PLUGIN_DIR",
+			EnvVar: domain.VarAgentPluginDir,
 		},
 
 		cli.StringFlag{
 			Name:   "logdir, ld",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "logs"),
-			Usage:  "Directory for plugin",
-			EnvVar: "FLOWCI_AGENT_LOG_DIR",
+			Usage:  "Directory for logging",
+			EnvVar: domain.VarAgentLogDir,
 		},
 	}
 
