@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"flow-agent-x/service"
-	"flow-agent-x/domain"
+	"github/flowci/flow-agent-x/service"
+	"github/flowci/flow-agent-x/domain"
 
 	"github.com/gin-gonic/gin"
 )

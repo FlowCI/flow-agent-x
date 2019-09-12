@@ -10,10 +10,10 @@ import (
 
 	"github.com/streadway/amqp"
 
-	"flow-agent-x/config"
-	"flow-agent-x/domain"
-	"flow-agent-x/executor"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/executor"
+	"github/flowci/flow-agent-x/util"
 )
 
 var (

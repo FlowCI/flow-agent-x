@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flow-agent-x/domain"
 	"fmt"
 	"net"
 	"net/http"
@@ -12,9 +11,10 @@ import (
 	"strings"
 	"time"
 
-	"flow-agent-x/config"
-	"flow-agent-x/controller"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/controller"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/urfave/cli"

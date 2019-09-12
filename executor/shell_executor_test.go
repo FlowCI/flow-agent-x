@@ -1,15 +1,15 @@
 package executor
 
 import (
-	"flow-agent-x/config"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/util"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"flow-agent-x/domain"
+	"github/flowci/flow-agent-x/domain"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
