@@ -14,7 +14,6 @@ The new version agent for flow.ci
 ## Build
 
 ```
-dep ensure
 go build
 ```
 
