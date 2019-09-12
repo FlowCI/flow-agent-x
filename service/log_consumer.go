@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"flow-agent-x/executor"
+	"github/flowci/flow-agent-x/executor"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -13,9 +13,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"flow-agent-x/config"
-	"flow-agent-x/domain"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 
 	"github.com/streadway/amqp"
 )

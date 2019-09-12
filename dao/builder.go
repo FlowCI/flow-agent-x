@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	u "flow-agent-x/util"
+	u "github/flowci/flow-agent-x/util"
 )
 
 type QueryBuilder struct {

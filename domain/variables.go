@@ -1,7 +1,7 @@
 package domain
 
 import (
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/util"
 	"fmt"
 )
 

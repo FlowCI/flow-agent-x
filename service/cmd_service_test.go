@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"flow-agent-x/config"
-	"flow-agent-x/domain"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 
 	"github.com/stretchr/testify/assert"
 )

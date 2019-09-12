@@ -1,15 +1,15 @@
 package executor
 
 import (
-	"flow-agent-x/config"
-	"flow-agent-x/util"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/util"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"flow-agent-x/domain"
+	"github/flowci/flow-agent-x/domain"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -53,7 +53,7 @@ func TestShouldPrintHomePath(t *testing.T) {
 	err := executor.Run()
 	assert.Nil(err)
 
-	item, _ := <- executor.GetLogChannel()
+	item, _ := <-executor.GetLogChannel()
 	assert.NotEmpty(item.Content)
 }
 
@@ -84,6 +84,30 @@ func TestShouldRunLinuxShell(t *testing.T) {
 	secondLog := <-executor.GetLogChannel()
 	assert.Equal(cmd.ID, secondLog.CmdID)
 	assert.Equal("aaa", secondLog.Content)
+}
+
+func TestShouldHandleEmbeddedEnvVars(t *testing.T) {
+	assert := assert.New(t)
+
+	// init: setup
+	cmd.Scripts = []string{
+		"echo $EMBEDDED_VAR",
+	}
+
+	cmd.Inputs = domain.Variables{
+		"EMBEDDED_VAR": "hello ${INPUT_VAR}",
+		"INPUT_VAR": "world",
+	}
+
+	// when:
+	executor := NewShellExecutor(cmd)
+	err := executor.Run()
+	assert.Nil(err)
+
+	// then:
+	item := <-executor.GetLogChannel()
+	assert.Equal(cmd.ID, item.CmdID)
+	assert.Equal("hello world", item.Content)
 }
 
 func TestShouldRunLinuxShellButTimeOut(t *testing.T) {
