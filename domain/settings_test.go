@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,28 +13,7 @@ func TestSettingsShouldParseFromJson(t *testing.T) {
 	assert := assert.New(t)
 
 	// given: json data
-	raw := []byte(`{
-		"agent": {
-			"id": "1",
-			"name": "local",
-			"token": "xxx-xxx",
-			"host": "test",
-			"tags": ["ios", "mac"],
-			"status": "OFFLINE",
-			"jobid": "job-id"
-		},
-
-		"queue": {
-			"uri": "amqp://guest:guest@127.0.0.1:5671",
-			"callback": "callback-q",
-			"logsExchange": "logs-exchange"
-		},
-
-		"zookeeper": {
-			"host": "127.0.0.1:2181",
-			"root": "/flow-x"
-		}
-	}`)
+	raw, _ := ioutil.ReadFile("../_testdata/agent_settings.json")
 
 	// when: parse
 	var settings Settings
@@ -44,7 +24,7 @@ func TestSettingsShouldParseFromJson(t *testing.T) {
 
 	// then: verify queue data
 	assert.NotNil(settings.Queue)
-	assert.Equal("amqp://guest:guest@127.0.0.1:5671", settings.Queue.Uri)
+	assert.Equal("amqp://guest:guest@127.0.0.1:5672", settings.Queue.Uri)
 	assert.Equal("callback-q", settings.Queue.Callback)
 	assert.Equal("logs-exchange", settings.Queue.LogsExchange)
 

@@ -3,3 +3,4 @@ flow-agent-x
 vendor/
 .idea/
 .vscode
+*.log

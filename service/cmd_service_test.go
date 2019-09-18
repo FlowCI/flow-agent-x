@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,32 +16,7 @@ import (
 )
 
 var (
-	rBody = []byte(`{
-		"code": 200,
-		"message": "mock",
-		"data": {
-			"agent": {
-				"id": "1",
-				"name": "local",
-				"token": "xxx-xxx",
-				"host": "test",
-				"tags": ["ios", "mac"],
-				"status": "OFFLINE",
-				"jobid": "job-id"
-			},
-	
-			"queue": {
-				"uri": "amqp://guest:guest@127.0.0.1:5672",
-				"callback": "callback-q-ut",
-				"logsExchange": "logs-exchange-ut"
-			},
-	
-			"zookeeper": {
-				"host": "127.0.0.1:2181",
-				"root": "/flow-x"
-			}
-		}
-	}`)
+	rBody, _ = ioutil.ReadFile("../_testdata/agent_connect_response.json")
 
 	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/agents/connect" {
