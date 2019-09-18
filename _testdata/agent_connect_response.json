@@ -1,0 +1,27 @@
+{
+  "code": 200,
+  "message": "mock",
+  "data": {
+    "agent": {
+      "id": "1",
+      "name": "local",
+      "token": "xxx-xxx",
+      "host": "test",
+      "tags": [
+        "ios",
+        "mac"
+      ],
+      "status": "OFFLINE",
+      "jobid": "job-id"
+    },
+    "queue": {
+      "uri": "amqp://guest:guest@127.0.0.1:5672",
+      "callback": "callback-q",
+      "logsExchange": "logs-exchange"
+    },
+    "zookeeper": {
+      "host": "127.0.0.1:2181",
+      "root": "/flow-x"
+    }
+  }
+}
