@@ -12,11 +12,13 @@ const (
 	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
 	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
+
+	VariablesTypeField = "_TYPE_"
+	VariablesStringType = "_string_"
 )
 
 // Variables applied for environment variable as key, value
 type Variables map[string]string
-
 // NilOrEmpty detect variable is nil or empty
 func NilOrEmpty(v Variables) bool {
 	return v == nil || v.IsEmpty()

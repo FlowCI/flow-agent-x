@@ -84,6 +84,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 		Output: make(domain.Variables),
 	}
 
+	result.Output[domain.VariablesTypeField] = domain.VariablesStringType
 	endTermUUID, _ := uuid.NewRandom()
 
 	executor := &ShellExecutor{
