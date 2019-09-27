@@ -5,6 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
+	"github.com/streadway/amqp"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
@@ -12,11 +16,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
-
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/mem"
-	"github.com/streadway/amqp"
+	"time"
 )
 
 const (
@@ -106,6 +106,8 @@ func (m *Manager) Init() {
 		toOfflineMode(m)
 		return
 	}
+
+	sendCurrentResource(m)
 }
 
 // HasQueue has rabbit mq connected
@@ -144,6 +146,10 @@ func (m *Manager) Close() {
 		m.Zk.Close()
 	}
 }
+
+// --------------------------------
+//		Util Functions
+// --------------------------------
 
 func toOfflineMode(m *Manager) {
 	util.LogInfo("Mode: 'offline'")
@@ -255,4 +261,31 @@ func initZookeeper(m *Manager) error {
 
 func getZkPath(s *domain.Settings) string {
 	return s.Zookeeper.Root + "/" + s.Agent.ID
+}
+
+func sendCurrentResource(m *Manager) {
+	uri := m.Server + "/agents/resource"
+	ctx, _ := context.WithCancel(m.AppCtx)
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done(): // if cancel() execute
+				return
+			default:
+				time.Sleep(1 * time.Minute)
+			}
+
+			body, err := json.Marshal(m.FetchResource())
+			if err != nil {
+				continue
+			}
+
+			request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
+			request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
+			request.Header.Set(util.HttpHeaderAgentToken, m.Token)
+
+			_, _ = http.DefaultClient.Do(request)
+		}
+	}()
 }
