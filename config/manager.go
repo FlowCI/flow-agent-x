@@ -127,10 +127,10 @@ func (m *Manager) FetchResource() *domain.Resource {
 
 	return &domain.Resource{
 		Cpu:         nCpu,
-		TotalMemory: vmStat.Total,
-		FreeMemory:  vmStat.Free,
-		TotalDisk:   diskStat.Total,
-		FreeDisk:    diskStat.Free,
+		TotalMemory: util.ByteToMB(vmStat.Total),
+		FreeMemory:  util.ByteToMB(vmStat.Available),
+		TotalDisk:   util.ByteToMB(diskStat.Total),
+		FreeDisk:    util.ByteToMB(diskStat.Free),
 	}
 }
 

@@ -147,3 +147,7 @@ func GetEnv(env, def string) string {
 	}
 	return def
 }
+
+func ByteToMB(bytes uint64) uint64 {
+	return (bytes / 1024) / 1024
+}
