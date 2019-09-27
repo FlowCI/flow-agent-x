@@ -120,11 +120,11 @@ func (m *Manager) FetchResource() *domain.Resource {
 	diskStat, _ := disk.Usage("/")
 
 	return &domain.Resource{
-		Cpu: nCpu,
+		Cpu:         nCpu,
 		TotalMemory: vmStat.Total,
-		FreeMemory: vmStat.Free,
-		TotalDisk: diskStat.Total,
-		FreeDisk: diskStat.Free,
+		FreeMemory:  vmStat.Free,
+		TotalDisk:   diskStat.Total,
+		FreeDisk:    diskStat.Free,
 	}
 }
 
@@ -149,8 +149,9 @@ func toOfflineMode(m *Manager) {
 func loadSettings(m *Manager) error {
 	uri := m.Server + "/agents/connect"
 	body, _ := json.Marshal(domain.AgentInit{
-		Port: m.Port,
-		Os:   util.OS(),
+		Port:     m.Port,
+		Os:       util.OS(),
+		Resource: m.FetchResource(),
 	})
 
 	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
