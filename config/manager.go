@@ -2,16 +2,16 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
-
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
@@ -54,7 +54,8 @@ type (
 		LoggingDir string
 		PluginDir  string
 
-		Quit chan bool
+		AppCtx context.Context
+		Cancel context.CancelFunc
 	}
 )
 
@@ -63,7 +64,6 @@ func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
 		singleton.IsOffline = false
-		singleton.Quit = make(chan bool)
 	})
 	return singleton
 }
@@ -82,6 +82,10 @@ func (m *Manager) Init() {
 		domain.VarAgentPluginDir: m.PluginDir,
 		domain.VarAgentLogDir:    m.LoggingDir,
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.AppCtx = ctx
+	m.Cancel = cancel
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {
