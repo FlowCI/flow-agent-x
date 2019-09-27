@@ -13,6 +13,9 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/streadway/amqp"
 )
 
@@ -72,12 +75,12 @@ func (m *Manager) Init() {
 	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
 
 	m.Vars = &domain.Variables{
-		domain.VarServerUrl: m.Server,
-		domain.VarAgentToken: m.Token,
-		domain.VarAgentPort: strconv.Itoa(m.Port),
+		domain.VarServerUrl:      m.Server,
+		domain.VarAgentToken:     m.Token,
+		domain.VarAgentPort:      strconv.Itoa(m.Port),
 		domain.VarAgentWorkspace: m.Workspace,
 		domain.VarAgentPluginDir: m.PluginDir,
-		domain.VarAgentLogDir: m.LoggingDir,
+		domain.VarAgentLogDir:    m.LoggingDir,
 	}
 
 	// load config and init rabbitmq, zookeeper
@@ -109,6 +112,20 @@ func (m *Manager) HasQueue() bool {
 // HasZookeeper has zookeeper connected
 func (m *Manager) HasZookeeper() bool {
 	return m.Zk != nil
+}
+
+func (m *Manager) FetchResource() *domain.Resource {
+	nCpu, _ := cpu.Counts(true)
+	vmStat, _ := mem.VirtualMemory()
+	diskStat, _ := disk.Usage("/")
+
+	return &domain.Resource{
+		Cpu: nCpu,
+		TotalMemory: vmStat.Total,
+		FreeMemory: vmStat.Free,
+		TotalDisk: diskStat.Total,
+		FreeDisk: diskStat.Free,
+	}
 }
 
 // Close release resources and connections
