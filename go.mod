@@ -3,9 +3,11 @@ module github/flowci/flow-agent-x
 go 1.12
 
 require (
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/gin-contrib/sse v0.0.0-20170109093832-22d885f9ecc7 // indirect
 	github.com/gin-gonic/gin v1.3.0
+	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golang/protobuf v0.0.0-20170601230230-5a0f697c9ed9 // indirect
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/google/uuid v1.1.0
@@ -13,6 +15,7 @@ require (
 	github.com/mattn/go-isatty v0.0.0-20170307163044-57fdcb988a5c // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/samuel/go-zookeeper v0.0.0-20180130194729-c4fab1ac1bec
+	github.com/shirou/gopsutil v2.18.12+incompatible
 	github.com/sirupsen/logrus v1.3.0
 	github.com/streadway/amqp v0.0.0-20181205114330-a314942b2fd9
 	github.com/stretchr/testify v1.3.0

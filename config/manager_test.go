@@ -19,6 +19,22 @@ var (
 	}))
 )
 
+func TestShouldFetchSystemResource(t *testing.T)  {
+	assert := assert.New(t)
+
+	m := GetInstance()
+	assert.NotNil(m)
+
+	resource := m.FetchResource()
+	assert.NotNil(resource)
+
+	assert.True(resource.Cpu > 0)
+	assert.True(resource.TotalMemory > 0)
+	assert.True(resource.FreeMemory > 0)
+	assert.True(resource.TotalDisk > 0)
+	assert.True(resource.FreeDisk > 0)
+}
+
 func TestShouldConnectServerAndGetSettings(t *testing.T) {
 	assert := assert.New(t)
 	defer ts.Close()

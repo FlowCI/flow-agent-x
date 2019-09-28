@@ -18,22 +18,33 @@ const (
 	AgentIdle AgentStatus = "IDLE"
 )
 
+// Resource agent resource data
+type Resource struct {
+	Cpu         int    `json:"cpu"`
+	TotalMemory uint64 `json:"totalMemory"`
+	FreeMemory  uint64 `json:"freeMemory"`
+	TotalDisk   uint64 `json:"totalDisk"`
+	FreeDisk    uint64 `json:"freeDisk"`
+}
+
 // AgentConnect request data to get settings from server
 type AgentInit struct {
-	Token string `json:"token"`
-	Port  int    `json:"port"`
-	Os    string `json:"os"`
+	Token    string    `json:"token"`
+	Port     int       `json:"port"`
+	Os       string    `json:"os"`
+	Resource *Resource `json:"resource"`
 }
 
 // Agent Class
 type Agent struct {
-	ID     string
-	Name   string
-	Token  string
-	Host   string
-	Tags   []string
-	Status AgentStatus
-	JobID  string
+	ID       string
+	Name     string
+	Token    string
+	Host     string
+	Tags     []string
+	Status   AgentStatus
+	JobID    string
+	Resource *Resource
 }
 
 func (a *Agent) HasHost() bool {

@@ -188,7 +188,7 @@ func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	config := config.GetInstance()
-	config.Quit <- true
+	config.Cancel()
 
 	return nil
 }

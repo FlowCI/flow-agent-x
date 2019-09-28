@@ -1,20 +1,17 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"github/flowci/flow-agent-x/config"
+	"github/flowci/flow-agent-x/controller"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
-
-	"github/flowci/flow-agent-x/config"
-	"github/flowci/flow-agent-x/controller"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 
 	"github.com/gin-gonic/gin"
 	"github.com/urfave/cli"
@@ -93,7 +90,12 @@ func start(c *cli.Context) error {
 
 	defer config.Close()
 
-	// start agent
+	startGin(config)
+	util.LogInfo("Agent stopped")
+	return nil
+}
+
+func startGin(config *config.Manager) {
 	router := gin.Default()
 	controller.NewCmdController(router)
 	controller.NewHealthController(router)
@@ -110,18 +112,12 @@ func start(c *cli.Context) error {
 		}
 	}()
 
-	<-config.Quit
+	// wait
+	<- config.AppCtx.Done()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
+	if err := server.Shutdown(config.AppCtx); err != nil {
 		util.FailOnError(err, "Unable to stop the agent")
-		return err
 	}
-
-	util.LogInfo("Agent stopped")
-	return nil
 }
 
 func getPort(strPort string) int {
