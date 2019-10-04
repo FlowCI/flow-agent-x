@@ -4,18 +4,20 @@ const (
 	ok = 200
 )
 
-// Response the base response message struct
-type Response struct {
-	Code    int
-	Message string
-}
+type (
+	// Response the base response message struct
+	Response struct {
+		Code    int
+		Message string
+	}
+
+	SettingsResponse struct {
+		Response
+		Data *Settings
+	}
+)
 
 // IsOk check response code is equal to 200
 func (r *Response) IsOk() bool {
 	return r.Code == ok
-}
-
-type SettingsResponse struct {
-	Response
-	Data *Settings
 }
