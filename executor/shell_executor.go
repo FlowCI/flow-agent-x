@@ -46,7 +46,7 @@ type (
 	CmdChannel chan string
 
 	ShellExecutor struct {
-		Inputs         *domain.Variables
+		Inputs         domain.Variables
 		CmdIn          *domain.CmdIn
 		EndTerm        string
 		Result         *domain.ExecutedCmd
@@ -88,7 +88,7 @@ func NewShellExecutor(cmdIn *domain.CmdIn) *ShellExecutor {
 	endTermUUID, _ := uuid.NewRandom()
 
 	executor := &ShellExecutor{
-		Inputs:             &domain.Variables{},
+		Inputs:             domain.Variables{},
 		CmdIn:              cmdIn,
 		EndTerm:            fmt.Sprintf("=====EOF-%s=====", endTermUUID),
 		Result:             result,

@@ -158,7 +158,8 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	// init and start executor
 	s.executor = executor.NewShellExecutor(in)
-	s.executor.Inputs = config.Vars
+	s.executor.Inputs = config.Vars.Copy()
+	s.executor.Inputs[domain.VarAgentJobDir] = in.WorkDir
 
 	go logConsumer(s.executor, config.LoggingDir)
 

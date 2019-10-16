@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,6 +20,14 @@ func TestShouldToStringArray(t *testing.T) {
 	assert.NotNil(array)
 	assert.Equal(1, len(array))
 	assert.Equal("hello=world", array[0])
+}
+
+func TestShouldDeepCopy(t *testing.T) {
+	assert := assert.New(t)
+
+	variables := Variables{"hello": "world"}
+	copied := variables.Copy()
+	assert.True(reflect.DeepEqual(variables, copied))
 }
 
 func TestShouldToStringArrayWithEnvVariables(t *testing.T) {

@@ -47,7 +47,7 @@ type (
 		Port   int
 
 		// app vars settings
-		Vars *domain.Variables
+		Vars domain.Variables
 
 		IsOffline  bool
 		Workspace  string
@@ -74,7 +74,7 @@ func (m *Manager) Init() {
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
 	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
 
-	m.Vars = &domain.Variables{
+	m.Vars = domain.Variables{
 		domain.VarServerUrl:      m.Server,
 		domain.VarAgentToken:     m.Token,
 		domain.VarAgentPort:      strconv.Itoa(m.Port),
