@@ -147,8 +147,12 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 		if util.LogIfError(err) {
 			result := &domain.ExecutedCmd{
+				Cmd: domain.Cmd{
+					ID: in.ID,
+				},
 				Status: domain.CmdStatusException,
 				Error:  err.Error(),
+				StartAt: time.Now(),
 			}
 
 			saveAndPushBack(result)
