@@ -89,6 +89,7 @@ type (
 // ===================================
 //		Cmd Methods
 // ===================================
+
 func (cmd *Cmd) HasPlugin() bool {
 	return cmd.Plugin != ""
 }
@@ -110,4 +111,21 @@ func (in *CmdIn) HasEnvFilters() bool {
 	}
 
 	return len(in.EnvFilters) != 0
+}
+
+// ===================================
+//		ExecutedCmd Methods
+// ===================================
+
+func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
+	return &ExecutedCmd{
+		Cmd: Cmd{
+			ID:           in.ID,
+			AllowFailure: in.AllowFailure,
+			Plugin:       in.Plugin,
+		},
+		Code:   CmdExitCodeUnknown,
+		Status: CmdStatusPending,
+		Output: make(Variables),
+	}
 }
