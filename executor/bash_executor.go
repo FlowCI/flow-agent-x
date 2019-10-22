@@ -19,6 +19,7 @@ import (
 
 var (
 	defaultLogChannelBufferSize = 10000
+	defaultLogWaitingDuration   = 5 * time.Second
 )
 
 type (
@@ -69,14 +70,17 @@ func NewBashExecutor(parent context.Context, inCmd *domain.CmdIn, vars domain.Va
 //	Public
 //====================================================================
 
+// CmdID current bash executor cmd id
 func (b *BashExecutor) CmdID() string {
 	return b.cmdId
 }
 
-func (b *BashExecutor) ScriptChannel() chan<- string {
+// BashChannel for input bash script
+func (b *BashExecutor) BashChannel() chan<- string {
 	return b.bashChannel
 }
 
+// LogChannel for output log from stdout, stdin
 func (b *BashExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
@@ -86,9 +90,8 @@ func (b *BashExecutor) Start() error {
 	defer func() {
 		close(b.bashChannel)
 
-		// wait for logging with 5 seconds
 		if len(b.LogChannel()) > 0 {
-			util.Wait(&b.stdOutWg, 5*time.Second)
+			util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
 		}
 
 		close(b.logChannel)

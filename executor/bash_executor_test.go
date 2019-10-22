@@ -16,10 +16,10 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 	executor := NewBashExecutor(ctx, createTestCmd(), nil)
 
 	time.AfterFunc(2 * time.Second, func() {
-		executor.ScriptChannel() <- "echo $HOME"
-		executor.ScriptChannel() <- "go version"
-		executor.ScriptChannel() <- "export HELLO_WORLD='hello'"
-		executor.ScriptChannel() <- "exit"
+		executor.BashChannel() <- "echo $HOME"
+		executor.BashChannel() <- "go version"
+		executor.BashChannel() <- "export HELLO_WORLD='hello'"
+		executor.BashChannel() <- "exit"
 	})
 
 	go printLog(executor.LogChannel())
