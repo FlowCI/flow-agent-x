@@ -68,7 +68,7 @@ RUN mkdir -p $TARGET_DIR \
     && mkdir -p $FLOWCI_AGENT_WORKSPACE
 
 WORKDIR $TARGET_DIR
-COPY flow-agent-x $TARGET_DIR
+COPY ./bin/flow-agent-x $TARGET_DIR
 
 ## start docker ##
 CMD service docker start && ./flow-agent-x
