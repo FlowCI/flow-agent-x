@@ -68,7 +68,7 @@ type (
 		Type       CmdType   `json:"type"`
 		Scripts    []string  `json:"scripts"`
 		WorkDir    string    `json:"workDir"`
-		Timeout    int64     `json:"timeout"`
+		Timeout    int     `json:"timeout"`
 		Inputs     Variables `json:"inputs"`
 		EnvFilters []string  `json:"envFilters"`
 	}
@@ -111,6 +111,14 @@ func (in *CmdIn) HasEnvFilters() bool {
 	}
 
 	return len(in.EnvFilters) != 0
+}
+
+func (in *CmdIn) VarsToStringArray() []string {
+	if !NilOrEmpty(in.Inputs) {
+		return in.Inputs.ToStringArray()
+	}
+
+	return []string{}
 }
 
 // ===================================
