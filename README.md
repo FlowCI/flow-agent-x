@@ -11,12 +11,23 @@ The new version agent for flow.ci
 
 - For more detail, please refer [doc](https://github.com/flowci/docs)
 
-## Build
+## Build binary
 
+```bash
+make build
+
+# binary will be created at ./bin/flow-agent-x
 ```
-go build
+
+## Run Unit Test
+
+```bash
+make run
 ```
 
-## Run Test
+## Build docker image
+```bash
+make docker
 
-`go test ./...`
+# docker image with name 'flowci/agent'
+```
