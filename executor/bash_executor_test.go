@@ -12,7 +12,9 @@ import (
 func TestShouldExitAfterExecuted(t *testing.T) {
 	assert := assert.New(t)
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, createTestCmd(), nil)
 
 	time.AfterFunc(2 * time.Second, func() {
@@ -40,7 +42,9 @@ func TestShouldExecuteFromInCmd(t *testing.T) {
 	testCmd.Scripts = []string{"echo $HOME", "export HELLO_WORLD='hello'"}
 	testCmd.EnvFilters = []string{"HELLO_WORLD"}
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
@@ -63,7 +67,9 @@ func TestShouldExitWithErrorAfterExecuted(t *testing.T) {
 	testCmd.Scripts = []string{"notCommand"}
 
 	// when:
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
@@ -86,7 +92,9 @@ func TestShouldExitAfterExecutedButAllowFailure(t *testing.T) {
 	testCmd.Scripts = []string{"notCommand"}
 
 	// when:
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
@@ -107,7 +115,9 @@ func TestShouldExitWithTimeout(t *testing.T) {
 	testCmd.Timeout = 5
 	testCmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, testCmd, nil)
 
 	go printLog(executor.LogChannel())
@@ -127,7 +137,9 @@ func TestShouldExitByKill(t *testing.T) {
 	testCmd := createTestCmd()
 	testCmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
-	ctx, _ := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	executor := NewBashExecutor(ctx, testCmd, nil)
 
 	go printLog(executor.LogChannel())

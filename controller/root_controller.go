@@ -11,7 +11,6 @@ import (
 )
 
 const (
-	filedName    = "RootController"
 	pathTagName  = "path"
 	methodSuffix = "Impl"
 

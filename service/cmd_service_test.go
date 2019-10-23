@@ -75,7 +75,11 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 	assert.Nil(err)
 
 	select {
-	case m, _ := <-msgs:
+	case m, ok := <-msgs:
+		if !ok {
+			return
+		}
+
 		util.LogDebug("Result of cmd '%s' been received", m.Body)
 
 		var r domain.ExecutedCmd

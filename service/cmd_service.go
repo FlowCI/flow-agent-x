@@ -100,7 +100,10 @@ func (s *CmdService) start() {
 					continue
 				}
 
-				s.Execute(&cmdIn)
+				err = s.Execute(&cmdIn)
+				if err != nil {
+					util.LogDebug(err.Error())
+				}
 
 			case <-time.After(time.Second * 10):
 				util.LogDebug("...")
@@ -203,16 +206,6 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 
 	config := config.GetInstance()
 	in.WorkDir = filepath.Join(config.Workspace, util.ParseString(in.WorkDir))
-	return nil
-}
-
-func verifyAndInitOpenSessionCmd(in *domain.CmdIn) error {
-	if in.HasScripts() {
-		return ErrorCmdScriptIsPersented
-	}
-
-	in.ID = uuid.New().String()
-
 	return nil
 }
 

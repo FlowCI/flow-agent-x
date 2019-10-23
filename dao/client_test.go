@@ -21,5 +21,6 @@ func TestShouldCreateTable(t *testing.T) {
 	assert.NotNil(client)
 
 	entity := &MockSubEntity{}
-	client.Create(entity)
+	err = client.Create(entity)
+	assert.Nil(err)
 }

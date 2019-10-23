@@ -13,8 +13,8 @@ const (
 	tagSeparator = ","
 	valSeparator = "="
 
-	keyFieldColumn   = "column"
-	keyFieldNullable = "nullable"
+	//keyFieldColumn   = "column"
+	//keyFieldNullable = "nullable"
 )
 
 var (

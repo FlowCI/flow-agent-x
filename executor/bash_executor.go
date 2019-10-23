@@ -18,8 +18,8 @@ import (
 )
 
 var (
-	linuxBash        = "/bin/bash"
-	linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
+	linuxBash = "/bin/bash"
+	//linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
 
 	defaultLogChannelBufferSize = 10000
 	defaultLogWaitingDuration   = 5 * time.Second
@@ -55,7 +55,7 @@ func NewBashExecutor(parent context.Context, inCmd *domain.CmdIn, vars domain.Va
 	}
 
 	if vars == nil {
-		instance.inVars = make(domain.Variables, 0)
+		instance.inVars = make(domain.Variables)
 	}
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
@@ -116,23 +116,22 @@ func (b *BashExecutor) Start() error {
 	command.Env = append(command.Env, b.inVars.ToStringArray()...)
 
 	go func() {
-		select {
-		case <-b.context.Done():
-			err := b.context.Err()
+		<-b.context.Done()
+		err := b.context.Err()
 
-			if err == context.DeadlineExceeded {
-				util.LogDebug("Timeout..")
-				_ = command.Process.Kill()
-				b.toTimeOutStatus()
-				return
-			}
-
-			if err == context.Canceled {
-				util.LogDebug("Cancel..")
-				_ = command.Process.Kill()
-				b.toKilledStatus()
-			}
+		if err == context.DeadlineExceeded {
+			util.LogDebug("Timeout..")
+			_ = command.Process.Kill()
+			b.toTimeOutStatus()
+			return
 		}
+
+		if err == context.Canceled {
+			util.LogDebug("Cancel..")
+			_ = command.Process.Kill()
+			b.toKilledStatus()
+		}
+
 	}()
 
 	// start command

@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	file = "agent.db"
+	//file = "agent.db"
 )
 
 // Client for sqlite3

@@ -224,6 +224,10 @@ func initRabbitMQ(m *Manager) error {
 
 	// init queue to receive job
 	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
 	qc.JobQueue = &jobQueue
 
 	m.Queue = qc
@@ -265,9 +269,11 @@ func getZkPath(s *domain.Settings) string {
 
 func sendCurrentResource(m *Manager) {
 	uri := m.Server + "/agents/resource"
-	ctx, _ := context.WithCancel(m.AppCtx)
+	ctx, cancel := context.WithCancel(m.AppCtx)
 
 	go func() {
+		defer cancel()
+
 		for {
 			select {
 			case <-ctx.Done(): // if cancel() execute
