@@ -156,7 +156,13 @@ func toOfflineMode(m *Manager) {
 	m.IsOffline = true
 }
 
-func loadSettings(m *Manager) error {
+func loadSettings(m *Manager) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	uri := m.Server + "/agents/connect"
 	body, _ := json.Marshal(domain.AgentInit{
 		Port:     m.Port,
@@ -169,19 +175,14 @@ func loadSettings(m *Manager) error {
 	request.Header.Set(util.HttpHeaderAgentToken, m.Token)
 
 	resp, errFromReq := http.DefaultClient.Do(request)
-	if errFromReq != nil {
-		return fmt.Errorf("%s: %v", errSettingConnectFail, errFromReq)
-	}
+	util.PanicIfErr(errFromReq)
 
 	defer resp.Body.Close()
 	raw, _ := ioutil.ReadAll(resp.Body)
 
 	var message domain.SettingsResponse
 	errFromJSON := json.Unmarshal(raw, &message)
-
-	if errFromJSON != nil {
-		return errFromJSON
-	}
+	util.PanicIfErr(errFromJSON)
 
 	if !message.IsOk() {
 		return fmt.Errorf(message.Message)
@@ -192,29 +193,29 @@ func loadSettings(m *Manager) error {
 	return nil
 }
 
-func initRabbitMQ(m *Manager) error {
+func initRabbitMQ(m *Manager) (out error) {
 	if m.Settings == nil {
 		return ErrSettingsNotBeenLoaded
 	}
 
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	// get connection
 	connStr := m.Settings.Queue.GetConnectionString()
 	conn, err := amqp.Dial(connStr)
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// create channel for job queue and send back the result
 	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// create channel for push log to server
 	logCh, err := conn.Channel()
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// init queue config
 	qc := new(QueueConfig)
@@ -224,12 +225,9 @@ func initRabbitMQ(m *Manager) error {
 
 	// init queue to receive job
 	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	qc.JobQueue = &jobQueue
-
 	m.Queue = qc
 	return nil
 }
@@ -244,7 +242,6 @@ func initZookeeper(m *Manager) error {
 	// make connection of zk
 	client := new(util.ZkClient)
 	err := client.Connect(zkConfig.Host)
-
 	if err != nil {
 		return err
 	}

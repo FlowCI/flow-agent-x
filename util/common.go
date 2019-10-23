@@ -151,3 +151,9 @@ func GetEnv(env, def string) string {
 func ByteToMB(bytes uint64) uint64 {
 	return (bytes / 1024) / 1024
 }
+
+func PanicIfErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
