@@ -22,11 +22,11 @@ var (
 )
 
 type (
-	CmdInteractSession map[string]*executor.ShellExecutor
-	
+	CmdInteractSession map[string]*executor.BashExecutor
+
 	// CmdService receive and execute cmd
 	CmdService struct {
-		executor *executor.ShellExecutor
+		executor *executor.BashExecutor
 		mux      sync.Mutex
 		session  CmdInteractSession
 	}
@@ -59,18 +59,6 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 
 	if in.Type == domain.CmdTypeClose {
 		return execCloseCmd(s, in)
-	}
-
-	if in.Type == domain.CmdTypeSessionOpen {
-		return execSessionOpenCmd(s, in)
-	}
-
-	if in.Type == domain.CmdTypeSessionShell {
-		return execSessionShellCmd(s, in)
-	}
-
-	if in.Type == domain.CmdTypeSessionClose {
-		return execSessionCloseCmd(s, in)
 	}
 
 	return ErrorCmdUnsupportedType
@@ -150,8 +138,8 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 				Cmd: domain.Cmd{
 					ID: in.ID,
 				},
-				Status: domain.CmdStatusException,
-				Error:  err.Error(),
+				Status:  domain.CmdStatusException,
+				Error:   err.Error(),
 				StartAt: time.Now(),
 			}
 
@@ -161,17 +149,17 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	}
 
 	// init and start executor
-	s.executor = executor.NewShellExecutor(in)
-	s.executor.Inputs = config.Vars.Copy()
-	s.executor.Inputs[domain.VarAgentJobDir] = in.WorkDir
+	vars := config.Vars.Copy()
+	vars[domain.VarAgentJobDir] = in.WorkDir
+	s.executor = executor.NewBashExecutor(config.AppCtx, in, vars)
 
 	go logConsumer(s.executor, config.LoggingDir)
 
 	go func() {
 		defer s.release()
-		_ = s.executor.Run()
+		_ = s.executor.Start()
 
-		result := s.executor.Result
+		result := s.executor.CmdResult
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
 		saveAndPushBack(result)
 	}()
@@ -181,7 +169,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 func execKillCmd(s *CmdService, in *domain.CmdIn) error {
 	if s.IsRunning() {
-		return s.executor.Kill()
+		s.executor.Kill()
 	}
 
 	return nil
@@ -189,78 +177,13 @@ func execKillCmd(s *CmdService, in *domain.CmdIn) error {
 
 func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	if s.IsRunning() {
-		return s.executor.Kill()
+		s.executor.Kill()
 	}
 
 	config := config.GetInstance()
 	config.Cancel()
 
 	return nil
-}
-
-func execSessionOpenCmd(s *CmdService, in *domain.CmdIn) error {
-	s.mux.Lock()
-	defer s.mux.Unlock()
-
-	if err := verifyAndInitOpenSessionCmd(in); util.HasError(err) {
-		return err
-	}
-
-	shellExecutor := executor.NewShellExecutor(in)
-	go logConsumer(shellExecutor, config.GetInstance().LoggingDir)
-
-	s.session[in.ID] = shellExecutor
-
-	// start to run executor by thread
-	go func() {
-		shellExecutor.Run()
-		delete(s.session, in.ID)
-		util.LogDebug("agent: session '%s' is exited", in.ID)
-	}()
-
-	return nil
-}
-
-func execSessionShellCmd(s *CmdService, in *domain.CmdIn) error {
-	exec, err := verifyAndGetExecutor(s, in)
-
-	if !util.HasError(err) {
-		return err
-	}
-
-	// ensure scripts array is not empty
-	if len(in.Scripts) == 0 {
-		return ErrorCmdSessionMissingScripts
-	}
-
-	script := in.Scripts[0]
-	channel := exec.GetCmdChannel()
-	channel <- script
-	return nil
-}
-
-func execSessionCloseCmd(s *CmdService, in *domain.CmdIn) error {
-	exec, err := verifyAndGetExecutor(s, in)
-
-	if util.HasError(err) {
-		return exec.Kill()
-	}
-
-	return nil
-}
-
-func verifyAndGetExecutor(s *CmdService, in *domain.CmdIn) (*executor.ShellExecutor, error) {
-	if util.IsEmptyString(in.ID) {
-		return nil, ErrorCmdMissingSessionID
-	}
-
-	exec := s.session[in.ID]
-
-	if exec == nil {
-		return nil, ErrorCmdSessionNotFound
-	}
-
-	return exec, nil
 }
 
 func verifyAndInitShellCmd(in *domain.CmdIn) error {

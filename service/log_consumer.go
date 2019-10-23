@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"github/flowci/flow-agent-x/executor"
 	"fmt"
+	"github/flowci/flow-agent-x/executor"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -21,12 +21,12 @@ import (
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(executor *executor.ShellExecutor, logDir string) {
+func logConsumer(executor *executor.BashExecutor, logDir string) {
 	config := config.GetInstance()
-	logChannel := executor.GetLogChannel()
+	logChannel := executor.LogChannel()
 
 	// init path for shell, log and raw log
-	logPath := filepath.Join(logDir, executor.CmdIn.ID+".log")
+	logPath := filepath.Join(logDir, executor.CmdID()+".log")
 	f, _ := os.Create(logPath)
 	writer := bufio.NewWriter(f)
 

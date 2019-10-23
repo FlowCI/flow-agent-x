@@ -68,7 +68,7 @@ type (
 		Type       CmdType   `json:"type"`
 		Scripts    []string  `json:"scripts"`
 		WorkDir    string    `json:"workDir"`
-		Timeout    int64     `json:"timeout"`
+		Timeout    int     `json:"timeout"`
 		Inputs     Variables `json:"inputs"`
 		EnvFilters []string  `json:"envFilters"`
 	}
@@ -89,6 +89,7 @@ type (
 // ===================================
 //		Cmd Methods
 // ===================================
+
 func (cmd *Cmd) HasPlugin() bool {
 	return cmd.Plugin != ""
 }
@@ -110,4 +111,29 @@ func (in *CmdIn) HasEnvFilters() bool {
 	}
 
 	return len(in.EnvFilters) != 0
+}
+
+func (in *CmdIn) VarsToStringArray() []string {
+	if !NilOrEmpty(in.Inputs) {
+		return in.Inputs.ToStringArray()
+	}
+
+	return []string{}
+}
+
+// ===================================
+//		ExecutedCmd Methods
+// ===================================
+
+func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
+	return &ExecutedCmd{
+		Cmd: Cmd{
+			ID:           in.ID,
+			AllowFailure: in.AllowFailure,
+			Plugin:       in.Plugin,
+		},
+		Code:   CmdExitCodeUnknown,
+		Status: CmdStatusPending,
+		Output: NewVariables(),
+	}
 }

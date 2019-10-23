@@ -113,7 +113,7 @@ func startGin(config *config.Manager) {
 	}()
 
 	// wait
-	<- config.AppCtx.Done()
+	<-config.AppCtx.Done()
 
 	if err := server.Shutdown(config.AppCtx); err != nil {
 		util.FailOnError(err, "Unable to stop the agent")
