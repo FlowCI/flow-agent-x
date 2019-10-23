@@ -134,6 +134,6 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 		},
 		Code:   CmdExitCodeUnknown,
 		Status: CmdStatusPending,
-		Output: make(Variables),
+		Output: NewVariables(),
 	}
 }

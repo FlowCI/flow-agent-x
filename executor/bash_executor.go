@@ -18,6 +18,9 @@ import (
 )
 
 var (
+	linuxBash        = "/bin/bash"
+	linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
+
 	defaultLogChannelBufferSize = 10000
 	defaultLogWaitingDuration   = 5 * time.Second
 )
@@ -341,4 +344,20 @@ func createWorkDir(dir string) error {
 func getExitCode(cmd *exec.Cmd) int {
 	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	return ws.ExitStatus()
+}
+
+func matchEnvFilter(env string, filters []string) bool {
+	for _, filter := range filters {
+		if strings.HasPrefix(env, filter) {
+			return true
+		}
+	}
+	return false
+}
+
+func appendNewLine(script string) string {
+	if !strings.HasSuffix(script, util.UnixLineBreak) {
+		script += util.UnixLineBreak
+	}
+	return script
 }
