@@ -1,16 +1,11 @@
 package util
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 
 	git "gopkg.in/src-d/go-git.v4"
-)
-
-var (
-	ErrInvlidPluginUrl = errors.New("agent: invalid plugin repo url")
 )
 
 type Plugins struct {
@@ -34,12 +29,38 @@ func (p *Plugins) Load(name string) error {
 
 	LogInfo("agent: clone plugin '%s' to '%s'", url, dir)
 
-	_, err := git.PlainClone(dir, false, &git.CloneOptions{
-		URL:      url,
-		Progress: os.Stdout,
-	})
+	err := p.clone(dir, url)
 
 	if err == git.ErrRepositoryAlreadyExists {
+		return p.pull(dir)
+	}
+
+	return err
+}
+
+func (p *Plugins) clone(dir ,url string) error {
+	options := &git.CloneOptions{
+		URL:      url,
+		Progress: os.Stdout,
+	}
+
+	_, err := git.PlainClone(dir, false, options)
+	return err
+}
+
+func (p *Plugins) pull(dir string) error {
+	repo, err := git.PlainOpen(dir)
+	if err != nil {
+		return err
+	}
+
+	workTree, err := repo.Worktree()
+	if err != nil {
+		return err
+	}
+
+	err = workTree.Pull(&git.PullOptions{RemoteName: "origin"})
+	if err == git.NoErrAlreadyUpToDate {
 		return nil
 	}
 

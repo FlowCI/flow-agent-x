@@ -42,8 +42,9 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
     && chmod +x /usr/local/bin/docker-compose \
     && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
 
-## start docker ##
-
+## python ##
+RUN apt install python-pip -y \
+    && apt install python3-venv python3-pip -y
 
 ## go ##
 ENV GOLANG_VERSION=1.12.9
@@ -67,6 +68,7 @@ RUN mkdir -p $TARGET_DIR \
     && mkdir -p $FLOWCI_AGENT_WORKSPACE
 
 WORKDIR $TARGET_DIR
-COPY flow-agent-x $TARGET_DIR
+COPY ./bin/flow-agent-x $TARGET_DIR
 
+## start docker ##
 CMD service docker start && ./flow-agent-x

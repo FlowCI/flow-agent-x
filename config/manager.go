@@ -2,18 +2,21 @@ package config
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/mem"
+	"github.com/streadway/amqp"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
-
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
-
-	"github.com/streadway/amqp"
+	"time"
 )
 
 const (
@@ -44,14 +47,15 @@ type (
 		Port   int
 
 		// app vars settings
-		Vars *domain.Variables
+		Vars domain.Variables
 
 		IsOffline  bool
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
 
-		Quit chan bool
+		AppCtx context.Context
+		Cancel context.CancelFunc
 	}
 )
 
@@ -60,7 +64,6 @@ func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
 		singleton.IsOffline = false
-		singleton.Quit = make(chan bool)
 	})
 	return singleton
 }
@@ -71,14 +74,18 @@ func (m *Manager) Init() {
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
 	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
 
-	m.Vars = &domain.Variables{
-		domain.VarServerUrl: m.Server,
-		domain.VarAgentToken: m.Token,
-		domain.VarAgentPort: strconv.Itoa(m.Port),
+	m.Vars = domain.Variables{
+		domain.VarServerUrl:      m.Server,
+		domain.VarAgentToken:     m.Token,
+		domain.VarAgentPort:      strconv.Itoa(m.Port),
 		domain.VarAgentWorkspace: m.Workspace,
 		domain.VarAgentPluginDir: m.PluginDir,
-		domain.VarAgentLogDir: m.LoggingDir,
+		domain.VarAgentLogDir:    m.LoggingDir,
 	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	m.AppCtx = ctx
+	m.Cancel = cancel
 
 	// load config and init rabbitmq, zookeeper
 	err := func() error {
@@ -99,6 +106,8 @@ func (m *Manager) Init() {
 		toOfflineMode(m)
 		return
 	}
+
+	sendCurrentResource(m)
 }
 
 // HasQueue has rabbit mq connected
@@ -109,6 +118,20 @@ func (m *Manager) HasQueue() bool {
 // HasZookeeper has zookeeper connected
 func (m *Manager) HasZookeeper() bool {
 	return m.Zk != nil
+}
+
+func (m *Manager) FetchResource() *domain.Resource {
+	nCpu, _ := cpu.Counts(true)
+	vmStat, _ := mem.VirtualMemory()
+	diskStat, _ := disk.Usage("/")
+
+	return &domain.Resource{
+		Cpu:         nCpu,
+		TotalMemory: util.ByteToMB(vmStat.Total),
+		FreeMemory:  util.ByteToMB(vmStat.Available),
+		TotalDisk:   util.ByteToMB(diskStat.Total),
+		FreeDisk:    util.ByteToMB(diskStat.Free),
+	}
 }
 
 // Close release resources and connections
@@ -124,16 +147,27 @@ func (m *Manager) Close() {
 	}
 }
 
+// --------------------------------
+//		Util Functions
+// --------------------------------
+
 func toOfflineMode(m *Manager) {
 	util.LogInfo("Mode: 'offline'")
 	m.IsOffline = true
 }
 
-func loadSettings(m *Manager) error {
+func loadSettings(m *Manager) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	uri := m.Server + "/agents/connect"
 	body, _ := json.Marshal(domain.AgentInit{
-		Port: m.Port,
-		Os:   util.OS(),
+		Port:     m.Port,
+		Os:       util.OS(),
+		Resource: m.FetchResource(),
 	})
 
 	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
@@ -141,19 +175,14 @@ func loadSettings(m *Manager) error {
 	request.Header.Set(util.HttpHeaderAgentToken, m.Token)
 
 	resp, errFromReq := http.DefaultClient.Do(request)
-	if errFromReq != nil {
-		return fmt.Errorf("%s: %v", errSettingConnectFail, errFromReq)
-	}
+	util.PanicIfErr(errFromReq)
 
 	defer resp.Body.Close()
 	raw, _ := ioutil.ReadAll(resp.Body)
 
 	var message domain.SettingsResponse
 	errFromJSON := json.Unmarshal(raw, &message)
-
-	if errFromJSON != nil {
-		return errFromJSON
-	}
+	util.PanicIfErr(errFromJSON)
 
 	if !message.IsOk() {
 		return fmt.Errorf(message.Message)
@@ -164,29 +193,29 @@ func loadSettings(m *Manager) error {
 	return nil
 }
 
-func initRabbitMQ(m *Manager) error {
+func initRabbitMQ(m *Manager) (out error) {
 	if m.Settings == nil {
 		return ErrSettingsNotBeenLoaded
 	}
 
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	// get connection
 	connStr := m.Settings.Queue.GetConnectionString()
 	conn, err := amqp.Dial(connStr)
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// create channel for job queue and send back the result
 	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// create channel for push log to server
 	logCh, err := conn.Channel()
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// init queue config
 	qc := new(QueueConfig)
@@ -196,8 +225,9 @@ func initRabbitMQ(m *Manager) error {
 
 	// init queue to receive job
 	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
-	qc.JobQueue = &jobQueue
+	util.PanicIfErr(err)
 
+	qc.JobQueue = &jobQueue
 	m.Queue = qc
 	return nil
 }
@@ -212,7 +242,6 @@ func initZookeeper(m *Manager) error {
 	// make connection of zk
 	client := new(util.ZkClient)
 	err := client.Connect(zkConfig.Host)
-
 	if err != nil {
 		return err
 	}
@@ -233,4 +262,33 @@ func initZookeeper(m *Manager) error {
 
 func getZkPath(s *domain.Settings) string {
 	return s.Zookeeper.Root + "/" + s.Agent.ID
+}
+
+func sendCurrentResource(m *Manager) {
+	uri := m.Server + "/agents/resource"
+	ctx, cancel := context.WithCancel(m.AppCtx)
+
+	go func() {
+		defer cancel()
+
+		for {
+			select {
+			case <-ctx.Done(): // if cancel() execute
+				return
+			default:
+				time.Sleep(1 * time.Minute)
+			}
+
+			body, err := json.Marshal(m.FetchResource())
+			if err != nil {
+				continue
+			}
+
+			request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
+			request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
+			request.Header.Set(util.HttpHeaderAgentToken, m.Token)
+
+			_, _ = http.DefaultClient.Do(request)
+		}
+	}()
 }

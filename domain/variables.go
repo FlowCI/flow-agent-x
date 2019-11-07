@@ -1,8 +1,8 @@
 package domain
 
 import (
-	"github/flowci/flow-agent-x/util"
 	"fmt"
+	"github/flowci/flow-agent-x/util"
 )
 
 const (
@@ -10,6 +10,7 @@ const (
 	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
 	VarAgentPort      = "FLOWCI_AGENT_PORT"
 	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
+	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
 	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
 )
@@ -17,9 +18,23 @@ const (
 // Variables applied for environment variable as key, value
 type Variables map[string]string
 
+func NewVariables() Variables {
+	return Variables{
+		"_TYPE_": "_string_",
+	}
+}
+
 // NilOrEmpty detect variable is nil or empty
 func NilOrEmpty(v Variables) bool {
 	return v == nil || v.IsEmpty()
+}
+
+func (v Variables) Copy() Variables {
+	copied := make(Variables, len(v))
+	for k, val := range v {
+		copied[k] = val
+	}
+	return copied
 }
 
 // ToStringArray convert variables map to key=value string array

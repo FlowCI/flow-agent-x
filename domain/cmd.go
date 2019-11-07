@@ -56,26 +56,47 @@ const (
 	CmdExitCodeSuccess = 0
 )
 
-type Cmd struct {
-	ID           string `json:"id"`
-	AllowFailure bool   `json:"allowFailure"`
-	Plugin       string `json:"plugin"`
-}
+type (
+	Cmd struct {
+		ID           string `json:"id"`
+		AllowFailure bool   `json:"allowFailure"`
+		Plugin       string `json:"plugin"`
+	}
+
+	CmdIn struct {
+		Cmd
+		Type       CmdType   `json:"type"`
+		Scripts    []string  `json:"scripts"`
+		WorkDir    string    `json:"workDir"`
+		Timeout    int     `json:"timeout"`
+		Inputs     Variables `json:"inputs"`
+		EnvFilters []string  `json:"envFilters"`
+	}
+
+	ExecutedCmd struct {
+		Cmd
+		ProcessId int       `json:"processId"`
+		Status    CmdStatus `json:"status"`
+		Code      int       `json:"code"`
+		Output    Variables `json:"output"`
+		StartAt   time.Time `json:"startAt"`
+		FinishAt  time.Time `json:"finishAt"`
+		Error     string    `json:"error"`
+		LogSize   int64     `json:"logSize"`
+	}
+)
+
+// ===================================
+//		Cmd Methods
+// ===================================
 
 func (cmd *Cmd) HasPlugin() bool {
 	return cmd.Plugin != ""
 }
 
-type CmdIn struct {
-	Cmd
-	Type       CmdType   `json:"type"`
-	Scripts    []string  `json:"scripts"`
-	WorkDir    string    `json:"workDir"`
-	Timeout    int64     `json:"timeout"`
-	Inputs     Variables `json:"inputs"`
-	EnvFilters []string  `json:"envFilters"`
-}
-
+// ===================================
+//		CmdIn Methods
+// ===================================
 func (in *CmdIn) HasScripts() bool {
 	if in.Scripts == nil {
 		return false
@@ -92,14 +113,27 @@ func (in *CmdIn) HasEnvFilters() bool {
 	return len(in.EnvFilters) != 0
 }
 
-type ExecutedCmd struct {
-	Cmd
-	ProcessId int       `json:"processId"`
-	Status    CmdStatus `json:"status"`
-	Code      int       `json:"code"`
-	Output    Variables `json:"output"`
-	StartAt   time.Time `json:"startAt"`
-	FinishAt  time.Time `json:"finishAt"`
-	Error     string    `json:"error"`
-	LogSize   int64     `json:"logSize"`
+func (in *CmdIn) VarsToStringArray() []string {
+	if !NilOrEmpty(in.Inputs) {
+		return in.Inputs.ToStringArray()
+	}
+
+	return []string{}
+}
+
+// ===================================
+//		ExecutedCmd Methods
+// ===================================
+
+func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
+	return &ExecutedCmd{
+		Cmd: Cmd{
+			ID:           in.ID,
+			AllowFailure: in.AllowFailure,
+			Plugin:       in.Plugin,
+		},
+		Code:   CmdExitCodeUnknown,
+		Status: CmdStatusPending,
+		Output: NewVariables(),
+	}
 }
