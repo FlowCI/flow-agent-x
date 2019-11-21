@@ -60,6 +60,9 @@ ENV PATH=$PATH:$NVM_DIR/versions/node/$NODE_VERSION/bin:$MAVEN_HOME/bin:$GOROOT/
 RUN mkdir -p $HOME/.ssh
 RUN echo "StrictHostKeyChecking=no" >> $HOME/.ssh/config
 
+## install api lib
+RUN pip3 install python-lib-flow.ci
+
 ## default work dir
 ENV TARGET_DIR=/flow.ci.agent
 ENV FLOWCI_AGENT_WORKSPACE=${TARGET_DIR}/workspace
