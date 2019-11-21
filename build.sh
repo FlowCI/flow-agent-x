@@ -10,7 +10,7 @@ fi
 docker run -it --rm \
 -v "$PWD":/go/src/flow-agent-x \
 -w /go/src/flow-agent-x golang:1.12 \
-/bin/bash -c "curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh && dep ensure && go build"
+/bin/bash -c "GO111MODULE=on go build -o bin/flow-agent-x -v"
 
 docker build -f ./Dockerfile -t flowci/agent:latest $VersionTag .
 
