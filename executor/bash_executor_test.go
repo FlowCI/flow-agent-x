@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+func init() {
+	util.EnableDebugLog()
+}
+
 func TestShouldExitAfterExecuted(t *testing.T) {
 	assert := assert.New(t)
 

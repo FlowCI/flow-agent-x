@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/controller"
 	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/executor"
 	"github/flowci/flow-agent-x/util"
 	"net"
 	"net/http"
@@ -69,6 +71,11 @@ func main() {
 			Usage:  "Directory for logging",
 			EnvVar: domain.VarAgentLogDir,
 		},
+
+		cli.StringFlag{
+			Name:  "script",
+			Usage: "Execute shell script locally, ex: --script \"echo hello world\"",
+		},
 	}
 
 	err := app.Run(os.Args)
@@ -77,22 +84,52 @@ func main() {
 
 func start(c *cli.Context) error {
 	util.LogInfo("Staring flow.ci agent...")
+	defer util.LogInfo("Agent stopped")
 
-	// try to load config from server
 	config := config.GetInstance()
+	defer config.Close()
+
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = util.ParseString(c.String("plugindir"))
 	config.LoggingDir = util.ParseString(c.String("logdir"))
+
+	// exec given cmd
+	script := c.String("script")
+	if len(script) > 0 {
+		execCmd(script)
+		return nil
+	}
+
+	// connect to ci server
 	config.Init()
-
-	defer config.Close()
-
 	startGin(config)
-	util.LogInfo("Agent stopped")
+
 	return nil
+}
+
+func execCmd(script string) {
+	cmd := &domain.CmdIn{
+		Cmd: domain.Cmd{
+			ID: "local",
+		},
+		Scripts: []string{script},
+		Inputs:  domain.Variables{},
+		Timeout: 1800,
+	}
+
+	printer := func(channel <-chan *domain.LogItem) {
+		for item := range channel {
+			util.LogInfo("[LOG]: %s", item.Content)
+		}
+	}
+
+	bashExecutor := executor.NewBashExecutor(context.Background(), cmd, nil)
+	go printer(bashExecutor.LogChannel())
+
+	_ = bashExecutor.Start()
 }
 
 func startGin(config *config.Manager) {
