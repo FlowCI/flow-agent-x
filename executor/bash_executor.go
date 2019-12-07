@@ -23,6 +23,7 @@ var (
 
 	defaultLogChannelBufferSize = 10000
 	defaultLogWaitingDuration   = 5 * time.Second
+	defaultReaderBufferSize = 8 * 1024
 )
 
 type (
@@ -282,24 +283,31 @@ func (b *BashExecutor) startConsumeStdOut(reader io.ReadCloser) context.CancelFu
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", cmdResult.LogSize)
 		}()
 
-		scanner := bufio.NewScanner(reader)
+		bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
+		var builder strings.Builder
 
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				if !scanner.Scan() {
-					time.Sleep(1 * time.Second)
-					break
-				}
+				line, err := readLine(bufferReader, builder)
+				builder.Reset()
 
-				line := scanner.Text()
+				if err != nil {
+					return
+				}
 
 				// to read system env vars in the end
 				if strings.EqualFold(line, b.endTag) {
-					for scanner.Scan() {
-						envLine := scanner.Text()
+					for {
+						envLine, err := readLine(bufferReader, builder)
+						builder.Reset()
+
+						if err != nil {
+							return
+						}
+
 						index := strings.IndexAny(envLine, "=")
 						if index == -1 {
 							continue
@@ -312,7 +320,6 @@ func (b *BashExecutor) startConsumeStdOut(reader io.ReadCloser) context.CancelFu
 							cmdResult.Output[key] = value
 						}
 					}
-					return
 				}
 
 				// send log item instance to channel
@@ -329,6 +336,29 @@ func (b *BashExecutor) startConsumeStdOut(reader io.ReadCloser) context.CancelFu
 //====================================================================
 //	util
 //====================================================================
+
+func readLine(r *bufio.Reader, builder strings.Builder) (string, error) {
+	var prefix bool
+
+	line, prefix, err := r.ReadLine()
+	builder.Write(line)
+
+	if err != nil {
+		return builder.String(), err
+	}
+
+	for prefix {
+		var rest []byte
+		rest, prefix, err = r.ReadLine()
+		builder.Write(rest)
+
+		if err != nil {
+			return builder.String(), err
+		}
+	}
+
+	return builder.String(), nil
+}
 
 func createWorkDir(dir string) error {
 	if !util.IsEmptyString(dir) {
