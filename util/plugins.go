@@ -32,13 +32,13 @@ func (p *Plugins) Load(name string) error {
 	err := p.clone(dir, url)
 
 	if err == git.ErrRepositoryAlreadyExists {
-		return p.pull(dir)
+		return p.pull(dir, url)
 	}
 
 	return err
 }
 
-func (p *Plugins) clone(dir ,url string) error {
+func (p *Plugins) clone(dir, url string) error {
 	options := &git.CloneOptions{
 		URL:      url,
 		Progress: os.Stdout,
@@ -48,15 +48,31 @@ func (p *Plugins) clone(dir ,url string) error {
 	return err
 }
 
-func (p *Plugins) pull(dir string) error {
+func (p *Plugins) pull(dir, url string) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	repo, err := git.PlainOpen(dir)
-	if err != nil {
-		return err
-	}
+	PanicIfErr(err)
 
 	workTree, err := repo.Worktree()
-	if err != nil {
-		return err
+	PanicIfErr(err)
+
+	// update remote url if url been changed
+	remote, err := repo.Remote("origin")
+	PanicIfErr(err)
+
+	config := remote.Config()
+	if config.URLs[0] != url {
+		err = repo.DeleteRemote("origin")
+		PanicIfErr(err)
+
+		config.URLs[0] = url
+		_, err = repo.CreateRemote(config)
+		PanicIfErr(err)
 	}
 
 	err = workTree.Pull(&git.PullOptions{RemoteName: "origin"})
