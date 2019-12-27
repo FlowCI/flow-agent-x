@@ -19,10 +19,6 @@ import (
 	"time"
 )
 
-const (
-	errSettingConnectFail = "Cannot get settings from server"
-)
-
 var (
 	singleton *Manager
 	once      sync.Once

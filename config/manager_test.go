@@ -14,7 +14,8 @@ var (
 
 	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/agents/connect" {
-			w.Write(rBody)
+			_, _ = w.Write(rBody)
+
 		}
 	}))
 )
