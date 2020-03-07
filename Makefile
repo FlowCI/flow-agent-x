@@ -18,8 +18,7 @@ DOCKER_BUILD 	:= ./build.sh
 .PHONY: build test docker
 
 build:
-	$(DOCKER_RUN) "$(GOBUILD_LINUX)"
-	$(DOCKER_RUN) "$(GOBUILD_MAC)"
+	$(DOCKER_RUN) "$(GOBUILD_LINUX) && $(GOBUILD_MAC)"
 
 test:
 	$(DOCKER_RUN) "$(GOTEST)"
