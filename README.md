@@ -16,13 +16,14 @@ The new version agent for flow.ci
 ```bash
 make build
 
-# binary will be created at ./bin/flow-agent-x
+# binary will be created at ./bin/flow-agent-x-mac
+# binary will be created at ./bin/flow-agent-x-linux
 ```
 
 ## Run Unit Test
 
 ```bash
-make run
+make test
 ```
 
 ## Build docker image
