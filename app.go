@@ -29,7 +29,9 @@ func init() {
 func main() {
 	app := cli.NewApp()
 	app.Name = "Agent of flow.ci"
+	app.Usage = ""
 	app.Action = start
+	app.Author = "yang.guo"
 	app.Version = version
 	app.Flags = []cli.Flag{
 		cli.StringFlag{
@@ -47,6 +49,7 @@ func main() {
 
 		cli.StringFlag{
 			Name:   "port, p",
+			Value: 	"",
 			Usage:  "Port for agent",
 			EnvVar: domain.VarAgentPort,
 		},
@@ -74,6 +77,7 @@ func main() {
 
 		cli.StringFlag{
 			Name:  "script",
+			Value: "",
 			Usage: "Execute shell script locally, ex: --script \"echo hello world\"",
 		},
 	}
