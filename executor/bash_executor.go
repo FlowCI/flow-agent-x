@@ -23,7 +23,7 @@ var (
 
 	defaultLogChannelBufferSize = 10000
 	defaultLogWaitingDuration   = 5 * time.Second
-	defaultReaderBufferSize = 8 * 1024
+	defaultReaderBufferSize     = 8 * 1024
 )
 
 type (
@@ -235,6 +235,7 @@ func (b *BashExecutor) startConsumeStdIn(stdin io.WriteCloser) context.CancelFun
 					return
 				}
 				_, _ = io.WriteString(stdin, appendNewLine(script))
+				util.LogDebug("----- exec: %s", script)
 			}
 		}
 	}
