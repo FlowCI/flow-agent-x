@@ -17,15 +17,6 @@ import (
 	"time"
 )
 
-var (
-	linuxBash = "/bin/bash"
-	//linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
-
-	defaultLogChannelBufferSize = 10000
-	defaultLogWaitingDuration   = 5 * time.Second
-	defaultReaderBufferSize     = 8 * 1024
-)
-
 type (
 	BashExecutor struct {
 		cmdId  string
