@@ -19,7 +19,7 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, createTestCmd(), nil)
+	executor := NewExecutor(Bash, ctx, createTestCmd(), nil)
 
 	time.AfterFunc(2 * time.Second, func() {
 		executor.BashChannel() <- "echo $HOME"
@@ -33,10 +33,11 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 	err := executor.Start()
 	assert.Nil(err)
 
-	assert.Equal(domain.CmdStatusSuccess, executor.CmdResult.Status)
-	assert.Equal(int64(2), executor.CmdResult.LogSize)
-	assert.Equal(0, executor.CmdResult.Code)
-	assert.NotNil(executor.CmdResult.FinishAt)
+	result := executor.GetResult()
+	assert.Equal(domain.CmdStatusSuccess, result)
+	assert.Equal(int64(2), result.LogSize)
+	assert.Equal(0, result.Code)
+	assert.NotNil(result.FinishAt)
 }
 
 func TestShouldExecuteFromInCmd(t *testing.T) {

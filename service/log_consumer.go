@@ -21,7 +21,7 @@ import (
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(executor *executor.BashExecutor, logDir string) {
+func logConsumer(executor executor.Executor, logDir string) {
 	config := config.GetInstance()
 	logChannel := executor.LogChannel()
 

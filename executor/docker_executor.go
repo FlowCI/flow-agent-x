@@ -2,15 +2,11 @@ package executor
 
 type (
 	DockerExecutor struct {
-
+		BaseExecutor
 	}
 )
 
-func NewDockerExecutor() *DockerExecutor {
-	return &DockerExecutor{}
-}
-
-func (e *DockerExecutor) Start() {
+func (e *DockerExecutor) Start() error {
 	// pull image
 
 	// start container
@@ -18,5 +14,11 @@ func (e *DockerExecutor) Start() {
 	// cp job dir
 
 	// for : run cmd
+
+	return nil
+}
+
+func (e *DockerExecutor) Kill() {
+
 }
 

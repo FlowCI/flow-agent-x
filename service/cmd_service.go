@@ -26,7 +26,7 @@ type (
 
 	// CmdService receive and execute cmd
 	CmdService struct {
-		executor *executor.BashExecutor
+		executor executor.Executor
 		mux      sync.Mutex
 		session  CmdInteractSession
 	}
@@ -154,7 +154,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	// init and start executor
 	vars := config.Vars.Copy()
 	vars[domain.VarAgentJobDir] = in.WorkDir
-	s.executor = executor.NewBashExecutor(config.AppCtx, in, vars)
+	s.executor = executor.NewExecutor(executor.Bash, config.AppCtx, in, vars)
 
 	go logConsumer(s.executor, config.LoggingDir)
 
@@ -162,7 +162,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 		defer s.release()
 		_ = s.executor.Start()
 
-		result := s.executor.CmdResult
+		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
 		saveAndPushBack(result)
 	}()

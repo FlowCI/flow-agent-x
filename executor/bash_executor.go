@@ -3,15 +3,12 @@ package executor
 import (
 	"bufio"
 	"context"
-	"fmt"
-	"github.com/google/uuid"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -19,66 +16,9 @@ import (
 
 type (
 	BashExecutor struct {
-		cmdId  string
-		inCmd  *domain.CmdIn
-		inVars domain.Variables
-
-		context    context.Context
-		cancelFunc context.CancelFunc
-
-		bashChannel chan string          // bash script comes from
-		logChannel  chan *domain.LogItem // output log
-		stdOutWg    sync.WaitGroup
-		endTag      string
-
-		CmdResult *domain.ExecutedCmd
+		BaseExecutor
 	}
 )
-
-// NewBashExecutor create new instance of bash executor
-func NewBashExecutor(parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) *BashExecutor {
-	instance := &BashExecutor{
-		cmdId:       inCmd.ID,
-		bashChannel: make(chan string),
-		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
-		inCmd:       inCmd,
-		inVars:      vars,
-		CmdResult:   domain.NewExecutedCmd(inCmd),
-	}
-
-	if vars == nil {
-		instance.inVars = make(domain.Variables)
-	}
-
-	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
-	instance.context = ctx
-	instance.cancelFunc = cancel
-
-	endUUID, _ := uuid.NewRandom()
-	instance.endTag = fmt.Sprintf("=====EOF-%s=====", endUUID)
-	instance.stdOutWg.Add(2)
-
-	return instance
-}
-
-//====================================================================
-//	Public
-//====================================================================
-
-// CmdID current bash executor cmd id
-func (b *BashExecutor) CmdID() string {
-	return b.cmdId
-}
-
-// BashChannel for input bash script
-func (b *BashExecutor) BashChannel() chan<- string {
-	return b.bashChannel
-}
-
-// LogChannel for output log from stdout, stdin
-func (b *BashExecutor) LogChannel() <-chan *domain.LogItem {
-	return b.logChannel
-}
 
 // Start run the cmd from domain.CmdIn
 func (b *BashExecutor) Start() error {
@@ -145,7 +85,7 @@ func (b *BashExecutor) Start() error {
 
 	// wait or timeout
 	err := command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.cmdId)
+	util.LogDebug("[Done]: Shell for %s", b.CmdID())
 
 	if b.CmdResult.Status == domain.CmdStatusTimeout {
 		return nil

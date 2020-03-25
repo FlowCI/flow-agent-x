@@ -11,7 +11,7 @@ GOTEST      	:= $(GO) test ./... -v
 CURRENT_DIR 	:= $(shell pwd)
 DOCKER_VERSION	:= golang:1.12
 DOCKER_DIR 		:= /go/src/flow-agent-x
-DOCKER_RUN 		:= docker run -it --rm -v $(CURRENT_DIR):$(DOCKER_DIR) -w $(DOCKER_DIR) $(DOCKER_VERSION) /bin/bash -c
+DOCKER_RUN 		:= docker run -it --rm -v $(CURRENT_DIR):$(DOCKER_DIR) -w $(DOCKER_DIR) --network host $(DOCKER_VERSION) /bin/bash -c
 
 DOCKER_BUILD 	:= ./build.sh
 
