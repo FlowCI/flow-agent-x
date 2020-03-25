@@ -19,7 +19,7 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewExecutor(Bash, ctx, createTestCmd(), nil)
+	executor := NewExecutor(Bash, ctx, createBashTestCmd(), nil)
 
 	time.AfterFunc(2 * time.Second, func() {
 		executor.BashChannel() <- "echo $HOME"
@@ -43,31 +43,32 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 func TestShouldExecuteFromInCmd(t *testing.T) {
 	assert := assert.New(t)
 
-	testCmd := createTestCmd()
+	testCmd := createBashTestCmd()
 	testCmd.Scripts = []string{"echo $HOME", "export HELLO_WORLD='hello'"}
 	testCmd.EnvFilters = []string{"HELLO_WORLD"}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, testCmd, nil)
+	executor := NewExecutor(Bash, ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
 	assert.Nil(err)
 
-	assert.Equal(domain.CmdStatusSuccess, executor.CmdResult.Status)
-	assert.Equal(int64(1), executor.CmdResult.LogSize)
-	assert.Equal(0, executor.CmdResult.Code)
-	assert.Equal("hello", executor.CmdResult.Output["HELLO_WORLD"])
-	assert.NotNil(executor.CmdResult.FinishAt)
+	result := executor.GetResult()
+	assert.Equal(domain.CmdStatusSuccess, result.Status)
+	assert.Equal(int64(1), result.LogSize)
+	assert.Equal(0, result.Code)
+	assert.Equal("hello", result.Output["HELLO_WORLD"])
+	assert.NotNil(result.FinishAt)
 }
 
 func TestShouldExitWithErrorAfterExecuted(t *testing.T) {
 	assert := assert.New(t)
 
 	// init:
-	testCmd := createTestCmd()
+	testCmd := createBashTestCmd()
 	testCmd.AllowFailure = false
 	testCmd.Scripts = []string{"notCommand"}
 
@@ -75,24 +76,24 @@ func TestShouldExitWithErrorAfterExecuted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, testCmd, nil)
+	executor := NewExecutor(Bash, ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
 	assert.Nil(err)
 
 	// then:
-	assert.Equal(int64(1), executor.CmdResult.LogSize)
-	assert.Equal(127, executor.CmdResult.Code)
-	assert.Equal(domain.CmdStatusException, executor.CmdResult.Status)
-	assert.NotNil(executor.CmdResult.FinishAt)
+	assert.Equal(int64(1), executor.GetResult().LogSize)
+	assert.Equal(127, executor.GetResult().Code)
+	assert.Equal(domain.CmdStatusException, executor.GetResult().Status)
+	assert.NotNil(executor.GetResult().FinishAt)
 }
 
 func TestShouldExitAfterExecutedButAllowFailure(t *testing.T) {
 	assert := assert.New(t)
 
 	// init:
-	testCmd := createTestCmd()
+	testCmd := createBashTestCmd()
 	testCmd.AllowFailure = true
 	testCmd.Scripts = []string{"notCommand"}
 
@@ -100,52 +101,52 @@ func TestShouldExitAfterExecutedButAllowFailure(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, testCmd, nil)
+	executor := NewExecutor(Bash, ctx, testCmd, nil)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
 	assert.Nil(err)
 
 	// then:
-	assert.Equal(int64(1), executor.CmdResult.LogSize)
-	assert.Equal(0, executor.CmdResult.Code)
-	assert.Equal(domain.CmdStatusSuccess, executor.CmdResult.Status)
-	assert.NotNil(executor.CmdResult.FinishAt)
+	assert.Equal(int64(1), executor.GetResult().LogSize)
+	assert.Equal(0, executor.GetResult().Code)
+	assert.Equal(domain.CmdStatusSuccess, executor.GetResult().Status)
+	assert.NotNil(executor.GetResult().FinishAt)
 }
 
 func TestShouldExitWithTimeout(t *testing.T) {
 	assert := assert.New(t)
 
-	testCmd := createTestCmd()
+	testCmd := createBashTestCmd()
 	testCmd.Timeout = 5
 	testCmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, testCmd, nil)
+	executor := NewExecutor(Bash, ctx, testCmd, nil)
 
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
 	assert.Nil(err)
 
-	assert.Equal(domain.CmdStatusTimeout, executor.CmdResult.Status)
-	assert.Equal(domain.CmdExitCodeTimeOut, executor.CmdResult.Code)
-	assert.Equal(int64(1), executor.CmdResult.LogSize)
-	assert.NotNil(executor.CmdResult.FinishAt)
+	assert.Equal(domain.CmdStatusTimeout, executor.GetResult().Status)
+	assert.Equal(domain.CmdExitCodeTimeOut, executor.GetResult().Code)
+	assert.Equal(int64(1), executor.GetResult().LogSize)
+	assert.NotNil(executor.GetResult().FinishAt)
 }
 
 func TestShouldExitByKill(t *testing.T) {
 	assert := assert.New(t)
 
-	testCmd := createTestCmd()
+	testCmd := createBashTestCmd()
 	testCmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewBashExecutor(ctx, testCmd, nil)
+	executor := NewExecutor(Bash, ctx, testCmd, nil)
 
 	go printLog(executor.LogChannel())
 
@@ -156,13 +157,13 @@ func TestShouldExitByKill(t *testing.T) {
 	err := executor.Start()
 	assert.Nil(err)
 
-	assert.Equal(domain.CmdStatusKilled, executor.CmdResult.Status)
-	assert.Equal(domain.CmdExitCodeKilled, executor.CmdResult.Code)
-	assert.Equal(int64(1), executor.CmdResult.LogSize)
-	assert.NotNil(executor.CmdResult.FinishAt)
+	assert.Equal(domain.CmdStatusKilled, executor.GetResult().Status)
+	assert.Equal(domain.CmdExitCodeKilled, executor.GetResult().Code)
+	assert.Equal(int64(1), executor.GetResult().LogSize)
+	assert.NotNil(executor.GetResult().FinishAt)
 }
 
-func createTestCmd() *domain.CmdIn {
+func createBashTestCmd() *domain.CmdIn {
 	return &domain.CmdIn{
 		Cmd: domain.Cmd{
 			ID: "1-1-1",

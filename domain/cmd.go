@@ -57,6 +57,11 @@ const (
 )
 
 type (
+	DockerDesc struct {
+		Image string   `json:"image"`
+		Ports []string `json:"ports"`
+	}
+
 	Cmd struct {
 		ID           string `json:"id"`
 		AllowFailure bool   `json:"allowFailure"`
@@ -65,12 +70,13 @@ type (
 
 	CmdIn struct {
 		Cmd
-		Type       CmdType   `json:"type"`
-		Scripts    []string  `json:"scripts"`
-		WorkDir    string    `json:"workDir"`
-		Timeout    int     `json:"timeout"`
-		Inputs     Variables `json:"inputs"`
-		EnvFilters []string  `json:"envFilters"`
+		Type       CmdType    `json:"type"`
+		Docker     *DockerDesc `json:"docker"`
+		Scripts    []string   `json:"scripts"`
+		WorkDir    string     `json:"workDir"`
+		Timeout    int        `json:"timeout"`
+		Inputs     Variables  `json:"inputs"`
+		EnvFilters []string   `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {
