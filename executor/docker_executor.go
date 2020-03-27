@@ -1,37 +1,50 @@
 package executor
 
 import (
+	"archive/tar"
 	"bufio"
+	"bytes"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"time"
 )
 
 type (
 	DockerExecutor struct {
 		BaseExecutor
+		workDirInContainer string
 	}
 )
 
-func (e *DockerExecutor) Start() error {
+func (e *DockerExecutor) Start() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
+	e.workDirInContainer = "/ws/" + e.inCmd.FlowId
+	e.inVars[domain.VarAgentJobDir] = e.workDirInContainer
+
 	// pull image
 	cli, err := client.NewEnvClient()
 	util.PanicIfErr(err)
 	defer cli.Close()
 
 	e.pullImage(cli)
+	cid := e.createContainer(cli)
 
-	e.createContainer(cli)
+	e.copyToContainer(cli, cid)
+	e.runCmdInContainer(cli, cid)
 
-	// cp job dir
-
-	// for : run cmd
-
-	return nil
+	return
 }
 
 func (e *DockerExecutor) Kill() {
@@ -50,24 +63,97 @@ func (e *DockerExecutor) pullImage(cli *client.Client) {
 	e.writeLogToChannel(reader)
 }
 
-func (e *DockerExecutor) createContainer(cli *client.Client) {
+func (e *DockerExecutor) createContainer(cli *client.Client) string {
 	docker := e.inCmd.Docker
 
-	resp, err := cli.ContainerCreate(
-		e.context,
-		&container.Config{
-			Image:      docker.Image,
-			Entrypoint: docker.Entrypoint,
-			Cmd:        []string{"echo", "hello world"},
-			Tty:        false,
-		},
-		nil, nil, "")
+	config := &container.Config{
+		Image:        docker.Image,
+		Env:          append(e.inVars.ToStringArray(), e.inCmd.VarsToStringArray()...),
+		Entrypoint:   docker.Entrypoint,
+		Tty:          false,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		OpenStdin:    true,
+		StdinOnce:    true,
+		WorkingDir:   e.workDirInContainer,
+	}
 
+	resp, err := cli.ContainerCreate(e.context, config, nil, nil, "")
 	util.PanicIfErr(err)
+	util.LogDebug("Container created %s", resp.ID)
 
+	return resp.ID
 }
 
-func (e *DockerExecutor) writeLogToChannel(reader io.ReadCloser) {
+func (e *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
+	reader, err := tarArchiveFromPath(e.workDir)
+	util.PanicIfErr(err)
+
+	config := types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: true,
+	}
+
+	err = cli.CopyToContainer(e.context, containerId, e.workDirInContainer, reader, config)
+	util.PanicIfErr(err)
+	util.LogDebug("Job working dir been created in container")
+}
+
+func (e *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) int {
+	//config := types.ContainerAttachOptions{
+	//	Stream: true,
+	//	Stdin:  true,
+	//	Stdout: true,
+	//	Stderr: true,
+	//}
+
+	execConfig := types.ExecConfig{
+		Tty:          true,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          []string{"/bin/bash"},
+	}
+
+	err := cli.ContainerStart(e.context, cid, types.ContainerStartOptions{})
+	util.PanicIfErr(err)
+
+	eid, err := cli.ContainerExecCreate(e.context, cid, execConfig)
+	util.PanicIfErr(err)
+
+	execStartCfg := types.ExecConfig{Tty: true}
+
+	attach, err := cli.ContainerExecAttach(e.context, eid.ID, execStartCfg)
+	util.PanicIfErr(err)
+
+	go func() {
+		io.Copy(os.Stdout, attach.Reader)
+	}()
+
+	input := bytes.NewBufferString("")
+
+	go func() {
+		io.Copy(attach.Conn, input)
+		defer attach.CloseWrite()
+	}()
+
+	go func() {
+		input.WriteString("echo hello1")
+
+		input.WriteString("echo hello1")
+		input.WriteString("echo hello1")
+		input.WriteString("echo hello1")
+		input.WriteString("echo hello1")
+	}()
+
+	time.Sleep(5 * time.Second)
+	_, err = cli.ContainerInspect(e.context, cid)
+	util.PanicIfErr(err)
+
+	return 0
+}
+
+func (e *DockerExecutor) writeLogToChannel(reader io.Reader) {
 	bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
 	var builder strings.Builder
 
@@ -86,4 +172,56 @@ func (e *DockerExecutor) writeLogToChannel(reader io.ReadCloser) {
 
 		e.logChannel <- log
 	}
+}
+
+//--------------------------------------------
+// util methods
+//--------------------------------------------
+
+func tarArchiveFromPath(path string) (io.Reader, error) {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	ok := filepath.Walk(path, func(file string, fi os.FileInfo, err error) (out error) {
+		defer func() {
+			if err := recover(); err != nil {
+				out = err.(error)
+			}
+		}()
+
+		util.PanicIfErr(err)
+
+		header, err := tar.FileInfoHeader(fi, fi.Name())
+		util.PanicIfErr(err)
+
+		header.Name = strings.TrimPrefix(strings.Replace(file, path, "", -1), string(filepath.Separator))
+		err = tw.WriteHeader(header)
+		util.PanicIfErr(err)
+
+		f, err := os.Open(file)
+		util.PanicIfErr(err)
+
+		if fi.IsDir() {
+			return
+		}
+
+		_, err = io.Copy(tw, f)
+		util.PanicIfErr(err)
+
+		err = f.Close()
+		util.PanicIfErr(err)
+
+		return
+	})
+
+	if ok != nil {
+		return nil, ok
+	}
+
+	ok = tw.Close()
+	if ok != nil {
+		return nil, ok
+	}
+
+	return bufio.NewReader(&buf), nil
 }

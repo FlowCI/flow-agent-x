@@ -59,7 +59,7 @@ const (
 type (
 	DockerDesc struct {
 		Image      string   `json:"image"`
-		Entrypoint []string   `json:"entrypoint"`
+		Entrypoint []string `json:"entrypoint"`
 		Ports      []string `json:"ports"`
 	}
 
@@ -74,7 +74,7 @@ type (
 		Type       CmdType     `json:"type"`
 		Docker     *DockerDesc `json:"docker"`
 		Scripts    []string    `json:"scripts"`
-		WorkDir    string      `json:"workDir"`
+		FlowId     string      `json:"flowId"`
 		Timeout    int         `json:"timeout"`
 		Inputs     Variables   `json:"inputs"`
 		EnvFilters []string    `json:"envFilters"`

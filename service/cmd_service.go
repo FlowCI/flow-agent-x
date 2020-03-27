@@ -2,7 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -153,7 +152,6 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 
 	// init and start executor
 	vars := config.Vars.Copy()
-	vars[domain.VarAgentJobDir] = in.WorkDir
 	s.executor = executor.NewExecutor(executor.Bash, config.AppCtx, in, vars)
 
 	go logConsumer(s.executor, config.LoggingDir)
@@ -205,7 +203,6 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 	}
 
 	config := config.GetInstance()
-	in.WorkDir = filepath.Join(config.Workspace, util.ParseString(in.WorkDir))
 	return nil
 }
 

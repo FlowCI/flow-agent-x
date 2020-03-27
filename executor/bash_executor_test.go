@@ -181,13 +181,3 @@ func createBashTestCmd() *domain.CmdIn {
 		EnvFilters: []string{"FLOW_"},
 	}
 }
-
-func printLog(channel <-chan *domain.LogItem) {
-	for {
-		item, ok := <-channel
-		if !ok {
-			break
-		}
-		util.LogDebug("[LOG]: %s", item.Content)
-	}
-}

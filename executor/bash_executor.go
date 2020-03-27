@@ -32,9 +32,8 @@ func (b *BashExecutor) Start() error {
 		close(b.logChannel)
 	}()
 
-	// init exec.command
 	command := exec.Command(linuxBash)
-	command.Dir = b.inCmd.WorkDir
+	command.Dir = b.workDir
 
 	if err := createWorkDir(command.Dir); err != nil {
 		return b.toErrorStatus(err)

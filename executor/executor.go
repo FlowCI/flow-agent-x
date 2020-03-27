@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
+	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -17,7 +20,7 @@ const (
 	defaultLogWaitingDuration   = 5 * time.Second
 	defaultReaderBufferSize     = 8 * 1024
 
-	Bash = TypeOfExecutor(1)
+	Bash   = TypeOfExecutor(1)
 	Docker = TypeOfExecutor(2)
 )
 
@@ -38,32 +41,36 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
-	context    context.Context
-	cancelFunc context.CancelFunc
-
-	inCmd  *domain.CmdIn
-	inVars domain.Variables
-
+	workspace   string // agent workspace
+	workDir     string //
+	context     context.Context
+	cancelFunc  context.CancelFunc
+	inCmd       *domain.CmdIn
+	inVars      domain.Variables
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
 	stdOutWg    sync.WaitGroup
 	endTag      string
-
-	CmdResult *domain.ExecutedCmd
+	CmdResult   *domain.ExecutedCmd
 }
 
 func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) Executor {
-	base := BaseExecutor {
-			bashChannel: make(chan string),
-			logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
-			inCmd:       inCmd,
-			inVars:      vars,
-			CmdResult:   domain.NewExecutedCmd(inCmd),
+	app := config.GetInstance()
+
+	base := BaseExecutor{
+		workspace:   app.Workspace,
+		workDir:     filepath.Join(app.Workspace, util.ParseString(inCmd.FlowId)),
+		bashChannel: make(chan string),
+		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
+		inCmd:       inCmd,
+		inVars:      vars,
+		CmdResult:   domain.NewExecutedCmd(inCmd),
 	}
 
 	if vars == nil {
 		base.inVars = make(domain.Variables)
 	}
+	base.inVars[domain.VarAgentJobDir] = base.workDir
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
 	base.context = ctx
