@@ -122,11 +122,13 @@ func (e *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) int {
 	}()
 
 	go func() {
-		attach.Conn.Write([]byte("echo hello 1"))
-		attach.Conn.Write([]byte("echo hello 1"))
-		attach.Conn.Write([]byte("echo hello 1"))
-		attach.Conn.Write([]byte("echo hello 1"))
-		attach.Conn.Write([]byte("echo hello 1"))
+		attach.Conn.Write([]byte("cd /etc\n"))
+		attach.Conn.Write([]byte("ls -al\n"))
+		attach.Conn.Write([]byte("echo hello 11111111111\n"))
+		attach.Conn.Write([]byte("echo hello 11111111111\n"))
+		attach.Conn.Write([]byte("echo hello 11111111111\n"))
+		attach.Conn.Write([]byte("echo hello 11111111111\n"))
+
 	}()
 
 	time.Sleep(5 * time.Second)
