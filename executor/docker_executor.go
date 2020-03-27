@@ -41,6 +41,7 @@ func (e *DockerExecutor) Start() (out error) {
 	e.pullImage(cli)
 	cid := e.createContainer(cli)
 
+	e.startContainer(cli, cid)
 	e.copyToContainer(cli, cid)
 	e.runCmdInContainer(cli, cid)
 
@@ -86,6 +87,11 @@ func (e *DockerExecutor) createContainer(cli *client.Client) string {
 	return resp.ID
 }
 
+func (e *DockerExecutor) startContainer(cli *client.Client, cid string) {
+	err := cli.ContainerStart(e.context, cid, types.ContainerStartOptions{})
+	util.PanicIfErr(err)
+}
+
 func (e *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
 	reader, err := tarArchiveFromPath(e.workDir)
 	util.PanicIfErr(err)
@@ -100,50 +106,27 @@ func (e *DockerExecutor) copyToContainer(cli *client.Client, containerId string)
 }
 
 func (e *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) int {
-	//config := types.ContainerAttachOptions{
-	//	Stream: true,
-	//	Stdin:  true,
-	//	Stdout: true,
-	//	Stderr: true,
-	//}
-
-	execConfig := types.ExecConfig{
-		Tty:          true,
-		AttachStdin:  true,
-		AttachStderr: true,
-		AttachStdout: true,
-		Cmd:          []string{"/bin/bash"},
+	config := types.ContainerAttachOptions{
+		Stream: true,
+		Stdin:  true,
+		Stdout: true,
+		Stderr: true,
+		Logs:   true,
 	}
 
-	err := cli.ContainerStart(e.context, cid, types.ContainerStartOptions{})
-	util.PanicIfErr(err)
-
-	eid, err := cli.ContainerExecCreate(e.context, cid, execConfig)
-	util.PanicIfErr(err)
-
-	execStartCfg := types.ExecConfig{Tty: true}
-
-	attach, err := cli.ContainerExecAttach(e.context, eid.ID, execStartCfg)
+	attach, err := cli.ContainerAttach(e.context, cid, config)
 	util.PanicIfErr(err)
 
 	go func() {
 		io.Copy(os.Stdout, attach.Reader)
 	}()
 
-	input := bytes.NewBufferString("")
-
 	go func() {
-		io.Copy(attach.Conn, input)
-		defer attach.CloseWrite()
-	}()
-
-	go func() {
-		input.WriteString("echo hello1")
-
-		input.WriteString("echo hello1")
-		input.WriteString("echo hello1")
-		input.WriteString("echo hello1")
-		input.WriteString("echo hello1")
+		attach.Conn.Write([]byte("echo hello 1"))
+		attach.Conn.Write([]byte("echo hello 1"))
+		attach.Conn.Write([]byte("echo hello 1"))
+		attach.Conn.Write([]byte("echo hello 1"))
+		attach.Conn.Write([]byte("echo hello 1"))
 	}()
 
 	time.Sleep(5 * time.Second)
