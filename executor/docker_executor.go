@@ -27,8 +27,7 @@ type (
 func (d *DockerExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
-			out = err.(error)
-			d.handleError(out)
+			out = d.handleErrors(err.(error))
 		}
 
 		d.closeChannels()
@@ -66,20 +65,21 @@ func (d *DockerExecutor) Start() (out error) {
 // private methods
 //--------------------------------------------
 
-func (d *DockerExecutor) handleError(err error) {
+func (d *DockerExecutor) handleErrors(err error) error {
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		d.toTimeOutStatus()
-		return
+		return nil
 	}
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
 		d.toKilledStatus()
-		return
+		return nil
 	}
 
 	_ = d.toErrorStatus(err)
+	return err
 }
 
 func (d *DockerExecutor) pullImage(cli *client.Client) {

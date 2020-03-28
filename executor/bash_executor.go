@@ -12,12 +12,20 @@ import (
 type (
 	BashExecutor struct {
 		BaseExecutor
+		command *exec.Cmd
 	}
 )
 
 // Start run the cmd from domain.CmdIn
-func (b *BashExecutor) Start() error {
-	defer b.closeChannels()
+func (b *BashExecutor) Start() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+			b.handleErrors(out)
+		}
+
+		b.closeChannels()
+	}()
 
 	// init wait group fro StdOut and StdErr
 	b.stdOutWg.Add(2)
@@ -36,7 +44,8 @@ func (b *BashExecutor) Start() error {
 	command.Env = append(os.Environ(), b.inCmd.VarsToStringArray()...)
 	command.Env = append(command.Env, b.inVars.ToStringArray()...)
 
-	b.startToHandleContext(command)
+	b.command = command
+	b.startToHandleContext()
 
 	// start command
 	if err := command.Start(); err != nil {
@@ -70,31 +79,46 @@ func (b *BashExecutor) Start() error {
 
 	// to finish status
 	b.toFinishStatus(getExitCode(command))
-	return nil
+	return b.context.Err()
 }
 
 //====================================================================
 //	private
 //====================================================================
 
-func (b *BashExecutor) startToHandleContext(command *exec.Cmd) {
+func (b *BashExecutor) startToHandleContext() {
 	go func() {
 		<-b.context.Done()
 		err := b.context.Err()
 
-		if err == context.DeadlineExceeded {
-			util.LogDebug("Timeout..")
-			_ = command.Process.Kill()
-			b.toTimeOutStatus()
-			return
-		}
-
-		if err == context.Canceled {
-			util.LogDebug("Cancel..")
-			_ = command.Process.Kill()
-			b.toKilledStatus()
+		if err != nil {
+			b.handleErrors(err)
 		}
 	}()
+}
+
+func (b *BashExecutor) handleErrors(err error) {
+	kill := func() {
+		if b.command != nil {
+			_ = b.command.Process.Kill()
+		}
+	}
+
+	if err == context.DeadlineExceeded {
+		util.LogDebug("Timeout..")
+		kill()
+		b.toTimeOutStatus()
+		return
+	}
+
+	if err == context.Canceled {
+		util.LogDebug("Cancel..")
+		kill()
+		b.toKilledStatus()
+		return
+	}
+
+	_ = b.toErrorStatus(err)
 }
 
 //====================================================================
