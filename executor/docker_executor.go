@@ -56,6 +56,7 @@ func (d *DockerExecutor) Start() (out error) {
 	}
 
 	d.toFinishStatus(nil, exitCode)
+	d.cleanupContainer(cli, cid)
 	return
 }
 
@@ -136,6 +137,25 @@ func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) strin
 	_ = d.startConsumeStdIn(attach.Conn)
 
 	return exec.ID
+}
+
+func (d *DockerExecutor) cleanupContainer(cli *client.Client, cid string) {
+	option := d.inCmd.Docker
+
+	if option.IsDeleteContainer {
+		err := cli.ContainerRemove(d.context, cid, types.ContainerRemoveOptions{Force: true})
+		if !util.LogIfError(err) {
+			util.LogInfo("Container %s for cmd %s has been deleted", cid, d.CmdID())
+		}
+		return
+	}
+
+	if option.IsStopContainer {
+		err := cli.ContainerStop(d.context, cid, nil)
+		if !util.LogIfError(err) {
+			util.LogInfo("Container %s for cmd %s has been stopped", cid, d.CmdID())
+		}
+	}
 }
 
 func (d *DockerExecutor) waitForExit(cli *client.Client, eid string) int {

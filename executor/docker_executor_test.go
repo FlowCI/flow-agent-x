@@ -13,7 +13,7 @@ func init() {
 	util.EnableDebugLog()
 }
 
-func TestShouldPullImage(t *testing.T) {
+func TestShouldExecWithinDocker(t *testing.T) {
 	assert := assert.New(t)
 
 	// init:
@@ -33,6 +33,11 @@ func TestShouldPullImage(t *testing.T) {
 	err := executor.Start()
 	assert.NoError(err)
 
+	// then:
+	result := executor.GetResult()
+	assert.Equal(0, result.Code)
+	assert.Equal("flowci", result.Output["FLOW_VVV"])
+	assert.Equal("flow...", result.Output["FLOW_AAA"])
 }
 
 func createDockerTestCmd() *domain.CmdIn {
@@ -50,9 +55,11 @@ func createDockerTestCmd() *domain.CmdIn {
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
 		Timeout:    1800,
 		EnvFilters: []string{"FLOW_"},
-		Docker: &domain.DockerDesc{
-			Image:      "ubuntu:18.04",
-			Entrypoint: []string{"/bin/bash"},
+		Docker: &domain.DockerOption{
+			Image:             "ubuntu:18.04",
+			Entrypoint:        []string{"/bin/bash"},
+			IsDeleteContainer: true,
+			IsStopContainer:   true,
 		},
 	}
 }

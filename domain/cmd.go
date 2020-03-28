@@ -57,10 +57,12 @@ const (
 )
 
 type (
-	DockerDesc struct {
-		Image      string   `json:"image"`
-		Entrypoint []string `json:"entrypoint"`
-		Ports      []string `json:"ports"`
+	DockerOption struct {
+		Image             string   `json:"image"`
+		Entrypoint        []string `json:"entrypoint"`
+		Ports             []string `json:"ports"`
+		IsStopContainer   bool
+		IsDeleteContainer bool
 	}
 
 	Cmd struct {
@@ -71,13 +73,13 @@ type (
 
 	CmdIn struct {
 		Cmd
-		Type       CmdType     `json:"type"`
-		Docker     *DockerDesc `json:"docker"`
-		Scripts    []string    `json:"scripts"`
-		FlowId     string      `json:"flowId"`
-		Timeout    int         `json:"timeout"`
-		Inputs     Variables   `json:"inputs"`
-		EnvFilters []string    `json:"envFilters"`
+		Type       CmdType       `json:"type"`
+		Docker     *DockerOption `json:"docker"`
+		Scripts    []string      `json:"scripts"`
+		FlowId     string        `json:"flowId"`
+		Timeout    int           `json:"timeout"`
+		Inputs     Variables     `json:"inputs"`
+		EnvFilters []string      `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {
