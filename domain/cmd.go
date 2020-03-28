@@ -144,3 +144,18 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 		Output: NewVariables(),
 	}
 }
+
+func (e *ExecutedCmd) IsFinishStatus() bool {
+	switch e.Status {
+	case CmdStatusKilled:
+		return true
+	case CmdStatusTimeout:
+		return true
+	case CmdStatusException:
+		return true
+	case CmdStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}

@@ -23,53 +23,60 @@ type (
 	}
 )
 
-func (e *DockerExecutor) Start() (out error) {
+func (d *DockerExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
+			_ = d.toErrorStatus(out)
 		}
+
+		d.closeChannels()
 	}()
 
-	e.workDirInContainer = "/ws/" + e.inCmd.FlowId
-	e.inVars[domain.VarAgentJobDir] = e.workDirInContainer
+	d.stdOutWg.Add(1)
+	d.workDirInContainer = "/ws/" + d.inCmd.FlowId
+	d.inVars[domain.VarAgentJobDir] = d.workDirInContainer
 
 	// pull image
 	cli, err := client.NewEnvClient()
 	util.PanicIfErr(err)
 	defer cli.Close()
 
-	e.pullImage(cli)
-	cid := e.createContainer(cli)
+	d.pullImage(cli)
+	cid := d.createContainer(cli)
 
-	e.startContainer(cli, cid)
-	e.copyToContainer(cli, cid)
-	e.runCmdInContainer(cli, cid)
+	d.startContainer(cli, cid)
+	d.copyToContainer(cli, cid)
 
+	eid := d.runCmdInContainer(cli, cid)
+	exitCode := d.waitForExit(cli, eid)
+
+	if d.CmdResult.IsFinishStatus() {
+		return nil
+	}
+
+	d.toFinishStatus(nil, exitCode)
 	return
-}
-
-func (e *DockerExecutor) Kill() {
-
 }
 
 //--------------------------------------------
 // private methods
 //--------------------------------------------
 
-func (e *DockerExecutor) pullImage(cli *client.Client) {
-	fullRef := "docker.io/library/" + e.inCmd.Docker.Image
-	reader, err := cli.ImagePull(e.context, fullRef, types.ImagePullOptions{})
+func (d *DockerExecutor) pullImage(cli *client.Client) {
+	fullRef := "docker.io/library/" + d.inCmd.Docker.Image
+	reader, err := cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 
 	util.PanicIfErr(err)
-	e.writeLogToChannel(reader)
+	d.writeLogToChannel(reader)
 }
 
-func (e *DockerExecutor) createContainer(cli *client.Client) string {
-	docker := e.inCmd.Docker
+func (d *DockerExecutor) createContainer(cli *client.Client) string {
+	docker := d.inCmd.Docker
 
 	config := &container.Config{
 		Image:        docker.Image,
-		Env:          append(e.inVars.ToStringArray(), e.inCmd.VarsToStringArray()...),
+		Env:          append(d.inVars.ToStringArray(), d.inCmd.VarsToStringArray()...),
 		Entrypoint:   docker.Entrypoint,
 		Tty:          false,
 		AttachStdin:  true,
@@ -77,68 +84,80 @@ func (e *DockerExecutor) createContainer(cli *client.Client) string {
 		AttachStdout: true,
 		OpenStdin:    true,
 		StdinOnce:    true,
-		WorkingDir:   e.workDirInContainer,
+		WorkingDir:   d.workDirInContainer,
 	}
 
-	resp, err := cli.ContainerCreate(e.context, config, nil, nil, "")
+	resp, err := cli.ContainerCreate(d.context, config, nil, nil, "")
 	util.PanicIfErr(err)
 	util.LogDebug("Container created %s", resp.ID)
 
 	return resp.ID
 }
 
-func (e *DockerExecutor) startContainer(cli *client.Client, cid string) {
-	err := cli.ContainerStart(e.context, cid, types.ContainerStartOptions{})
+func (d *DockerExecutor) startContainer(cli *client.Client, cid string) {
+	err := cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
 	util.PanicIfErr(err)
 }
 
-func (e *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
-	reader, err := tarArchiveFromPath(e.workDir)
+func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
+	reader, err := tarArchiveFromPath(d.workDir)
 	util.PanicIfErr(err)
 
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	}
 
-	err = cli.CopyToContainer(e.context, containerId, e.workDirInContainer, reader, config)
+	err = cli.CopyToContainer(d.context, containerId, d.workDirInContainer, reader, config)
 	util.PanicIfErr(err)
 	util.LogDebug("Job working dir been created in container")
 }
 
-func (e *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) int {
-	config := types.ContainerAttachOptions{
-		Stream: true,
-		Stdin:  true,
-		Stdout: true,
-		Stderr: true,
-		Logs:   true,
+func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) string {
+	config := types.ExecConfig{
+		Tty:          false,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          []string{linuxBash},
 	}
 
-	attach, err := cli.ContainerAttach(e.context, cid, config)
+	exec, err := cli.ContainerExecCreate(d.context, cid, config)
 	util.PanicIfErr(err)
 
-	go func() {
-		io.Copy(os.Stdout, attach.Reader)
-	}()
-
-	go func() {
-		attach.Conn.Write([]byte("cd /etc\n"))
-		attach.Conn.Write([]byte("ls -al\n"))
-		attach.Conn.Write([]byte("echo hello 11111111111\n"))
-		attach.Conn.Write([]byte("echo hello 11111111111\n"))
-		attach.Conn.Write([]byte("echo hello 11111111111\n"))
-		attach.Conn.Write([]byte("echo hello 11111111111\n"))
-
-	}()
-
-	time.Sleep(5 * time.Second)
-	_, err = cli.ContainerInspect(e.context, cid)
+	attach, err := cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{})
 	util.PanicIfErr(err)
 
-	return 0
+	onStdOutExit := func() {
+		d.stdOutWg.Done()
+		util.LogDebug("[Exit]: StdOut/Err, log size = %d", d.CmdResult.LogSize)
+	}
+
+	_ = d.startConsumeStdOut(attach.Reader, onStdOutExit)
+	_ = d.startConsumeStdIn(attach.Conn)
+
+	return exec.ID
 }
 
-func (e *DockerExecutor) writeLogToChannel(reader io.Reader) {
+func (d *DockerExecutor) waitForExit(cli *client.Client, eid string) int {
+	inspect, err := cli.ContainerExecInspect(d.context, eid)
+	util.PanicIfErr(err)
+	d.toStartStatus(inspect.Pid)
+
+	for {
+		inspect, err = cli.ContainerExecInspect(d.context, eid)
+		util.PanicIfErr(err)
+
+		if !inspect.Running {
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return inspect.ExitCode
+}
+
+func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
 	bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
 	var builder strings.Builder
 
@@ -151,11 +170,11 @@ func (e *DockerExecutor) writeLogToChannel(reader io.Reader) {
 		}
 
 		log := &domain.LogItem{
-			CmdID:   e.CmdID(),
+			CmdID:   d.CmdID(),
 			Content: line,
 		}
 
-		e.logChannel <- log
+		d.logChannel <- log
 	}
 }
 

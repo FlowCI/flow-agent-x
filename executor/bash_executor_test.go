@@ -34,7 +34,7 @@ func TestShouldExitAfterExecuted(t *testing.T) {
 	assert.Nil(err)
 
 	result := executor.GetResult()
-	assert.Equal(domain.CmdStatusSuccess, result)
+	assert.Equal(domain.CmdStatusSuccess, result.Status)
 	assert.Equal(int64(2), result.LogSize)
 	assert.Equal(0, result.Code)
 	assert.NotNil(result.FinishAt)

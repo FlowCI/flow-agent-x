@@ -1,17 +1,11 @@
 package executor
 
 import (
-	"bufio"
-	"context"
-	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
-	"sync/atomic"
 	"syscall"
-	"time"
 )
 
 type (
@@ -22,15 +16,10 @@ type (
 
 // Start run the cmd from domain.CmdIn
 func (b *BashExecutor) Start() error {
-	defer func() {
-		close(b.bashChannel)
+	defer b.closeChannels()
 
-		if len(b.LogChannel()) > 0 {
-			util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
-		}
-
-		close(b.logChannel)
-	}()
+	// init wait group fro StdOut and StdErr
+	b.stdOutWg.Add(2)
 
 	command := exec.Command(linuxBash)
 	command.Dir = b.workDir
@@ -46,32 +35,30 @@ func (b *BashExecutor) Start() error {
 	command.Env = append(os.Environ(), b.inCmd.VarsToStringArray()...)
 	command.Env = append(command.Env, b.inVars.ToStringArray()...)
 
-	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
+	onContextTimeOut := func() {
+		_ = command.Process.Kill()
+		b.toTimeOutStatus()
+	}
 
-		if err == context.DeadlineExceeded {
-			util.LogDebug("Timeout..")
-			_ = command.Process.Kill()
-			b.toTimeOutStatus()
-			return
-		}
+	onContextCancel := func() {
+		_ = command.Process.Kill()
+		b.toKilledStatus()
+	}
 
-		if err == context.Canceled {
-			util.LogDebug("Cancel..")
-			_ = command.Process.Kill()
-			b.toKilledStatus()
-		}
-
-	}()
+	b.startToHandleContext(onContextTimeOut, onContextCancel)
 
 	// start command
 	if err := command.Start(); err != nil {
 		return b.toErrorStatus(err)
 	}
 
-	cancelForStdOut := b.startConsumeStdOut(stdout)
-	cancelForStdErr := b.startConsumeStdOut(stderr)
+	onStdOutExit := func() {
+		b.stdOutWg.Done()
+		util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
+	}
+
+	cancelForStdOut := b.startConsumeStdOut(stdout, onStdOutExit)
+	cancelForStdErr := b.startConsumeStdOut(stderr, onStdOutExit)
 	cancelForStdIn := b.startConsumeStdIn(stdin)
 
 	defer func() {
@@ -86,182 +73,13 @@ func (b *BashExecutor) Start() error {
 	err := command.Wait()
 	util.LogDebug("[Done]: Shell for %s", b.CmdID())
 
-	if b.CmdResult.Status == domain.CmdStatusTimeout {
-		return nil
-	}
-
-	if b.CmdResult.Status == domain.CmdStatusKilled {
+	if b.CmdResult.IsFinishStatus() {
 		return nil
 	}
 
 	// to finish status
 	b.toFinishStatus(err, getExitCode(command))
 	return nil
-}
-
-// Stop stop current running script
-func (b *BashExecutor) Kill() {
-	b.cancelFunc()
-}
-
-//====================================================================
-//	private
-//====================================================================
-
-func (b *BashExecutor) toStartStatus(pid int) {
-	b.CmdResult.Status = domain.CmdStatusRunning
-	b.CmdResult.ProcessId = pid
-	b.CmdResult.StartAt = time.Now()
-}
-
-func (b *BashExecutor) toErrorStatus(err error) error {
-	b.CmdResult.Status = domain.CmdStatusException
-	b.CmdResult.Error = err.Error()
-	b.CmdResult.FinishAt = time.Now()
-	return err
-}
-
-func (b *BashExecutor) toTimeOutStatus() {
-	b.CmdResult.Status = domain.CmdStatusTimeout
-	b.CmdResult.Code = domain.CmdExitCodeTimeOut
-	b.CmdResult.FinishAt = time.Now()
-}
-
-func (b *BashExecutor) toKilledStatus() {
-	b.CmdResult.Status = domain.CmdStatusKilled
-	b.CmdResult.Code = domain.CmdExitCodeKilled
-	b.CmdResult.FinishAt = time.Now()
-}
-
-func (b *BashExecutor) toFinishStatus(errFromCmd error, exitCode int) {
-	b.CmdResult.FinishAt = time.Now()
-	b.CmdResult.Code = exitCode
-
-	// success status if no err
-	if errFromCmd == nil {
-		b.CmdResult.Status = domain.CmdStatusSuccess
-		return
-	}
-
-	exitError, _ := errFromCmd.(*exec.ExitError)
-	_ = b.toErrorStatus(exitError)
-}
-
-func (b *BashExecutor) startConsumeStdIn(stdin io.WriteCloser) context.CancelFunc {
-	ctx, cancel := context.WithCancel(b.context)
-
-	consumer := func() {
-		defer func() {
-			_ = stdin.Close()
-			util.LogDebug("[Exit]: StdIn")
-		}()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case script, ok := <-b.bashChannel:
-				if !ok {
-					return
-				}
-				_, _ = io.WriteString(stdin, appendNewLine(script))
-				util.LogDebug("----- exec: %s", script)
-			}
-		}
-	}
-
-	// start
-	go consumer()
-
-	b.sendScriptForAllowFailure()
-	b.sendScriptFromCmdIn()
-
-	return cancel
-}
-
-func (b *BashExecutor) sendScriptFromCmdIn() {
-	for _, script := range b.inCmd.Scripts {
-		b.bashChannel <- script
-	}
-
-	// write for end term
-	if len(b.inCmd.EnvFilters) > 0 {
-		b.bashChannel <- "echo " + b.endTag
-		b.bashChannel <- "env"
-	}
-
-	b.bashChannel <- "exit"
-}
-
-func (b *BashExecutor) sendScriptForAllowFailure() {
-	set := "set -e"
-
-	if b.inCmd.AllowFailure {
-		set = "set +e"
-	}
-
-	b.bashChannel <- set
-}
-
-func (b *BashExecutor) startConsumeStdOut(reader io.ReadCloser) context.CancelFunc {
-	ctx, cancel := context.WithCancel(b.context)
-	cmdResult := b.CmdResult
-
-	consumer := func() {
-		defer func() {
-			_ = reader.Close()
-			b.stdOutWg.Done()
-			util.LogDebug("[Exit]: StdOut/Err, log size = %d", cmdResult.LogSize)
-		}()
-
-		bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
-		var builder strings.Builder
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				line, err := readLine(bufferReader, builder)
-				builder.Reset()
-
-				if err != nil {
-					return
-				}
-
-				// to read system env vars in the end
-				if strings.EqualFold(line, b.endTag) {
-					for {
-						envLine, err := readLine(bufferReader, builder)
-						builder.Reset()
-
-						if err != nil {
-							return
-						}
-
-						index := strings.IndexAny(envLine, "=")
-						if index == -1 {
-							continue
-						}
-
-						key := envLine[0:index]
-						value := envLine[index+1:]
-
-						if matchEnvFilter(key, b.inCmd.EnvFilters) {
-							cmdResult.Output[key] = value
-						}
-					}
-				}
-
-				// send log item instance to channel
-				atomic.AddInt64(&cmdResult.LogSize, 1)
-				b.logChannel <- &domain.LogItem{CmdID: cmdResult.ID, Content: line}
-			}
-		}
-	}
-
-	go consumer()
-	return cancel
 }
 
 //====================================================================
@@ -290,11 +108,4 @@ func matchEnvFilter(env string, filters []string) bool {
 		}
 	}
 	return false
-}
-
-func appendNewLine(script string) string {
-	if !strings.HasSuffix(script, util.UnixLineBreak) {
-		script += util.UnixLineBreak
-	}
-	return script
 }
