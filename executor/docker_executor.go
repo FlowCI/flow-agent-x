@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
+	"context"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -27,7 +28,7 @@ func (d *DockerExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-			_ = d.toErrorStatus(out)
+			d.handleError(out)
 		}
 
 		d.closeChannels()
@@ -43,7 +44,9 @@ func (d *DockerExecutor) Start() (out error) {
 	defer cli.Close()
 
 	d.pullImage(cli)
+
 	cid := d.createContainer(cli)
+	defer d.cleanupContainer(cli, cid)
 
 	d.startContainer(cli, cid)
 	d.copyToContainer(cli, cid)
@@ -55,14 +58,29 @@ func (d *DockerExecutor) Start() (out error) {
 		return nil
 	}
 
-	d.toFinishStatus(nil, exitCode)
-	d.cleanupContainer(cli, cid)
+	d.toFinishStatus(exitCode)
 	return
 }
 
 //--------------------------------------------
 // private methods
 //--------------------------------------------
+
+func (d *DockerExecutor) handleError(err error) {
+	if err == context.DeadlineExceeded {
+		util.LogDebug("Timeout..")
+		d.toTimeOutStatus()
+		return
+	}
+
+	if err == context.Canceled {
+		util.LogDebug("Cancel..")
+		d.toKilledStatus()
+		return
+	}
+
+	_ = d.toErrorStatus(err)
+}
 
 func (d *DockerExecutor) pullImage(cli *client.Client) {
 	fullRef := "docker.io/library/" + d.inCmd.Docker.Image

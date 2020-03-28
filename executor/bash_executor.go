@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"context"
 	"github/flowci/flow-agent-x/util"
 	"os"
 	"os/exec"
@@ -35,17 +36,7 @@ func (b *BashExecutor) Start() error {
 	command.Env = append(os.Environ(), b.inCmd.VarsToStringArray()...)
 	command.Env = append(command.Env, b.inVars.ToStringArray()...)
 
-	onContextTimeOut := func() {
-		_ = command.Process.Kill()
-		b.toTimeOutStatus()
-	}
-
-	onContextCancel := func() {
-		_ = command.Process.Kill()
-		b.toKilledStatus()
-	}
-
-	b.startToHandleContext(onContextTimeOut, onContextCancel)
+	b.startToHandleContext(command)
 
 	// start command
 	if err := command.Start(); err != nil {
@@ -70,7 +61,7 @@ func (b *BashExecutor) Start() error {
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
-	err := command.Wait()
+	_ = command.Wait()
 	util.LogDebug("[Done]: Shell for %s", b.CmdID())
 
 	if b.CmdResult.IsFinishStatus() {
@@ -78,8 +69,32 @@ func (b *BashExecutor) Start() error {
 	}
 
 	// to finish status
-	b.toFinishStatus(err, getExitCode(command))
+	b.toFinishStatus(getExitCode(command))
 	return nil
+}
+
+//====================================================================
+//	private
+//====================================================================
+
+func (b *BashExecutor) startToHandleContext(command *exec.Cmd) {
+	go func() {
+		<-b.context.Done()
+		err := b.context.Err()
+
+		if err == context.DeadlineExceeded {
+			util.LogDebug("Timeout..")
+			_ = command.Process.Kill()
+			b.toTimeOutStatus()
+			return
+		}
+
+		if err == context.Canceled {
+			util.LogDebug("Cancel..")
+			_ = command.Process.Kill()
+			b.toKilledStatus()
+		}
+	}()
 }
 
 //====================================================================

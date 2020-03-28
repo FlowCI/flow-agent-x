@@ -9,7 +9,6 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -208,24 +207,6 @@ func (b *BaseExecutor) startConsumeStdOut(reader io.Reader, onExitFunc func()) c
 	return cancel
 }
 
-func (b *BaseExecutor) startToHandleContext(onTimeOut func(), onCancel func()) {
-	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
-
-		if err == context.DeadlineExceeded {
-			util.LogDebug("Timeout..")
-			onTimeOut()
-			return
-		}
-
-		if err == context.Canceled {
-			util.LogDebug("Cancel..")
-			onCancel()
-		}
-	}()
-}
-
 func (b *BaseExecutor) sendScriptFromCmdIn() {
 	set := "set -e"
 	if b.inCmd.AllowFailure {
@@ -281,17 +262,14 @@ func (b *BaseExecutor) toKilledStatus() {
 	b.CmdResult.FinishAt = time.Now()
 }
 
-func (b *BaseExecutor) toFinishStatus(errFromCmd error, exitCode int) {
+func (b *BaseExecutor) toFinishStatus(exitCode int) {
 	b.CmdResult.FinishAt = time.Now()
 	b.CmdResult.Code = exitCode
 
-	// success status if no err
-	if errFromCmd == nil {
-		b.CmdResult.Status = domain.CmdStatusSuccess
+	if exitCode != 0 {
+		_ = b.toErrorStatus(fmt.Errorf("exit status %d", exitCode))
 		return
 	}
 
-	exitError, _ := errFromCmd.(*exec.ExitError)
-	_ = b.toErrorStatus(exitError)
+	b.CmdResult.Status = domain.CmdStatusSuccess
 }
-
