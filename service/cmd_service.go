@@ -2,6 +2,9 @@ package service
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -138,16 +141,15 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		}
 	}
 
-	// init and start executor
-	vars := config.Vars.Copy()
-
-	instance, err := executor.NewExecutorFromCmd(config.AppCtx, in, vars)
+	// init workdir
+	workDir := filepath.Join(config.Workspace, util.ParseString(in.FlowId))
+	err := os.MkdirAll(workDir, os.ModePerm)
 	if err != nil {
 		s.failureBeforeExecute(in, err)
-		return err
+		return nil
 	}
-	s.executor = instance
 
+	s.executor = executor.NewExecutorFromCmd(config.AppCtx, workDir, in, s.initEnv(workDir))
 	go logConsumer(s.executor, config.LoggingDir)
 
 	go func() {
@@ -160,6 +162,22 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 	}()
 
 	return nil
+}
+
+func (s *CmdService) initEnv(workDir string) domain.Variables {
+	config := config.GetInstance()
+
+	vars := domain.NewVariables()
+	vars[domain.VarAgentJobDir] = workDir
+	vars[domain.VarAgentPluginDir] = config.PluginDir
+	vars[domain.VarServerUrl] = config.Server
+	vars[domain.VarAgentToken] = config.Token
+	vars[domain.VarAgentPort] = strconv.Itoa(config.Port)
+	vars[domain.VarAgentWorkspace] = config.Workspace
+	vars[domain.VarAgentPluginDir] = config.PluginDir
+	vars[domain.VarAgentLogDir] = config.LoggingDir
+
+	return vars
 }
 
 func (s *CmdService) execKill(in *domain.CmdIn) error {

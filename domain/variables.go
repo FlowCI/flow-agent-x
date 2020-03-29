@@ -7,6 +7,7 @@ import (
 
 const (
 	VarServerUrl      = "FLOWCI_SERVER_URL"
+
 	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
 	VarAgentPort      = "FLOWCI_AGENT_PORT"
 	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"

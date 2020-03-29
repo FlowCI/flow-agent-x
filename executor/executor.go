@@ -5,12 +5,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/google/uuid"
-	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -59,35 +56,26 @@ type BaseExecutor struct {
 	stdOutWg    sync.WaitGroup // init on subclasses
 }
 
-func NewExecutorFromCmd(parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) (Executor, error) {
+func NewExecutorFromCmd(parent context.Context, workDir string, inCmd *domain.CmdIn, vars domain.Variables) Executor {
 	if inCmd.HasDockerOption() {
-		return NewExecutor(Docker, parent, inCmd, vars)
+		return NewExecutor(Docker, parent, workDir, inCmd, vars)
 	}
 
-	return NewExecutor(Bash, parent, inCmd, vars)
+	return NewExecutor(Bash, parent, workDir, inCmd, vars)
 }
 
-func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) (Executor, error) {
-	app := config.GetInstance()
+func NewExecutor(t TypeOfExecutor, parent context.Context, workDir string, inCmd *domain.CmdIn, vars domain.Variables) Executor {
+	if vars == nil {
+		vars = domain.NewVariables()
+	}
 
 	base := BaseExecutor{
-		workspace:   app.Workspace,
-		workDir:     filepath.Join(app.Workspace, util.ParseString(inCmd.FlowId)),
+		workDir:     workDir,
 		bashChannel: make(chan string),
 		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
 		inCmd:       inCmd,
 		inVars:      vars,
 		CmdResult:   domain.NewExecutedCmd(inCmd),
-	}
-
-	if vars == nil {
-		base.inVars = make(domain.Variables)
-	}
-
-	base.inVars[domain.VarAgentJobDir] = base.workDir
-	err := os.MkdirAll(base.workDir, os.ModePerm)
-	if err != nil {
-		return nil, base.toErrorStatus(err)
 	}
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
@@ -101,11 +89,11 @@ func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, 
 	case Bash:
 		return &BashExecutor{
 			BaseExecutor: base,
-		}, nil
+		}
 	case Docker:
 		return &DockerExecutor{
 			BaseExecutor: base,
-		}, nil
+		}
 	default:
 		panic("Invalid executor type")
 	}

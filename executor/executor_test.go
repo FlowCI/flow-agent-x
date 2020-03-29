@@ -3,9 +3,11 @@ package executor
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
+	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"path"
+	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -25,18 +27,20 @@ func getTestDataDir() string {
 	return path.Join(base, "_testdata")
 }
 
+func newExecutor(cmd *domain.CmdIn, t TypeOfExecutor) Executor {
+	ctx, _ := context.WithCancel(context.Background())
+
+	app := config.GetInstance()
+	workDir := filepath.Join(app.Workspace, util.ParseString(cmd.FlowId))
+	return NewExecutor(t, ctx, workDir, cmd, nil)
+}
+
 func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
-	// init:
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
 	// when:
-	executor, err := NewExecutor(t, ctx, cmd, nil)
-	assert.NoError(err)
-
+	executor := newExecutor(cmd, t)
 	go printLog(executor.LogChannel())
 
-	err = executor.Start()
+	err := executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -54,15 +58,10 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfE
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, err := NewExecutor(t, ctx, cmd, nil)
-	assert.NoError(err)
-
+	executor := newExecutor(cmd, t)
 	go printLog(executor.LogChannel())
 
-	err = executor.Start()
+	err := executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -78,15 +77,10 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, err := NewExecutor(t, ctx, cmd, nil)
-	assert.NoError(err)
-
+	executor := newExecutor(cmd, t)
 	go printLog(executor.LogChannel())
 
-	err = executor.Start()
+	err := executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -102,14 +96,10 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOf
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, err := NewExecutor(t, ctx, cmd, nil)
-	assert.NoError(err)
+	executor := newExecutor(cmd, t)
 	go printLog(executor.LogChannel())
 
-	err = executor.Start()
+	err := executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -124,19 +114,14 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfE
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	executor, err := NewExecutor(t, ctx, cmd, nil)
-	assert.NoError(err)
-
+	executor := newExecutor(cmd, t)
 	go printLog(executor.LogChannel())
 
 	time.AfterFunc(5*time.Second, func() {
 		executor.Kill()
 	})
 
-	err = executor.Start()
+	err := executor.Start()
 	assert.NoError(err)
 
 	// then:
