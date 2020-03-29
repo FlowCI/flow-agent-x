@@ -49,6 +49,12 @@ func createDockerTestCmd() *domain.CmdIn {
 		FlowId: "flowid", // same as dir flowid in _testdata
 		Cmd: domain.Cmd{
 			ID: "1-1-1",
+			Docker: &domain.DockerOption{
+				Image:             "ubuntu:18.04",
+				Entrypoint:        []string{"/bin/bash"},
+				IsDeleteContainer: true,
+				IsStopContainer:   true,
+			},
 		},
 		Scripts: []string{
 			"echo bbb",
@@ -60,11 +66,5 @@ func createDockerTestCmd() *domain.CmdIn {
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
 		Timeout:    1800,
 		EnvFilters: []string{"FLOW_"},
-		Docker: &domain.DockerOption{
-			Image:             "ubuntu:18.04",
-			Entrypoint:        []string{"/bin/bash"},
-			IsDeleteContainer: true,
-			IsStopContainer:   true,
-		},
 	}
 }

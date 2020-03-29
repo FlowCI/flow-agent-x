@@ -9,6 +9,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -58,7 +59,15 @@ type BaseExecutor struct {
 	stdOutWg    sync.WaitGroup // init on subclasses
 }
 
-func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) Executor {
+func NewExecutorFromCmd(parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) (Executor, error) {
+	if inCmd.HasDockerOption() {
+		return NewExecutor(Docker, parent, inCmd, vars)
+	}
+
+	return NewExecutor(Bash, parent, inCmd, vars)
+}
+
+func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, vars domain.Variables) (Executor, error) {
 	app := config.GetInstance()
 
 	base := BaseExecutor{
@@ -74,7 +83,12 @@ func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, 
 	if vars == nil {
 		base.inVars = make(domain.Variables)
 	}
+
 	base.inVars[domain.VarAgentJobDir] = base.workDir
+	err := os.MkdirAll(base.workDir, os.ModePerm)
+	if err != nil {
+		return nil, base.toErrorStatus(err)
+	}
 
 	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
 	base.context = ctx
@@ -87,11 +101,11 @@ func NewExecutor(t TypeOfExecutor, parent context.Context, inCmd *domain.CmdIn, 
 	case Bash:
 		return &BashExecutor{
 			BaseExecutor: base,
-		}
+		}, nil
 	case Docker:
 		return &DockerExecutor{
 			BaseExecutor: base,
-		}
+		}, nil
 	default:
 		panic("Invalid executor type")
 	}

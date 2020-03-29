@@ -31,10 +31,12 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecuto
 	defer cancel()
 
 	// when:
-	executor := NewExecutor(t, ctx, cmd, nil)
+	executor, err := NewExecutor(t, ctx, cmd, nil)
+	assert.NoError(err)
+
 	go printLog(executor.LogChannel())
 
-	err := executor.Start()
+	err = executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -55,10 +57,12 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfE
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewExecutor(t, ctx, cmd, nil)
+	executor, err := NewExecutor(t, ctx, cmd, nil)
+	assert.NoError(err)
+
 	go printLog(executor.LogChannel())
 
-	err := executor.Start()
+	err = executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -77,10 +81,12 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewExecutor(t, ctx, cmd, nil)
+	executor, err := NewExecutor(t, ctx, cmd, nil)
+	assert.NoError(err)
+
 	go printLog(executor.LogChannel())
 
-	err := executor.Start()
+	err = executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -99,10 +105,11 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOf
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewExecutor(t, ctx, cmd, nil)
+	executor, err := NewExecutor(t, ctx, cmd, nil)
+	assert.NoError(err)
 	go printLog(executor.LogChannel())
 
-	err := executor.Start()
+	err = executor.Start()
 	assert.NoError(err)
 
 	// then:
@@ -120,14 +127,16 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfE
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	executor := NewExecutor(t, ctx, cmd, nil)
+	executor, err := NewExecutor(t, ctx, cmd, nil)
+	assert.NoError(err)
+
 	go printLog(executor.LogChannel())
 
 	time.AfterFunc(5*time.Second, func() {
 		executor.Kill()
 	})
 
-	err := executor.Start()
+	err = executor.Start()
 	assert.NoError(err)
 
 	// then:

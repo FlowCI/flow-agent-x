@@ -48,19 +48,16 @@ func (s *CmdService) IsRunning() bool {
 
 // Execute execute cmd according to the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
-	if in.Type == domain.CmdTypeShell {
-		return execShellCmd(s, in)
+	switch in.Type {
+	case domain.CmdTypeShell:
+		return s.execShell(in)
+	case domain.CmdTypeKill:
+		return s.execKill(in)
+	case domain.CmdTypeClose:
+		return s.execClose(in)
+	default:
+		return ErrorCmdUnsupportedType
 	}
-
-	if in.Type == domain.CmdTypeKill {
-		return execKillCmd(s, in)
-	}
-
-	if in.Type == domain.CmdTypeClose {
-		return execCloseCmd(s, in)
-	}
-
-	return ErrorCmdUnsupportedType
 }
 
 // new thread to consume rabbitmq message
@@ -116,7 +113,7 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func execShellCmd(s *CmdService, in *domain.CmdIn) error {
+func (s *CmdService) execShell(in *domain.CmdIn) error {
 	config := config.GetInstance()
 
 	s.mux.Lock()
@@ -126,33 +123,30 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 		return ErrorCmdIsRunning
 	}
 
-	if err := verifyAndInitShellCmd(in); util.HasError(err) {
+	if err := verifyAndInitShellCmd(in); err != nil {
+		s.failureBeforeExecute(in, err)
 		return err
 	}
 
 	// git clone required plugin
 	if in.HasPlugin() && !config.IsOffline {
 		plugins := util.NewPlugins(config.PluginDir, config.Server)
-		err := plugins.Load(in.Plugin)
 
-		if util.LogIfError(err) {
-			result := &domain.ExecutedCmd{
-				Cmd: domain.Cmd{
-					ID: in.ID,
-				},
-				Status:  domain.CmdStatusException,
-				Error:   err.Error(),
-				StartAt: time.Now(),
-			}
-
-			saveAndPushBack(result)
-			return nil
+		if err := plugins.Load(in.Plugin); err != nil {
+			s.failureBeforeExecute(in, err)
+			return err
 		}
 	}
 
 	// init and start executor
 	vars := config.Vars.Copy()
-	s.executor = executor.NewExecutor(executor.Bash, config.AppCtx, in, vars)
+
+	instance, err := executor.NewExecutorFromCmd(config.AppCtx, in, vars)
+	if err != nil {
+		s.failureBeforeExecute(in, err)
+		return err
+	}
+	s.executor = instance
 
 	go logConsumer(s.executor, config.LoggingDir)
 
@@ -168,15 +162,14 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	return nil
 }
 
-func execKillCmd(s *CmdService, in *domain.CmdIn) error {
+func (s *CmdService) execKill(in *domain.CmdIn) error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
-
 	return nil
 }
 
-func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
+func (s *CmdService) execClose(in *domain.CmdIn) error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
@@ -185,6 +178,19 @@ func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	config.Cancel()
 
 	return nil
+}
+
+func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
+	result := &domain.ExecutedCmd{
+		Cmd: domain.Cmd{
+			ID: in.ID,
+		},
+		Status:  domain.CmdStatusException,
+		Error:   err.Error(),
+		StartAt: time.Now(),
+	}
+
+	saveAndPushBack(result)
 }
 
 func verifyAndInitShellCmd(in *domain.CmdIn) error {
@@ -202,7 +208,6 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 		in.Inputs = make(domain.Variables, 10)
 	}
 
-	config := config.GetInstance()
 	return nil
 }
 

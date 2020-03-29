@@ -33,10 +33,6 @@ func (b *BashExecutor) Start() (out error) {
 	command := exec.Command(linuxBash)
 	command.Dir = b.workDir
 
-	if err := createWorkDir(command.Dir); err != nil {
-		return b.toErrorStatus(err)
-	}
-
 	stdin, _ := command.StdinPipe()
 	stdout, _ := command.StdoutPipe()
 	stderr, _ := command.StderrPipe()
@@ -124,16 +120,6 @@ func (b *BashExecutor) handleErrors(err error) {
 //====================================================================
 //	util
 //====================================================================
-
-func createWorkDir(dir string) error {
-	if !util.IsEmptyString(dir) {
-		err := os.MkdirAll(dir, os.ModePerm)
-		if util.HasError(err) {
-			return err
-		}
-	}
-	return nil
-}
 
 func getExitCode(cmd *exec.Cmd) int {
 	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)

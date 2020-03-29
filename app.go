@@ -130,7 +130,7 @@ func execCmd(script string) {
 		}
 	}
 
-	bashExecutor := executor.NewExecutor(executor.Bash, context.Background(), cmd, nil)
+	bashExecutor, _ := executor.NewExecutor(executor.Bash, context.Background(), cmd, nil)
 	go printer(bashExecutor.LogChannel())
 
 	_ = bashExecutor.Start()

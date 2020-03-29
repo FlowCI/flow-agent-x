@@ -69,20 +69,20 @@ type (
 	}
 
 	Cmd struct {
-		ID           string `json:"id"`
-		AllowFailure bool   `json:"allowFailure"`
-		Plugin       string `json:"plugin"`
+		ID           string        `json:"id"`
+		AllowFailure bool          `json:"allowFailure"`
+		Plugin       string        `json:"plugin"`
+		Docker       *DockerOption `json:"docker"`
 	}
 
 	CmdIn struct {
 		Cmd
-		Type       CmdType       `json:"type"`
-		Docker     *DockerOption `json:"docker"`
-		Scripts    []string      `json:"scripts"`
-		FlowId     string        `json:"flowId"`
-		Timeout    int           `json:"timeout"`
-		Inputs     Variables     `json:"inputs"`
-		EnvFilters []string      `json:"envFilters"`
+		Type       CmdType   `json:"type"`
+		Scripts    []string  `json:"scripts"`
+		FlowId     string    `json:"flowId"`
+		Timeout    int       `json:"timeout"`
+		Inputs     Variables `json:"inputs"`
+		EnvFilters []string  `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {
@@ -104,6 +104,10 @@ type (
 
 func (cmd *Cmd) HasPlugin() bool {
 	return cmd.Plugin != ""
+}
+
+func (cmd *Cmd) HasDockerOption() bool {
+	return cmd.Docker != nil
 }
 
 // ===================================
@@ -143,6 +147,7 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 			ID:           in.ID,
 			AllowFailure: in.AllowFailure,
 			Plugin:       in.Plugin,
+			Docker:       in.Docker,
 		},
 		Code:   CmdExitCodeUnknown,
 		Status: CmdStatusPending,
