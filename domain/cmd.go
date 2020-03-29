@@ -1,6 +1,8 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
 
 type CmdType string
 
@@ -59,10 +61,11 @@ const (
 type (
 	DockerOption struct {
 		Image             string   `json:"image"`
-		Entrypoint        []string `json:"entrypoint"`
+		Entrypoint        []string `json:"entrypoint"` // host:container
 		Ports             []string `json:"ports"`
-		IsStopContainer   bool
-		IsDeleteContainer bool
+		NetworkMode       string   `json:"networkMode"`
+		IsStopContainer   bool     `json:"isStopContainer"`
+		IsDeleteContainer bool     `json:"isDeleteContainer"`
 	}
 
 	Cmd struct {

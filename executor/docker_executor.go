@@ -8,6 +8,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
@@ -92,11 +93,14 @@ func (d *DockerExecutor) pullImage(cli *client.Client) {
 
 func (d *DockerExecutor) createContainer(cli *client.Client) string {
 	docker := d.inCmd.Docker
+	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
+	util.PanicIfErr(err)
 
 	config := &container.Config{
 		Image:        docker.Image,
 		Env:          append(d.inVars.ToStringArray(), d.inCmd.VarsToStringArray()...),
 		Entrypoint:   docker.Entrypoint,
+		ExposedPorts: portSet,
 		Tty:          false,
 		AttachStdin:  true,
 		AttachStderr: true,
@@ -106,7 +110,12 @@ func (d *DockerExecutor) createContainer(cli *client.Client) string {
 		WorkingDir:   d.workDirInContainer,
 	}
 
-	resp, err := cli.ContainerCreate(d.context, config, nil, nil, "")
+	hostConfig := &container.HostConfig{
+		NetworkMode:  container.NetworkMode(docker.NetworkMode),
+		PortBindings: portMap,
+	}
+
+	resp, err := cli.ContainerCreate(d.context, config, hostConfig, nil, "")
 	util.PanicIfErr(err)
 	util.LogDebug("Container created %s", resp.ID)
 
