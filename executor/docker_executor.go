@@ -48,7 +48,7 @@ func (d *DockerExecutor) Start() (out error) {
 
 	d.stdOutWg.Add(1)
 
-	d.workDirInContainer = dockerBaseDir + "/" + filepath.Dir(d.workDir)
+	d.workDirInContainer = dockerBaseDir + "/" + filepath.Base(d.workDir)
 	d.inVars[domain.VarAgentJobDir] = d.workDirInContainer
 	d.inVars[domain.VarAgentPluginDir] = dockerPluginDir
 
@@ -95,7 +95,12 @@ func (d *DockerExecutor) handleErrors(err error) error {
 }
 
 func (d *DockerExecutor) pullImage() {
-	fullRef := "docker.io/library/" + d.inCmd.Docker.Image
+	image := d.inCmd.Docker.Image
+	fullRef := "docker.io/library/" + image
+	if strings.Contains(image, "/") {
+		fullRef = "docker.io/" + image
+	}
+
 	reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 
 	util.PanicIfErr(err)
