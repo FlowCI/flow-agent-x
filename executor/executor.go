@@ -43,8 +43,8 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
-	workspace   string // agent workspace
-	workDir     string //
+	workDir     string
+	pluginDir   string
 	context     context.Context
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.CmdIn
@@ -56,46 +56,46 @@ type BaseExecutor struct {
 	stdOutWg    sync.WaitGroup // init on subclasses
 }
 
-func NewExecutorFromCmd(parent context.Context, workDir string, inCmd *domain.CmdIn, vars domain.Variables) Executor {
-	if inCmd.HasDockerOption() {
-		return NewExecutor(Docker, parent, workDir, inCmd, vars)
-	}
-
-	return NewExecutor(Bash, parent, workDir, inCmd, vars)
+type Options struct {
+	Parent    context.Context
+	WorkDir   string
+	PluginDir string
+	Cmd       *domain.CmdIn
+	Vars      domain.Variables
 }
 
-func NewExecutor(t TypeOfExecutor, parent context.Context, workDir string, inCmd *domain.CmdIn, vars domain.Variables) Executor {
-	if vars == nil {
-		vars = domain.NewVariables()
+func NewExecutor(options Options) Executor {
+	if options.Vars == nil {
+		options.Vars = domain.NewVariables()
 	}
+
+	cmd := options.Cmd
 
 	base := BaseExecutor{
-		workDir:     workDir,
+		workDir:     options.WorkDir,
+		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
 		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
-		inCmd:       inCmd,
-		inVars:      vars,
-		CmdResult:   domain.NewExecutedCmd(inCmd),
+		inCmd:       cmd,
+		inVars:      options.Vars,
+		CmdResult:   domain.NewExecutedCmd(cmd),
 	}
 
-	ctx, cancel := context.WithTimeout(parent, time.Duration(inCmd.Timeout)*time.Second)
+	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
 	base.context = ctx
 	base.cancelFunc = cancel
 
 	endUUID, _ := uuid.NewRandom()
 	base.endTag = fmt.Sprintf("=====EOF-%s=====", endUUID)
 
-	switch t {
-	case Bash:
-		return &BashExecutor{
-			BaseExecutor: base,
-		}
-	case Docker:
+	if cmd.HasDockerOption() {
 		return &DockerExecutor{
 			BaseExecutor: base,
 		}
-	default:
-		panic("Invalid executor type")
+	}
+
+	return &BashExecutor{
+		BaseExecutor: base,
 	}
 }
 

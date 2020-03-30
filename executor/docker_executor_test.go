@@ -17,31 +17,31 @@ func init() {
 func TestShouldExecInDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
-	shouldExecCmd(assert, cmd, Docker)
+	shouldExecCmd(assert, cmd)
 }
 
 func TestShouldExecWithErrorInDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
-	shouldExecWithError(assert, cmd, Docker)
+	shouldExecWithError(assert, cmd)
 }
 
 func TestShouldExecWithErrorIfAllowFailureWithinDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
-	shouldExecWithErrorButAllowFailure(assert, cmd, Docker)
+	shouldExecWithErrorButAllowFailure(assert, cmd)
 }
 
 func TestShouldExitWithTimeoutInDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
-	shouldExecButTimeOut(assert, cmd, Docker)
+	shouldExecButTimeOut(assert, cmd)
 }
 
 func TestShouldExitByKillInDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
-	shouldExecButKilled(assert, cmd, Docker)
+	shouldExecButKilled(assert, cmd)
 }
 
 func createDockerTestCmd() *domain.CmdIn {

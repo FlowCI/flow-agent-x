@@ -27,17 +27,25 @@ func getTestDataDir() string {
 	return path.Join(base, "_testdata")
 }
 
-func newExecutor(cmd *domain.CmdIn, t TypeOfExecutor) Executor {
+func newExecutor(cmd *domain.CmdIn) Executor {
 	ctx, _ := context.WithCancel(context.Background())
 
 	app := config.GetInstance()
 	workDir := filepath.Join(app.Workspace, util.ParseString(cmd.FlowId))
-	return NewExecutor(t, ctx, workDir, cmd, nil)
+
+	options := Options{
+		Parent:    ctx,
+		WorkDir:   workDir,
+		PluginDir: app.PluginDir,
+		Cmd:       cmd,
+	}
+
+	return NewExecutor(options)
 }
 
-func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
+func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// when:
-	executor := newExecutor(cmd, t)
+	executor := newExecutor(cmd)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -52,13 +60,13 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecuto
 	assert.Equal("flow...", result.Output["FLOW_AAA"])
 }
 
-func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
+func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// init:
 	cmd.AllowFailure = false
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	executor := newExecutor(cmd, t)
+	executor := newExecutor(cmd)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -71,13 +79,13 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfE
 	assert.NotNil(executor.GetResult().FinishAt)
 }
 
-func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
+func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// init:
 	cmd.AllowFailure = true
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	executor := newExecutor(cmd, t)
+	executor := newExecutor(cmd)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -90,13 +98,13 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	assert.NotNil(executor.GetResult().FinishAt)
 }
 
-func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
+func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// init:
 	cmd.Timeout = 5
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	executor := newExecutor(cmd, t)
+	executor := newExecutor(cmd)
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -109,12 +117,12 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOf
 	assert.NotNil(executor.GetResult().FinishAt)
 }
 
-func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn, t TypeOfExecutor) {
+func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// init:
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	executor := newExecutor(cmd, t)
+	executor := newExecutor(cmd)
 	go printLog(executor.LogChannel())
 
 	time.AfterFunc(5*time.Second, func() {

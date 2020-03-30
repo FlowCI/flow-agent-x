@@ -21,7 +21,8 @@ import (
 type (
 	DockerExecutor struct {
 		BaseExecutor
-		workDirInContainer string
+		workDirInContainer   string
+		pluginDirInContainer string
 	}
 )
 
@@ -37,6 +38,9 @@ func (d *DockerExecutor) Start() (out error) {
 	d.stdOutWg.Add(1)
 	d.workDirInContainer = "/ws/" + d.inCmd.FlowId
 	d.inVars[domain.VarAgentJobDir] = d.workDirInContainer
+
+	d.pluginDirInContainer = "/ws/.plugins"
+	d.inVars[domain.VarAgentPluginDir] = d.pluginDirInContainer
 
 	// pull image
 	cli, err := client.NewEnvClient()
@@ -128,16 +132,27 @@ func (d *DockerExecutor) startContainer(cli *client.Client, cid string) {
 }
 
 func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
-	reader, err := tarArchiveFromPath(d.workDir)
-	util.PanicIfErr(err)
-
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	}
 
-	err = cli.CopyToContainer(d.context, containerId, d.workDirInContainer, reader, config)
-	util.PanicIfErr(err)
-	util.LogDebug("Job working dir been created in container")
+	if !util.IsEmptyString(d.workDir) {
+		reader, err := tarArchiveFromPath(d.workDir)
+		util.PanicIfErr(err)
+
+		err = cli.CopyToContainer(d.context, containerId, d.workDirInContainer, reader, config)
+		util.PanicIfErr(err)
+		util.LogDebug("Job working dir been created in container")
+	}
+
+	if !util.IsEmptyString(d.pluginDir) {
+		reader, err := tarArchiveFromPath(d.pluginDir)
+		util.PanicIfErr(err)
+
+		err = cli.CopyToContainer(d.context, containerId, d.pluginDirInContainer, reader, config)
+		util.PanicIfErr(err)
+		util.LogDebug("Plugin dir been created in container")
+	}
 }
 
 func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) string {
@@ -229,7 +244,7 @@ func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
 // util methods
 //--------------------------------------------
 
-func tarArchiveFromPath(path string) (io.Reader, error) {
+	func tarArchiveFromPath(path string) (io.Reader, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 

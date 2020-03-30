@@ -149,7 +149,13 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		return nil
 	}
 
-	s.executor = executor.NewExecutorFromCmd(config.AppCtx, workDir, in, s.initEnv(workDir))
+	s.executor = executor.NewExecutorFromCmd(executor.Options{
+		Parent:    config.AppCtx,
+		WorkDir:   workDir,
+		PluginDir: config.PluginDir,
+		Cmd:       in,
+		Vars:      s.initEnv(workDir),
+	})
 	go logConsumer(s.executor, config.LoggingDir)
 
 	go func() {

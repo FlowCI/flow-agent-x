@@ -14,31 +14,31 @@ func init() {
 func TestShouldExecInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-	shouldExecCmd(assert, cmd, Bash)
+	shouldExecCmd(assert, cmd)
 }
 
 func TestShouldExecWithErrorInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-	shouldExecWithError(assert, cmd, Bash)
+	shouldExecWithError(assert, cmd)
 }
 
 func TestShouldExecWithErrorButAllowFailureInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-	shouldExecWithErrorButAllowFailure(assert, cmd, Bash)
+	shouldExecWithErrorButAllowFailure(assert, cmd)
 }
 
 func TestShouldExecButTimeout(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-	shouldExecButTimeOut(assert, cmd, Bash)
+	shouldExecButTimeOut(assert, cmd)
 }
 
 func TestShouldExitByKill(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-	shouldExecButKilled(assert, cmd, Bash)
+	shouldExecButKilled(assert, cmd)
 }
 
 func createBashTestCmd() *domain.CmdIn {
