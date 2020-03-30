@@ -21,6 +21,8 @@ import (
 type (
 	DockerExecutor struct {
 		BaseExecutor
+		cli                  *client.Client
+		containerId          string
 		workDirInContainer   string
 		pluginDirInContainer string
 	}
@@ -30,6 +32,10 @@ func (d *DockerExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = d.handleErrors(err.(error))
+		}
+
+		if d.cli != nil {
+			d.cleanupContainer()
 		}
 
 		d.closeChannels()
@@ -43,20 +49,18 @@ func (d *DockerExecutor) Start() (out error) {
 	d.inVars[domain.VarAgentPluginDir] = d.pluginDirInContainer
 
 	// pull image
-	cli, err := client.NewEnvClient()
+	var err error
+	d.cli, err = client.NewEnvClient()
 	util.PanicIfErr(err)
-	defer cli.Close()
 
-	d.pullImage(cli)
+	d.pullImage()
+	d.createContainer()
 
-	cid := d.createContainer(cli)
-	defer d.cleanupContainer(cli, cid)
+	d.startContainer()
+	d.copyToContainer()
 
-	d.startContainer(cli, cid)
-	d.copyToContainer(cli, cid)
-
-	eid := d.runCmdInContainer(cli, cid)
-	exitCode := d.waitForExit(cli, eid)
+	eid := d.runCmdInContainer()
+	exitCode := d.waitForExit(eid)
 
 	if d.CmdResult.IsFinishStatus() {
 		return nil
@@ -87,15 +91,15 @@ func (d *DockerExecutor) handleErrors(err error) error {
 	return err
 }
 
-func (d *DockerExecutor) pullImage(cli *client.Client) {
+func (d *DockerExecutor) pullImage() {
 	fullRef := "docker.io/library/" + d.inCmd.Docker.Image
-	reader, err := cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+	reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 
 	util.PanicIfErr(err)
 	d.writeLogToChannel(reader)
 }
 
-func (d *DockerExecutor) createContainer(cli *client.Client) string {
+func (d *DockerExecutor) createContainer() {
 	docker := d.inCmd.Docker
 	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
 	util.PanicIfErr(err)
@@ -104,6 +108,7 @@ func (d *DockerExecutor) createContainer(cli *client.Client) string {
 		Image:        docker.Image,
 		Env:          append(d.inVars.ToStringArray(), d.inCmd.VarsToStringArray()...),
 		Entrypoint:   docker.Entrypoint,
+		Cmd:          []string{"mkdir -p " + d.pluginDirInContainer},
 		ExposedPorts: portSet,
 		Tty:          false,
 		AttachStdin:  true,
@@ -119,21 +124,20 @@ func (d *DockerExecutor) createContainer(cli *client.Client) string {
 		PortBindings: portMap,
 	}
 
-	resp, err := cli.ContainerCreate(d.context, config, hostConfig, nil, "")
+	resp, err := d.cli.ContainerCreate(d.context, config, hostConfig, nil, "")
 	util.PanicIfErr(err)
 	util.LogDebug("Container created %s", resp.ID)
 
-	return resp.ID
+	d.containerId = resp.ID
+	d.CmdResult.ContainerId = resp.ID
 }
 
-func (d *DockerExecutor) startContainer(cli *client.Client, cid string) {
-	err := cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
+func (d *DockerExecutor) startContainer() {
+	err := d.cli.ContainerStart(d.context, d.containerId, types.ContainerStartOptions{})
 	util.PanicIfErr(err)
-
-	d.CmdResult.ContainerId = cid
 }
 
-func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
+func (d *DockerExecutor) copyToContainer() {
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	}
@@ -142,7 +146,7 @@ func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string)
 		reader, err := tarArchiveFromPath(d.workDir)
 		util.PanicIfErr(err)
 
-		err = cli.CopyToContainer(d.context, containerId, d.workDirInContainer, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.containerId, d.workDirInContainer, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Job working dir been created in container")
 	}
@@ -151,13 +155,13 @@ func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string)
 		reader, err := tarArchiveFromPath(d.pluginDir)
 		util.PanicIfErr(err)
 
-		err = cli.CopyToContainer(d.context, containerId, d.pluginDirInContainer, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.containerId, d.pluginDirInContainer, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Plugin dir been created in container")
 	}
 }
 
-func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) string {
+func (d *DockerExecutor) runCmdInContainer() string {
 	config := types.ExecConfig{
 		Tty:          false,
 		AttachStdin:  true,
@@ -166,10 +170,10 @@ func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) strin
 		Cmd:          []string{linuxBash},
 	}
 
-	exec, err := cli.ContainerExecCreate(d.context, cid, config)
+	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
 
-	attach, err := cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{})
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{})
 	util.PanicIfErr(err)
 
 	onStdOutExit := func() {
@@ -183,32 +187,32 @@ func (d *DockerExecutor) runCmdInContainer(cli *client.Client, cid string) strin
 	return exec.ID
 }
 
-func (d *DockerExecutor) cleanupContainer(cli *client.Client, cid string) {
+func (d *DockerExecutor) cleanupContainer() {
 	option := d.inCmd.Docker
 
 	if option.IsDeleteContainer {
-		err := cli.ContainerRemove(d.context, cid, types.ContainerRemoveOptions{Force: true})
+		err := d.cli.ContainerRemove(d.context, d.containerId, types.ContainerRemoveOptions{Force: true})
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been deleted", cid, d.CmdID())
+			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.CmdID())
 		}
 		return
 	}
 
 	if option.IsStopContainer {
-		err := cli.ContainerStop(d.context, cid, nil)
+		err := d.cli.ContainerStop(d.context, d.containerId, nil)
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been stopped", cid, d.CmdID())
+			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.CmdID())
 		}
 	}
 }
 
-func (d *DockerExecutor) waitForExit(cli *client.Client, eid string) int {
-	inspect, err := cli.ContainerExecInspect(d.context, eid)
+func (d *DockerExecutor) waitForExit(eid string) int {
+	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
 	util.PanicIfErr(err)
 	d.toStartStatus(inspect.Pid)
 
 	for {
-		inspect, err = cli.ContainerExecInspect(d.context, eid)
+		inspect, err = d.cli.ContainerExecInspect(d.context, eid)
 		util.PanicIfErr(err)
 
 		if !inspect.Running {
