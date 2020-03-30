@@ -21,9 +21,6 @@ const (
 	defaultLogChannelBufferSize = 10000
 	defaultLogWaitingDuration   = 5 * time.Second
 	defaultReaderBufferSize     = 8 * 1024
-
-	Bash   = TypeOfExecutor(1)
-	Docker = TypeOfExecutor(2)
 )
 
 type TypeOfExecutor int

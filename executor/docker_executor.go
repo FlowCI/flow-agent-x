@@ -18,6 +18,11 @@ import (
 	"time"
 )
 
+const (
+	dockerBaseDir = "/ws"
+	dockerPluginDir = dockerBaseDir + "/plugins"
+)
+
 type (
 	DockerExecutor struct {
 		BaseExecutor
@@ -42,13 +47,11 @@ func (d *DockerExecutor) Start() (out error) {
 	}()
 
 	d.stdOutWg.Add(1)
-	d.workDirInContainer = "/ws/" + d.inCmd.FlowId
+
+	d.workDirInContainer = dockerBaseDir + "/" + filepath.Dir(d.workDir)
 	d.inVars[domain.VarAgentJobDir] = d.workDirInContainer
+	d.inVars[domain.VarAgentPluginDir] = dockerPluginDir
 
-	d.pluginDirInContainer = "/ws/.plugins"
-	d.inVars[domain.VarAgentPluginDir] = d.pluginDirInContainer
-
-	// pull image
 	var err error
 	d.cli, err = client.NewEnvClient()
 	util.PanicIfErr(err)
@@ -108,7 +111,6 @@ func (d *DockerExecutor) createContainer() {
 		Image:        docker.Image,
 		Env:          append(d.inVars.ToStringArray(), d.inCmd.VarsToStringArray()...),
 		Entrypoint:   docker.Entrypoint,
-		Cmd:          []string{"mkdir -p " + d.pluginDirInContainer},
 		ExposedPorts: portSet,
 		Tty:          false,
 		AttachStdin:  true,
@@ -146,7 +148,7 @@ func (d *DockerExecutor) copyToContainer() {
 		reader, err := tarArchiveFromPath(d.workDir)
 		util.PanicIfErr(err)
 
-		err = d.cli.CopyToContainer(d.context, d.containerId, d.workDirInContainer, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.containerId, dockerBaseDir, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Job working dir been created in container")
 	}
@@ -155,7 +157,7 @@ func (d *DockerExecutor) copyToContainer() {
 		reader, err := tarArchiveFromPath(d.pluginDir)
 		util.PanicIfErr(err)
 
-		err = d.cli.CopyToContainer(d.context, d.containerId, d.pluginDirInContainer, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.containerId, dockerBaseDir, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Plugin dir been created in container")
 	}
@@ -250,9 +252,11 @@ func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
 // util methods
 //--------------------------------------------
 
+// tar dir, ex: abc/.. output is archived abc dir
 func tarArchiveFromPath(path string) (io.Reader, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
+	dir := filepath.Dir(path)
 
 	ok := filepath.Walk(path, func(file string, fi os.FileInfo, err error) (out error) {
 		defer func() {
@@ -266,7 +270,7 @@ func tarArchiveFromPath(path string) (io.Reader, error) {
 		header, err := tar.FileInfoHeader(fi, fi.Name())
 		util.PanicIfErr(err)
 
-		header.Name = strings.TrimPrefix(strings.Replace(file, path, "", -1), string(filepath.Separator))
+		header.Name = strings.TrimPrefix(strings.Replace(file, dir, "", -1), string(filepath.Separator))
 		err = tw.WriteHeader(header)
 		util.PanicIfErr(err)
 
