@@ -246,7 +246,7 @@ func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
 // util methods
 //--------------------------------------------
 
-	func tarArchiveFromPath(path string) (io.Reader, error) {
+func tarArchiveFromPath(path string) (io.Reader, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 

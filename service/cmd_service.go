@@ -149,7 +149,7 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		return nil
 	}
 
-	s.executor = executor.NewExecutorFromCmd(executor.Options{
+	s.executor = executor.NewExecutor(executor.Options{
 		Parent:    config.AppCtx,
 		WorkDir:   workDir,
 		PluginDir: config.PluginDir,
