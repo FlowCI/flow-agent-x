@@ -129,6 +129,8 @@ func (d *DockerExecutor) createContainer(cli *client.Client) string {
 func (d *DockerExecutor) startContainer(cli *client.Client, cid string) {
 	err := cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
 	util.PanicIfErr(err)
+
+	d.CmdResult.ContainerId = cid
 }
 
 func (d *DockerExecutor) copyToContainer(cli *client.Client, containerId string) {
