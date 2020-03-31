@@ -30,27 +30,50 @@ func NilOrEmpty(v Variables) bool {
 	return v == nil || v.IsEmpty()
 }
 
+func ConnectVars(a Variables, b Variables) Variables {
+	vars := make(Variables, a.Size() + b.Size())
+	for k, val := range a {
+		vars[k] = val
+	}
+
+	for k, val := range b {
+		vars[k] = val
+	}
+	return vars
+}
+
 func (v Variables) Copy() Variables {
-	copied := make(Variables, len(v))
+	copied := make(Variables, v.Size())
 	for k, val := range v {
 		copied[k] = val
 	}
 	return copied
 }
 
-// ToStringArray convert variables map to key=value string array
-func (v Variables) ToStringArray() []string {
-	// build env variables map
-	envs := make(map[string]string, len(v))
+func (v Variables) Size() int {
+	return len(v)
+}
+
+// Resolve to gain actual value from env variables
+func (v Variables) Resolve() {
+	// resolve from system env vars
 	for key, val := range v {
 		val = util.ParseString(val)
-		envs[key] = val
+		v[key] = val
 	}
 
-	array := make([]string, len(v))
+	// resolve from current env vars
+	for key, val := range v {
+		val = util.ParseStringWithSource(val, v)
+		v[key] = val
+	}
+}
+
+// ToStringArray convert variables map to key=value string array
+func (v Variables) ToStringArray() []string {
+	array := make([]string, v.Size())
 	index := 0
-	for key, val := range envs {
-		val = util.ParseStringWithSource(val, envs)
+	for key, val := range v {
 		array[index] = fmt.Sprintf("%s=%s", key, val)
 		index++
 	}

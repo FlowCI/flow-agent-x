@@ -32,13 +32,11 @@ func (b *BashExecutor) Start() (out error) {
 
 	command := exec.Command(linuxBash)
 	command.Dir = b.workDir
+	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
 
 	stdin, _ := command.StdinPipe()
 	stdout, _ := command.StdoutPipe()
 	stderr, _ := command.StderrPipe()
-
-	command.Env = append(os.Environ(), b.inCmd.VarsToStringArray()...)
-	command.Env = append(command.Env, b.inVars.ToStringArray()...)
 
 	b.command = command
 	b.startToHandleContext()

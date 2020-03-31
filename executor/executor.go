@@ -45,7 +45,7 @@ type BaseExecutor struct {
 	context     context.Context
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.CmdIn
-	inVars      domain.Variables
+	vars        domain.Variables     // vars from input and in cmd
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
 	endTag      string
@@ -68,13 +68,16 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 
+	vars := domain.ConnectVars(options.Vars, cmd.Inputs)
+	vars.Resolve()
+
 	base := BaseExecutor{
 		workDir:     options.WorkDir,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
 		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
 		inCmd:       cmd,
-		inVars:      options.Vars,
+		vars:        vars,
 		CmdResult:   domain.NewExecutedCmd(cmd),
 	}
 

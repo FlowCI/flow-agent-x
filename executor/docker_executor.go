@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	dockerBaseDir = "/ws"
+	dockerBaseDir   = "/ws"
 	dockerPluginDir = dockerBaseDir + "/plugins"
 )
 
@@ -27,6 +27,8 @@ type (
 	DockerExecutor struct {
 		BaseExecutor
 		cli                  *client.Client
+		containerConfig      *container.Config
+		hostConfig           *container.HostConfig
 		containerId          string
 		workDirInContainer   string
 		pluginDirInContainer string
@@ -49,13 +51,14 @@ func (d *DockerExecutor) Start() (out error) {
 	d.stdOutWg.Add(1)
 
 	d.workDirInContainer = dockerBaseDir + "/" + filepath.Base(d.workDir)
-	d.inVars[domain.VarAgentJobDir] = d.workDirInContainer
-	d.inVars[domain.VarAgentPluginDir] = dockerPluginDir
+	d.vars[domain.VarAgentJobDir] = d.workDirInContainer
+	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 
 	var err error
 	d.cli, err = client.NewEnvClient()
 	util.PanicIfErr(err)
 
+	d.initConfig()
 	d.pullImage()
 	d.createContainer()
 
@@ -77,6 +80,39 @@ func (d *DockerExecutor) Start() (out error) {
 // private methods
 //--------------------------------------------
 
+func (d *DockerExecutor) initConfig() {
+	docker := d.inCmd.Docker
+
+	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
+	util.PanicIfErr(err)
+
+	image := util.ParseStringWithSource(docker.Image, d.vars)
+
+	entrypoint := make([]string, len(docker.Entrypoint))
+	for i, item := range docker.Entrypoint {
+		entrypoint[i] = util.ParseStringWithSource(item, d.vars)
+	}
+
+	d.containerConfig = &container.Config{
+		Image:        image,
+		Env:          d.vars.ToStringArray(),
+		Entrypoint:   entrypoint,
+		ExposedPorts: portSet,
+		Tty:          false,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		OpenStdin:    true,
+		StdinOnce:    true,
+		WorkingDir:   d.workDirInContainer,
+	}
+
+	d.hostConfig = &container.HostConfig{
+		NetworkMode:  container.NetworkMode(docker.NetworkMode),
+		PortBindings: portMap,
+	}
+}
+
 func (d *DockerExecutor) handleErrors(err error) error {
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
@@ -95,7 +131,8 @@ func (d *DockerExecutor) handleErrors(err error) error {
 }
 
 func (d *DockerExecutor) pullImage() {
-	image := d.inCmd.Docker.Image
+	image := d.containerConfig.Image
+
 	fullRef := "docker.io/library/" + image
 	if strings.Contains(image, "/") {
 		fullRef = "docker.io/" + image
@@ -108,30 +145,7 @@ func (d *DockerExecutor) pullImage() {
 }
 
 func (d *DockerExecutor) createContainer() {
-	docker := d.inCmd.Docker
-	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
-	util.PanicIfErr(err)
-
-	config := &container.Config{
-		Image:        docker.Image,
-		Env:          append(d.inVars.ToStringArray(), d.inCmd.VarsToStringArray()...),
-		Entrypoint:   docker.Entrypoint,
-		ExposedPorts: portSet,
-		Tty:          false,
-		AttachStdin:  true,
-		AttachStderr: true,
-		AttachStdout: true,
-		OpenStdin:    true,
-		StdinOnce:    true,
-		WorkingDir:   d.workDirInContainer,
-	}
-
-	hostConfig := &container.HostConfig{
-		NetworkMode:  container.NetworkMode(docker.NetworkMode),
-		PortBindings: portMap,
-	}
-
-	resp, err := d.cli.ContainerCreate(d.context, config, hostConfig, nil, "")
+	resp, err := d.cli.ContainerCreate(d.context, d.containerConfig, d.hostConfig, nil, "")
 	util.PanicIfErr(err)
 	util.LogDebug("Container created %s", resp.ID)
 
