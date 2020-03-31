@@ -35,3 +35,8 @@ func LogDebug(format string, a ...interface{}) {
 	str := fmt.Sprintf(format, a...)
 	logger.Debug(str)
 }
+
+func LogWarn(format string, a ...interface{}) {
+	str := fmt.Sprintf(format, a...)
+	logger.Warn(str)
+}

@@ -117,12 +117,14 @@ func (d *DockerExecutor) handleErrors(err error) error {
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		d.toTimeOutStatus()
+		d.context = context.Background() // reset context for further docker operation
 		return nil
 	}
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
 		d.toKilledStatus()
+		d.context = context.Background() // reset context for further docker operation
 		return nil
 	}
 

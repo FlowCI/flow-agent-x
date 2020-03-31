@@ -157,7 +157,13 @@ func (b *BaseExecutor) startConsumeStdOut(reader io.Reader, onExitFunc func()) c
 	cmdResult := b.CmdResult
 
 	consumer := func() {
-		defer onExitFunc()
+		defer func() {
+			// handle panic: send on closed channel
+			if err := recover(); err != nil {
+				util.LogWarn(err.(error).Error())
+			}
+			onExitFunc()
+		}()
 
 		bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
 		var builder strings.Builder
