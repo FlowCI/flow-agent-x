@@ -7,7 +7,6 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"path"
-	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -29,13 +28,11 @@ func getTestDataDir() string {
 
 func newExecutor(cmd *domain.CmdIn) Executor {
 	ctx, _ := context.WithCancel(context.Background())
-
 	app := config.GetInstance()
-	workDir := filepath.Join(app.Workspace, util.ParseString(cmd.FlowId))
 
 	options := Options{
 		Parent:    ctx,
-		WorkDir:   workDir,
+		Workspace: app.Workspace,
 		PluginDir: app.PluginDir,
 		Cmd:       cmd,
 	}
@@ -46,6 +43,8 @@ func newExecutor(cmd *domain.CmdIn) Executor {
 func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// when:
 	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -67,6 +66,8 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
 
 	// when:
 	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -86,6 +87,8 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 
 	// when:
 	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -105,6 +108,8 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
 
 	// when:
 	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
 	go printLog(executor.LogChannel())
 
 	err := executor.Start()
@@ -123,6 +128,8 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
 
 	// when:
 	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
 	go printLog(executor.LogChannel())
 
 	time.AfterFunc(5*time.Second, func() {
@@ -138,5 +145,3 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.Equal(int64(1), executor.GetResult().LogSize)
 	assert.NotNil(executor.GetResult().FinishAt)
 }
-
-

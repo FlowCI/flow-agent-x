@@ -2,9 +2,11 @@ package executor
 
 import (
 	"context"
+	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 )
@@ -13,8 +15,19 @@ type (
 	BashExecutor struct {
 		BaseExecutor
 		command *exec.Cmd
+		workDir string
 	}
 )
+
+func (b *BashExecutor) Init() (out error) {
+	cmd := b.inCmd
+
+	b.workDir = filepath.Join(b.workspace, util.ParseString(cmd.FlowId))
+	out = os.MkdirAll(b.workDir, os.ModePerm)
+
+	b.vars[domain.VarAgentJobDir] = b.workDir
+	return
+}
 
 // Start run the cmd from domain.CmdIn
 func (b *BashExecutor) Start() (out error) {

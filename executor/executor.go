@@ -26,6 +26,8 @@ const (
 type TypeOfExecutor int
 
 type Executor interface {
+	Init() error
+
 	CmdID() string
 
 	BashChannel() chan<- string
@@ -40,7 +42,7 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
-	workDir     string
+	workspace   string
 	pluginDir   string
 	context     context.Context
 	cancelFunc  context.CancelFunc
@@ -55,7 +57,7 @@ type BaseExecutor struct {
 
 type Options struct {
 	Parent    context.Context
-	WorkDir   string
+	Workspace string
 	PluginDir string
 	Cmd       *domain.CmdIn
 	Vars      domain.Variables
@@ -72,7 +74,7 @@ func NewExecutor(options Options) Executor {
 	vars.Resolve()
 
 	base := BaseExecutor{
-		workDir:     options.WorkDir,
+		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
 		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),

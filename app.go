@@ -62,20 +62,6 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:   "plugindir, pd",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "plugins"),
-			Usage:  "Directory for plugin",
-			EnvVar: domain.VarAgentPluginDir,
-		},
-
-		cli.StringFlag{
-			Name:   "logdir, ld",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "logs"),
-			Usage:  "Directory for logging",
-			EnvVar: domain.VarAgentLogDir,
-		},
-
-		cli.StringFlag{
 			Name:  "script",
 			Value: "",
 			Usage: "Execute shell script locally, ex: --script \"echo hello world\"",
@@ -97,8 +83,8 @@ func start(c *cli.Context) error {
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
 	config.Workspace = util.ParseString(c.String("workspace"))
-	config.PluginDir = util.ParseString(c.String("plugindir"))
-	config.LoggingDir = util.ParseString(c.String("logdir"))
+	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
+	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
 
 	// exec given cmd
 	script := c.String("script")

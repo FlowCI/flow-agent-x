@@ -7,6 +7,8 @@ import (
 	"context"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 	"github/flowci/flow-agent-x/domain"
@@ -19,21 +21,37 @@ import (
 )
 
 const (
-	dockerBaseDir   = "/ws"
-	dockerPluginDir = dockerBaseDir + "/plugins"
+	dockerWorkspace = "/ws"
+	dockerPluginDir = dockerWorkspace + "/.plugins"
 )
 
 type (
 	DockerExecutor struct {
 		BaseExecutor
+		flowVolume           types.Volume
 		cli                  *client.Client
 		containerConfig      *container.Config
 		hostConfig           *container.HostConfig
 		containerId          string
-		workDirInContainer   string
-		pluginDirInContainer string
+		workDir              string
 	}
 )
+
+func (d *DockerExecutor) Init() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
+	d.cli, out = client.NewEnvClient()
+	util.PanicIfErr(out)
+
+	d.initJobVolume()
+	d.initConfig()
+
+	return
+}
 
 func (d *DockerExecutor) Start() (out error) {
 	defer func() {
@@ -50,20 +68,11 @@ func (d *DockerExecutor) Start() (out error) {
 
 	d.stdOutWg.Add(1)
 
-	d.workDirInContainer = dockerBaseDir + "/" + filepath.Base(d.workDir)
-	d.vars[domain.VarAgentJobDir] = d.workDirInContainer
-	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
-
-	var err error
-	d.cli, err = client.NewEnvClient()
-	util.PanicIfErr(err)
-
-	d.initConfig()
 	d.pullImage()
 	d.createContainer()
 
 	d.startContainer()
-	d.copyToContainer()
+	d.copyPlugins()
 
 	eid := d.runCmdInContainer()
 	exitCode := d.waitForExit(eid)
@@ -80,8 +89,36 @@ func (d *DockerExecutor) Start() (out error) {
 // private methods
 //--------------------------------------------
 
+// create job volume based on flow id
+func (d *DockerExecutor) initJobVolume() {
+	name := "flow-" + d.inCmd.FlowId
+
+	filter := filters.NewArgs()
+	filter.Add("name", name)
+
+	list, err := d.cli.VolumeList(d.context, filter)
+	util.PanicIfErr(err)
+
+	if len(list.Volumes) == 1 {
+		d.flowVolume = *list.Volumes[0]
+		util.LogInfo("Job volume '%s' existed", name)
+		return
+	}
+
+	d.flowVolume, err = d.cli.VolumeCreate(d.context, volume.VolumesCreateBody{
+		Name: name,
+	})
+	util.PanicIfErr(err)
+	util.LogInfo("Job volume '%s' created", name)
+}
+
 func (d *DockerExecutor) initConfig() {
 	docker := d.inCmd.Docker
+
+	// set work dir in the container
+	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
+	d.vars[domain.VarAgentJobDir] = d.workDir
+	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 
 	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
 	util.PanicIfErr(err)
@@ -104,12 +141,13 @@ func (d *DockerExecutor) initConfig() {
 		AttachStdout: true,
 		OpenStdin:    true,
 		StdinOnce:    true,
-		WorkingDir:   d.workDirInContainer,
+		WorkingDir:   d.workDir,
 	}
 
 	d.hostConfig = &container.HostConfig{
 		NetworkMode:  container.NetworkMode(docker.NetworkMode),
 		PortBindings: portMap,
+		Binds:        []string{d.flowVolume.Name + ":" + d.workDir},
 	}
 }
 
@@ -160,25 +198,16 @@ func (d *DockerExecutor) startContainer() {
 	util.PanicIfErr(err)
 }
 
-func (d *DockerExecutor) copyToContainer() {
+func (d *DockerExecutor) copyPlugins() {
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
-	}
-
-	if !util.IsEmptyString(d.workDir) {
-		reader, err := tarArchiveFromPath(d.workDir)
-		util.PanicIfErr(err)
-
-		err = d.cli.CopyToContainer(d.context, d.containerId, dockerBaseDir, reader, config)
-		util.PanicIfErr(err)
-		util.LogDebug("Job working dir been created in container")
 	}
 
 	if !util.IsEmptyString(d.pluginDir) {
 		reader, err := tarArchiveFromPath(d.pluginDir)
 		util.PanicIfErr(err)
 
-		err = d.cli.CopyToContainer(d.context, d.containerId, dockerBaseDir, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.containerId, dockerWorkspace, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Plugin dir been created in container")
 	}
@@ -273,7 +302,7 @@ func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
 // util methods
 //--------------------------------------------
 
-// tar dir, ex: abc/.. output is archived abc dir
+// tar dir, ex: abc/.. output is archived content .. in dir
 func tarArchiveFromPath(path string) (io.Reader, error) {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -285,7 +314,6 @@ func tarArchiveFromPath(path string) (io.Reader, error) {
 				out = err.(error)
 			}
 		}()
-
 		util.PanicIfErr(err)
 
 		header, err := tar.FileInfoHeader(fi, fi.Name())

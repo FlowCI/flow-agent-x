@@ -2,8 +2,6 @@ package service
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -131,31 +129,27 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		return err
 	}
 
-	// git clone required plugin
-	if in.HasPlugin() && !config.IsOffline {
+	if in.HasPlugin() {
 		plugins := util.NewPlugins(config.PluginDir, config.Server)
-
 		if err := plugins.Load(in.Plugin); err != nil {
 			s.failureBeforeExecute(in, err)
 			return err
 		}
 	}
 
-	// init workdir
-	workDir := filepath.Join(config.Workspace, util.ParseString(in.FlowId))
-	err := os.MkdirAll(workDir, os.ModePerm)
-	if err != nil {
-		s.failureBeforeExecute(in, err)
-		return nil
-	}
-
 	s.executor = executor.NewExecutor(executor.Options{
 		Parent:    config.AppCtx,
-		WorkDir:   workDir,
+		Workspace: config.Workspace,
 		PluginDir: config.PluginDir,
 		Cmd:       in,
-		Vars:      s.initEnv(workDir),
+		Vars:      s.initEnv(),
 	})
+
+	if err := s.executor.Init(); err != nil {
+		s.failureBeforeExecute(in, err)
+		return err
+	}
+
 	go logConsumer(s.executor, config.LoggingDir)
 
 	go func() {
@@ -170,11 +164,10 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 	return nil
 }
 
-func (s *CmdService) initEnv(workDir string) domain.Variables {
+func (s *CmdService) initEnv() domain.Variables {
 	config := config.GetInstance()
 
 	vars := domain.NewVariables()
-	vars[domain.VarAgentJobDir] = workDir
 	vars[domain.VarAgentPluginDir] = config.PluginDir
 	vars[domain.VarServerUrl] = config.Server
 	vars[domain.VarAgentToken] = config.Token
