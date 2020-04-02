@@ -77,12 +77,13 @@ type (
 
 	CmdIn struct {
 		Cmd
-		Type       CmdType   `json:"type"`
-		Scripts    []string  `json:"scripts"`
-		FlowId     string    `json:"flowId"`
-		Timeout    int       `json:"timeout"`
-		Inputs     Variables `json:"inputs"`
-		EnvFilters []string  `json:"envFilters"`
+		Type        CmdType   `json:"type"`
+		Scripts     []string  `json:"scripts"`
+		FlowId      string    `json:"flowId"`
+		ContainerId string    `json:"containerId"` // container id prefer to reuse
+		Timeout     int       `json:"timeout"`
+		Inputs      Variables `json:"inputs"`
+		EnvFilters  []string  `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {

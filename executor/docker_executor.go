@@ -28,12 +28,12 @@ const (
 type (
 	DockerExecutor struct {
 		BaseExecutor
-		flowVolume           types.Volume
-		cli                  *client.Client
-		containerConfig      *container.Config
-		hostConfig           *container.HostConfig
-		containerId          string
-		workDir              string
+		flowVolume      types.Volume
+		cli             *client.Client
+		containerConfig *container.Config
+		hostConfig      *container.HostConfig
+		containerId     string
+		workDir         string
 	}
 )
 
@@ -69,8 +69,6 @@ func (d *DockerExecutor) Start() (out error) {
 	d.stdOutWg.Add(1)
 
 	d.pullImage()
-	d.createContainer()
-
 	d.startContainer()
 	d.copyPlugins()
 
@@ -184,18 +182,62 @@ func (d *DockerExecutor) pullImage() {
 	d.writeLogToChannel(reader)
 }
 
-func (d *DockerExecutor) createContainer() {
+func (d *DockerExecutor) startContainer() {
+	if d.tryToResume() {
+		return
+	}
+
 	resp, err := d.cli.ContainerCreate(d.context, d.containerConfig, d.hostConfig, nil, "")
 	util.PanicIfErr(err)
-	util.LogDebug("Container created %s", resp.ID)
 
-	d.containerId = resp.ID
-	d.CmdResult.ContainerId = resp.ID
+	cid := resp.ID
+	d.containerId = cid
+	d.CmdResult.ContainerId = cid
+	util.LogDebug("Container created %s", cid)
+
+	err = d.cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
+	util.PanicIfErr(err)
+	util.LogDebug("Container started %s", cid)
 }
 
-func (d *DockerExecutor) startContainer() {
-	err := d.cli.ContainerStart(d.context, d.containerId, types.ContainerStartOptions{})
+func (d *DockerExecutor) tryToResume() bool {
+	containerIdToReuse := d.inCmd.ContainerId
+
+	if util.IsEmptyString(containerIdToReuse) {
+		return false
+	}
+
+	inspect, err := d.cli.ContainerInspect(d.context, containerIdToReuse)
+	if client.IsErrContainerNotFound(err) {
+		util.LogWarn("Container %s not found, will create a new one", containerIdToReuse)
+		return false
+	}
+
 	util.PanicIfErr(err)
+
+	if inspect.State.Status != "exited" {
+		util.LogWarn("Container %s status not exited, will create a new one", containerIdToReuse)
+		return false
+	}
+
+	timeout := 5 * time.Second
+	err = d.cli.ContainerRestart(d.context, containerIdToReuse, &timeout)
+
+	// resume
+	if err == nil {
+		d.containerId = containerIdToReuse
+		d.CmdResult.ContainerId = containerIdToReuse
+		util.LogInfo("Container %s resumed", inspect.ID)
+		return true
+	}
+
+	// delete container that cannot resume
+	_ = d.cli.ContainerRemove(d.context, containerIdToReuse, types.ContainerRemoveOptions{
+		Force: true,
+	})
+
+	util.LogWarn("Failed to resume container %s, deleted", containerIdToReuse)
+	return false
 }
 
 func (d *DockerExecutor) copyPlugins() {

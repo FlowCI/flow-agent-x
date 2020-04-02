@@ -40,7 +40,7 @@ func newExecutor(cmd *domain.CmdIn) Executor {
 	return NewExecutor(options)
 }
 
-func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) {
+func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) *domain.ExecutedCmd {
 	// when:
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
@@ -53,10 +53,12 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) {
 	// then:
 	result := executor.GetResult()
 	assert.Equal(0, result.Code)
-	assert.Equal(int64(2), result.LogSize)
+	assert.True(result.LogSize > 0)
 	assert.NotNil(result.FinishAt)
 	assert.Equal("flowci", result.Output["FLOW_VVV"])
 	assert.Equal("flow...", result.Output["FLOW_AAA"])
+
+	return executor.GetResult()
 }
 
 func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
@@ -74,10 +76,11 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.NoError(err)
 
 	// then:
-	assert.Equal(int64(1), executor.GetResult().LogSize)
-	assert.Equal(127, executor.GetResult().Code)
-	assert.Equal(domain.CmdStatusException, executor.GetResult().Status)
-	assert.NotNil(executor.GetResult().FinishAt)
+	result := executor.GetResult()
+	assert.True(result.LogSize > 0)
+	assert.Equal(127, result.Code)
+	assert.Equal(domain.CmdStatusException, result.Status)
+	assert.NotNil(result.FinishAt)
 }
 
 func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.CmdIn) {
@@ -95,10 +98,11 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	assert.NoError(err)
 
 	// then:
-	assert.Equal(int64(1), executor.GetResult().LogSize)
-	assert.Equal(0, executor.GetResult().Code)
-	assert.Equal(domain.CmdStatusSuccess, executor.GetResult().Status)
-	assert.NotNil(executor.GetResult().FinishAt)
+	result := executor.GetResult()
+	assert.True(result.LogSize > 0)
+	assert.Equal(0, result.Code)
+	assert.Equal(domain.CmdStatusSuccess, result.Status)
+	assert.NotNil(result.FinishAt)
 }
 
 func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
@@ -116,10 +120,11 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.NoError(err)
 
 	// then:
-	assert.Equal(domain.CmdStatusTimeout, executor.GetResult().Status)
-	assert.Equal(domain.CmdExitCodeTimeOut, executor.GetResult().Code)
-	assert.Equal(int64(1), executor.GetResult().LogSize)
-	assert.NotNil(executor.GetResult().FinishAt)
+	result := executor.GetResult()
+	assert.True(result.LogSize > 0)
+	assert.Equal(domain.CmdStatusTimeout, result.Status)
+	assert.Equal(domain.CmdExitCodeTimeOut, result.Code)
+	assert.NotNil(result.FinishAt)
 }
 
 func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
@@ -140,8 +145,9 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.NoError(err)
 
 	// then:
-	assert.Equal(domain.CmdStatusKilled, executor.GetResult().Status)
-	assert.Equal(domain.CmdExitCodeKilled, executor.GetResult().Code)
-	assert.Equal(int64(1), executor.GetResult().LogSize)
-	assert.NotNil(executor.GetResult().FinishAt)
+	result := executor.GetResult()
+	assert.True(result.LogSize > 0)
+	assert.Equal(domain.CmdStatusKilled, result.Status)
+	assert.Equal(domain.CmdExitCodeKilled, result.Code)
+	assert.NotNil(result.FinishAt)
 }

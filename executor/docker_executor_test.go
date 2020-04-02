@@ -44,6 +44,28 @@ func TestShouldExitByKillInDocker(t *testing.T) {
 	shouldExecButKilled(assert, cmd)
 }
 
+func TestShouldReuseContainer(t *testing.T) {
+	assert := assert.New(t)
+
+	// run cmd in container
+	cmd := createDockerTestCmd()
+	cmd.Docker.IsStopContainer = true
+	cmd.Docker.IsDeleteContainer = false
+
+	result := shouldExecCmd(assert, cmd)
+	assert.NotEmpty(result.ContainerId)
+
+	// run cmd in container from first step
+	cmd = createDockerTestCmd()
+	cmd.ContainerId = result.ContainerId
+	cmd.Docker.IsStopContainer = true
+	cmd.Docker.IsDeleteContainer = true
+
+	resultFromReuse := shouldExecCmd(assert, cmd)
+	assert.NotEmpty(resultFromReuse.ContainerId)
+	assert.Equal(result.ContainerId, resultFromReuse.ContainerId)
+}
+
 func createDockerTestCmd() *domain.CmdIn {
 	return &domain.CmdIn{
 		FlowId: "flowid", // same as dir flowid in _testdata
