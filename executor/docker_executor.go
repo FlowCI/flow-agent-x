@@ -215,7 +215,7 @@ func (d *DockerExecutor) copyPlugins() {
 
 func (d *DockerExecutor) runCmdInContainer() string {
 	config := types.ExecConfig{
-		Tty:          false,
+		Tty:          true,
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
@@ -225,7 +225,7 @@ func (d *DockerExecutor) runCmdInContainer() string {
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
 
-	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{})
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: true})
 	util.PanicIfErr(err)
 
 	onStdOutExit := func() {
