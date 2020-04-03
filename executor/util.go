@@ -2,36 +2,63 @@ package executor
 
 import (
 	"bufio"
+	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io"
+	"os/exec"
 	"strings"
+	"syscall"
 )
 
-func readLine(r *bufio.Reader, builder strings.Builder) (string, error) {
-	var prefix bool
+func getExitCode(cmd *exec.Cmd) int {
+	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
+	return ws.ExitStatus()
+}
 
-	line, prefix, err := r.ReadLine()
-	builder.Write(line)
+func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
+	reader := bufio.NewReader(r)
+	output := domain.NewVariables()
 
-	if err != nil {
-		return builder.String(), err
-	}
-
-	for prefix {
-		var rest []byte
-		rest, prefix, err = r.ReadLine()
-		builder.Write(rest)
-
+	for {
+		line, err := reader.ReadString(util.UnixLineBreak)
 		if err != nil {
-			return builder.String(), err
+			return output
+		}
+
+		line = strings.TrimSpace(line)
+		if ok, key, val := getEnvKeyAndVal(line); ok {
+			if matchEnvFilter(key, filters) {
+				output[key] = val
+			}
 		}
 	}
+}
 
-	return builder.String(), nil
+func matchEnvFilter(env string, filters []string) bool {
+	for _, filter := range filters {
+		if strings.HasPrefix(env, filter) {
+			return true
+		}
+	}
+	return false
 }
 
 func appendNewLine(script string) string {
-	if !strings.HasSuffix(script, util.UnixLineBreak) {
-		script += util.UnixLineBreak
+	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
+		script += util.UnixLineBreakStr
 	}
 	return script
+}
+
+func getEnvKeyAndVal(line string) (ok bool, key, val string) {
+	index := strings.IndexAny(line, "=")
+	if index == -1 {
+		ok = false
+		return
+	}
+
+	key = line[0:index]
+	val = line[index+1:]
+	ok = true
+	return
 }

@@ -23,6 +23,7 @@ import (
 const (
 	dockerWorkspace = "/ws"
 	dockerPluginDir = dockerWorkspace + "/.plugins"
+	dockerEnvFile = "/tmp/.env"
 )
 
 type (
@@ -34,6 +35,7 @@ type (
 		hostConfig      *container.HostConfig
 		containerId     string
 		workDir         string
+		envFile         string
 	}
 )
 
@@ -66,7 +68,8 @@ func (d *DockerExecutor) Start() (out error) {
 		d.closeChannels()
 	}()
 
-	d.stdOutWg.Add(1)
+	// one for pull image output, and one for cmd output
+	d.stdOutWg.Add(2)
 
 	d.pullImage()
 	d.startContainer()
@@ -74,6 +77,7 @@ func (d *DockerExecutor) Start() (out error) {
 
 	eid := d.runCmdInContainer()
 	exitCode := d.waitForExit(eid)
+	d.exportEnv()
 
 	if d.CmdResult.IsFinishStatus() {
 		return nil
@@ -177,9 +181,8 @@ func (d *DockerExecutor) pullImage() {
 	}
 
 	reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
-
 	util.PanicIfErr(err)
-	d.writeLogToChannel(reader)
+	d.writeLog(reader)
 }
 
 func (d *DockerExecutor) startContainer() {
@@ -257,7 +260,7 @@ func (d *DockerExecutor) copyPlugins() {
 
 func (d *DockerExecutor) runCmdInContainer() string {
 	config := types.ExecConfig{
-		Tty:          true,
+		Tty:          false,
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
@@ -267,18 +270,25 @@ func (d *DockerExecutor) runCmdInContainer() string {
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
 
-	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: true})
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	onStdOutExit := func() {
-		d.stdOutWg.Done()
-		util.LogDebug("[Exit]: StdOut/Err, log size = %d", d.CmdResult.LogSize)
-	}
-
-	_ = d.startConsumeStdOut(attach.Reader, onStdOutExit)
-	_ = d.startConsumeStdIn(attach.Conn)
+	d.writeLog(attach.Reader)
+	d.writeCmd(attach.Conn, func(in chan string) {
+		in <- "env > " + dockerEnvFile
+	})
 
 	return exec.ID
+}
+
+func (d *DockerExecutor) exportEnv() {
+	reader, _, err := d.cli.CopyFromContainer(d.context, d.containerId, dockerEnvFile)
+	if err != nil {
+		return
+	}
+
+	defer reader.Close()
+	d.CmdResult.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
 }
 
 func (d *DockerExecutor) cleanupContainer() {
@@ -317,27 +327,6 @@ func (d *DockerExecutor) waitForExit(eid string) int {
 	}
 
 	return inspect.ExitCode
-}
-
-func (d *DockerExecutor) writeLogToChannel(reader io.Reader) {
-	bufferReader := bufio.NewReaderSize(reader, defaultReaderBufferSize)
-	var builder strings.Builder
-
-	for {
-		line, err := readLine(bufferReader, builder)
-		builder.Reset()
-
-		if err != nil {
-			return
-		}
-
-		log := &domain.LogItem{
-			CmdID:   d.CmdID(),
-			Content: line,
-		}
-
-		d.logChannel <- log
-	}
 }
 
 //--------------------------------------------

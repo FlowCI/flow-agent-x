@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	CRLF          = "\r\n"
-	UnixLineBreak = "\n"
+	CRLF             = "\r\n"
+	UnixLineBreak    = '\n'
+	UnixLineBreakStr = "\n"
 
 	EmptyStr = ""
 

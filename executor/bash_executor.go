@@ -4,11 +4,10 @@ import (
 	"context"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
-	"syscall"
 )
 
 type (
@@ -16,6 +15,7 @@ type (
 		BaseExecutor
 		command *exec.Cmd
 		workDir string
+		envFile string
 	}
 )
 
@@ -24,6 +24,9 @@ func (b *BashExecutor) Init() (out error) {
 
 	b.workDir = filepath.Join(b.workspace, util.ParseString(cmd.FlowId))
 	out = os.MkdirAll(b.workDir, os.ModePerm)
+	if out != nil {
+		return
+	}
 
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	return
@@ -59,26 +62,24 @@ func (b *BashExecutor) Start() (out error) {
 		return b.toErrorStatus(err)
 	}
 
-	onStdOutExit := func() {
-		b.stdOutWg.Done()
-		util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
-	}
+	b.writeLog(stdout)
+	b.writeLog(stderr)
+	b.writeCmd(stdin, func(in chan string) {
+		tmpFile, err := ioutil.TempFile("", "agent_env_")
 
-	cancelForStdOut := b.startConsumeStdOut(stdout, onStdOutExit)
-	cancelForStdErr := b.startConsumeStdOut(stderr, onStdOutExit)
-	cancelForStdIn := b.startConsumeStdIn(stdin)
-
-	defer func() {
-		cancelForStdOut()
-		cancelForStdErr()
-		cancelForStdIn()
-	}()
+		if err == nil {
+			in <- "env > " + tmpFile.Name()
+			b.envFile = tmpFile.Name()
+		}
+	})
 
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
 	_ = command.Wait()
 	util.LogDebug("[Done]: Shell for %s", b.CmdID())
+
+	b.exportEnv()
 
 	if b.CmdResult.IsFinishStatus() {
 		return nil
@@ -92,6 +93,20 @@ func (b *BashExecutor) Start() (out error) {
 //====================================================================
 //	private
 //====================================================================
+
+func (b *BashExecutor) exportEnv() {
+	if util.IsEmptyString(b.envFile) {
+		return
+	}
+
+	file, err := os.Open(b.envFile)
+	if err != nil {
+		return
+	}
+
+	defer file.Close()
+	b.CmdResult.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
+}
 
 func (b *BashExecutor) startToHandleContext() {
 	go func() {
@@ -126,22 +141,4 @@ func (b *BashExecutor) handleErrors(err error) {
 	}
 
 	_ = b.toErrorStatus(err)
-}
-
-//====================================================================
-//	util
-//====================================================================
-
-func getExitCode(cmd *exec.Cmd) int {
-	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
-	return ws.ExitStatus()
-}
-
-func matchEnvFilter(env string, filters []string) bool {
-	for _, filter := range filters {
-		if strings.HasPrefix(env, filter) {
-			return true
-		}
-	}
-	return false
 }
