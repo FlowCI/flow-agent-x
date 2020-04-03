@@ -74,7 +74,12 @@ func main() {
 
 func start(c *cli.Context) error {
 	util.LogInfo("Staring flow.ci agent...")
-	defer util.LogInfo("Agent stopped")
+	defer func() {
+		if err := recover(); err != nil {
+			util.LogIfError(err.(error))
+		}
+		util.LogInfo("Agent stopped")
+	}()
 
 	config := config.GetInstance()
 	defer config.Close()

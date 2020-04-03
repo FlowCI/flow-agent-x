@@ -41,7 +41,6 @@ type (
 		Token  string
 		Port   int
 
-		IsOffline  bool
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
@@ -55,7 +54,6 @@ type (
 func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
-		singleton.IsOffline = false
 	})
 	return singleton
 }
@@ -86,7 +84,7 @@ func (m *Manager) Init() {
 	}()
 
 	if util.LogIfError(err) {
-		toOfflineMode(m)
+		panic(fmt.Errorf("failed to connect to server %s", m.Server))
 		return
 	}
 
@@ -133,11 +131,6 @@ func (m *Manager) Close() {
 // --------------------------------
 //		Util Functions
 // --------------------------------
-
-func toOfflineMode(m *Manager) {
-	util.LogInfo("Mode: 'offline'")
-	m.IsOffline = true
-}
 
 func loadSettings(m *Manager) (out error) {
 	defer func() {
