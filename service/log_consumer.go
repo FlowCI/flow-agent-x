@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github/flowci/flow-agent-x/executor"
 	"io"
 	"io/ioutil"
@@ -13,11 +14,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/streadway/amqp"
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-
-	"github.com/streadway/amqp"
 )
 
 // Push stdout, stderr log back to server
@@ -26,7 +26,7 @@ func logConsumer(executor executor.Executor, logDir string) {
 	logChannel := executor.LogChannel()
 
 	// init path for shell, log and raw log
-	logPath := filepath.Join(logDir, executor.CmdID()+".log")
+	logPath := filepath.Join(logDir, executor.CmdId()+".log")
 	f, _ := os.Create(logPath)
 	writer := bufio.NewWriter(f)
 
@@ -47,17 +47,23 @@ func logConsumer(executor executor.Executor, logDir string) {
 			break
 		}
 
+		writer.Write(item.Content)
 		util.LogDebug("[LOG]: %s", item)
-
-		// write to file
-		writeLogToFile(writer, item)
 
 		// send to queue
 		if config.HasQueue() {
-			exchangeName := config.Settings.Queue.LogsExchange
+			exchange := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
 
-			writeLogToQueue(exchangeName, channel, item)
+			raw, err := proto.Marshal(item)
+			if err != nil {
+				continue
+			}
+
+			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+				ContentType: util.HttpProtobuf,
+				Body:        raw,
+			})
 		}
 	}
 }
@@ -114,16 +120,4 @@ func uploadLog(logFile string) error {
 	}
 
 	return fmt.Errorf(message.Message)
-}
-
-func writeLogToFile(w *bufio.Writer, item *domain.LogItem) {
-	_, _ = w.WriteString(item.Content)
-	_, _ = w.WriteString(util.CRLF)
-}
-
-func writeLogToQueue(exchange string, qChannel *amqp.Channel, item *domain.LogItem) {
-	_ = qChannel.Publish(exchange, "", false, false, amqp.Publishing{
-		ContentType: util.HttpTextPlain,
-		Body:        []byte(item.String()),
-	})
 }

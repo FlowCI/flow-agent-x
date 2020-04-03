@@ -13,7 +13,7 @@ require (
 	github.com/gin-contrib/sse v0.0.0-20170109093832-22d885f9ecc7 // indirect
 	github.com/gin-gonic/gin v1.3.0
 	github.com/go-ole/go-ole v1.2.4 // indirect
-	github.com/golang/protobuf v0.0.0-20170601230230-5a0f697c9ed9 // indirect
+	github.com/golang/protobuf v1.3.5
 	github.com/google/gofuzz v1.0.0 // indirect
 	github.com/google/uuid v1.1.0
 	github.com/json-iterator/go v0.0.0-20170829155851-36b14963da70 // indirect

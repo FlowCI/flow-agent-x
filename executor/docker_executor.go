@@ -297,7 +297,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsDeleteContainer {
 		err := d.cli.ContainerRemove(d.context, d.containerId, types.ContainerRemoveOptions{Force: true})
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.CmdID())
+			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.CmdId())
 		}
 		return
 	}
@@ -305,7 +305,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsStopContainer {
 		err := d.cli.ContainerStop(d.context, d.containerId, nil)
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.CmdID())
+			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.CmdId())
 		}
 	}
 }

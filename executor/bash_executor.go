@@ -22,13 +22,15 @@ type (
 func (b *BashExecutor) Init() (out error) {
 	cmd := b.inCmd
 
-	b.workDir = filepath.Join(b.workspace, util.ParseString(cmd.FlowId))
-	out = os.MkdirAll(b.workDir, os.ModePerm)
-	if out != nil {
+	if util.IsEmptyString(b.workspace) {
+		b.workDir, out = ioutil.TempDir("", "agent_")
+		b.vars[domain.VarAgentJobDir] = b.workDir
 		return
 	}
 
+	b.workDir = filepath.Join(b.workspace, util.ParseString(cmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
+	out = os.MkdirAll(b.workDir, os.ModePerm)
 	return
 }
 
@@ -77,7 +79,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	// wait or timeout
 	_ = command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.CmdID())
+	util.LogDebug("[Done]: Shell for %s", b.CmdId())
 
 	b.exportEnv()
 

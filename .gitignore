@@ -5,3 +5,6 @@ vendor/
 .vscode
 *.log
 bin/
+*.pb.go
+.cache/
+.vender/

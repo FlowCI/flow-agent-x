@@ -25,7 +25,7 @@ type TypeOfExecutor int
 type Executor interface {
 	Init() error
 
-	CmdID() string
+	CmdId() string
 
 	BashChannel() chan<- string
 
@@ -95,7 +95,7 @@ func NewExecutor(options Options) Executor {
 }
 
 // CmdID current bash executor cmd id
-func (b *BaseExecutor) CmdID() string {
+func (b *BaseExecutor) CmdId() string {
 	return b.inCmd.ID
 }
 
@@ -185,7 +185,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader) {
 				}
 
 				b.logChannel <- &domain.LogItem{
-					CmdID:   b.CmdID(),
+					CmdId:   b.CmdId(),
 					Content: buffer[0:n],
 				}
 
