@@ -115,9 +115,9 @@ func execCmd(script string) {
 		Timeout: 1800,
 	}
 
-	printer := func(channel <-chan *domain.Log) {
+	printer := func(channel <-chan *domain.LogItem) {
 		for item := range channel {
-			util.LogInfo("[LOG]: %s", item.Raw)
+			util.LogInfo("[LOG]: %s", item.Content)
 		}
 	}
 

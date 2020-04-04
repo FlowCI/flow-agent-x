@@ -29,7 +29,7 @@ type Executor interface {
 
 	BashChannel() chan<- string
 
-	LogChannel() <-chan *domain.Log
+	LogChannel() <-chan *domain.LogItem
 
 	Start() error
 
@@ -44,9 +44,9 @@ type BaseExecutor struct {
 	context     context.Context
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.CmdIn
-	vars        domain.Variables // vars from input and in cmd
-	bashChannel chan string      // bash script comes from
-	logChannel  chan *domain.Log // output log
+	vars        domain.Variables     // vars from input and in cmd
+	bashChannel chan string          // bash script comes from
+	logChannel  chan *domain.LogItem // output log
 	CmdResult   *domain.ExecutedCmd
 	stdOutWg    sync.WaitGroup // init on subclasses
 }
@@ -73,7 +73,7 @@ func NewExecutor(options Options) Executor {
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
-		logChannel:  make(chan *domain.Log, defaultLogChannelBufferSize),
+		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
 		inCmd:       cmd,
 		vars:        vars,
 		CmdResult:   domain.NewExecutedCmd(cmd),
@@ -105,7 +105,7 @@ func (b *BaseExecutor) BashChannel() chan<- string {
 }
 
 // LogChannel for output log from stdout, stdin
-func (b *BaseExecutor) LogChannel() <-chan *domain.Log {
+func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
 
@@ -184,9 +184,9 @@ func (b *BaseExecutor) writeLog(reader io.Reader) {
 					return
 				}
 
-				b.logChannel <- &domain.Log{
-					CmdId: b.CmdId(),
-					Raw:   buffer[0:n],
+				b.logChannel <- &domain.LogItem{
+					CmdId:   b.CmdId(),
+					Content: buffer[0:n],
 				}
 
 				atomic.AddInt64(&b.CmdResult.LogSize, int64(n))
