@@ -98,6 +98,11 @@ type (
 		Error       string    `json:"error"`
 		LogSize     int64     `json:"logSize"`
 	}
+
+	Log struct {
+		CmdId string
+		Raw   []byte
+	}
 )
 
 // ===================================

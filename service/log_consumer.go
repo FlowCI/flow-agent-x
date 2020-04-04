@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/golang/protobuf/proto"
@@ -42,27 +43,31 @@ func logConsumer(executor executor.Executor, logDir string) {
 	}()
 
 	for {
-		item, ok := <-logChannel
+		log, ok := <-logChannel
 		if !ok {
 			break
 		}
 
-		writer.Write(item.Content)
-		util.LogDebug("[LOG]: %s", item)
+		writer.Write(log.Raw)
+		util.LogDebug("[LOG]: %s", log)
 
 		// send to queue
 		if config.HasQueue() {
 			exchange := config.Settings.Queue.LogsExchange
 			channel := config.Queue.LogChannel
 
-			raw, err := proto.Marshal(item)
+			item, err := proto.Marshal(&domain.LogItem{
+				CmdId:        log.CmdId,
+				ContentInB64: base64.StdEncoding.EncodeToString(log.Raw),
+			})
+
 			if err != nil {
 				continue
 			}
 
 			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
 				ContentType: util.HttpProtobuf,
-				Body:        raw,
+				Body:        item,
 			})
 		}
 	}

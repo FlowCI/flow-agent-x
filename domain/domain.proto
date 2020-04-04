@@ -3,5 +3,5 @@ package domain;
 
 message LogItem {
   string cmdId = 1;
-  bytes  content = 2;
+  string content = 2;
 }
