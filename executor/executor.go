@@ -168,11 +168,12 @@ func (b *BaseExecutor) closeChannels() {
 
 func (b *BaseExecutor) writeLog(reader io.Reader) {
 	go func() {
-		buffer := make([]byte, defaultReaderBufferSize)
 		defer func() {
 			b.stdOutWg.Done()
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
 		}()
+
+		buffer := make([]byte, defaultReaderBufferSize)
 
 		for {
 			select {
@@ -186,7 +187,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader) {
 
 				b.logChannel <- &domain.LogItem{
 					CmdId:   b.CmdId(),
-					Content: buffer[0:n],
+					Content: removeDockerHeader(buffer[0:n]),
 				}
 
 				atomic.AddInt64(&b.CmdResult.LogSize, int64(n))
