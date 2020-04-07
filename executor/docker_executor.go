@@ -23,12 +23,13 @@ import (
 const (
 	dockerWorkspace = "/ws"
 	dockerPluginDir = dockerWorkspace + "/.plugins"
-	dockerEnvFile = "/tmp/.env"
+	dockerEnvFile   = "/tmp/.env"
 )
 
 type (
 	DockerExecutor struct {
 		BaseExecutor
+		volumes         []*DockerVolume
 		flowVolume      types.Volume
 		cli             *client.Client
 		containerConfig *container.Config
@@ -94,24 +95,24 @@ func (d *DockerExecutor) Start() (out error) {
 // create job volume based on flow id
 func (d *DockerExecutor) initJobVolume() {
 	name := "flow-" + d.inCmd.FlowId
+	ok, v := d.getVolume(name)
 
-	filter := filters.NewArgs()
-	filter.Add("name", name)
-
-	list, err := d.cli.VolumeList(d.context, filter)
-	util.PanicIfErr(err)
-
-	if len(list.Volumes) == 1 {
-		d.flowVolume = *list.Volumes[0]
+	if ok {
+		d.flowVolume = *v
 		util.LogInfo("Job volume '%s' existed", name)
 		return
 	}
 
-	d.flowVolume, err = d.cli.VolumeCreate(d.context, volume.VolumesCreateBody{
+	body := volume.VolumesCreateBody{
 		Name: name,
-	})
+	}
+
+	created, err := d.cli.VolumeCreate(d.context, body)
 	util.PanicIfErr(err)
+
+	d.flowVolume = created
 	util.LogInfo("Job volume '%s' created", name)
+	return
 }
 
 func (d *DockerExecutor) initConfig() {
@@ -150,6 +151,15 @@ func (d *DockerExecutor) initConfig() {
 		NetworkMode:  container.NetworkMode(docker.NetworkMode),
 		PortBindings: portMap,
 		Binds:        []string{d.flowVolume.Name + ":" + d.workDir},
+	}
+
+	for _, v := range d.volumes {
+		ok, _ := d.getVolume(v.Name)
+		if !ok {
+			util.LogWarn("Volume %s not found", v.Name)
+			continue
+		}
+		d.hostConfig.Binds = append(d.hostConfig.Binds, v.toBindStr())
 	}
 }
 
@@ -273,10 +283,22 @@ func (d *DockerExecutor) runCmdInContainer() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	d.writeLog(attach.Reader)
-	d.writeCmd(attach.Conn, func(in chan string) {
+	initScriptInVolume := func(in chan string) {
+		for _, v := range d.volumes {
+			if util.IsEmptyString(v.Script) {
+				continue
+			}
+
+			in <- "source " + v.scriptPath()
+		}
+	}
+
+	writeEnv := func(in chan string) {
 		in <- "env > " + dockerEnvFile
-	})
+	}
+
+	d.writeLog(attach.Reader)
+	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
 
 	return exec.ID
 }
@@ -329,9 +351,35 @@ func (d *DockerExecutor) waitForExit(eid string) int {
 	return inspect.ExitCode
 }
 
+func (d *DockerExecutor) getVolume(name string) (bool, *types.Volume) {
+	filter := filters.NewArgs()
+	filter.Add("name", name)
+
+	list, err := d.cli.VolumeList(d.context, filter)
+	util.PanicIfErr(err)
+
+	if len(list.Volumes) == 1 {
+		return true, list.Volumes[0]
+	}
+
+	return false, nil
+}
+
 //--------------------------------------------
 // util methods
 //--------------------------------------------
+
+func hasPyenv() (bool, string) {
+	root := os.Getenv("PYENV_ROOT")
+
+	if util.IsEmptyString(root) {
+		root = "${HOME}/.pyenv"
+	}
+
+	root = util.ParseString(root)
+	_, err := os.Stat(root)
+	return !os.IsNotExist(err), root
+}
 
 // tar dir, ex: abc/.. output is archived content .. in dir
 func tarArchiveFromPath(path string) (io.Reader, error) {

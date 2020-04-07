@@ -64,17 +64,18 @@ func (b *BashExecutor) Start() (out error) {
 		return b.toErrorStatus(err)
 	}
 
-	b.writeLog(stdout)
-	b.writeLog(stderr)
-	b.writeCmd(stdin, func(in chan string) {
+	writeEnv := func(in chan string) {
 		tmpFile, err := ioutil.TempFile("", "agent_env_")
 
 		if err == nil {
 			in <- "env > " + tmpFile.Name()
 			b.envFile = tmpFile.Name()
 		}
-	})
+	}
 
+	b.writeLog(stdout)
+	b.writeLog(stderr)
+	b.writeCmd(stdin, nil, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout

@@ -57,6 +57,7 @@ type Options struct {
 	PluginDir string
 	Cmd       *domain.CmdIn
 	Vars      domain.Variables
+	Volumes   []*DockerVolume
 }
 
 func NewExecutor(options Options) Executor {
@@ -86,6 +87,7 @@ func NewExecutor(options Options) Executor {
 	if cmd.HasDockerOption() {
 		return &DockerExecutor{
 			BaseExecutor: base,
+			volumes: options.Volumes,
 		}
 	}
 
@@ -122,7 +124,7 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, handleEnv func(chan string)) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)) {
 	consumer := func() {
 		for {
 			select {
@@ -148,11 +150,17 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, handleEnv func(chan string)) {
 
 	b.bashChannel <- set
 
+	if before != nil {
+		before(b.bashChannel)
+	}
+
 	for _, script := range b.inCmd.Scripts {
 		b.bashChannel <- script
 	}
 
-	handleEnv(b.bashChannel)
+	if after != nil {
+		after(b.bashChannel)
+	}
 
 	b.bashChannel <- "exit"
 }

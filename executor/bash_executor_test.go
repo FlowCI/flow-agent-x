@@ -14,6 +14,10 @@ func init() {
 func TestShouldExecInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
+
+	ok, _ := hasPyenv()
+	assert.True(ok)
+
 	shouldExecCmd(assert, cmd)
 }
 

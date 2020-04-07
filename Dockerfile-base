@@ -28,10 +28,11 @@ RUN echo 'eval "$(pyenv virtualenv-init -)"' >> ${HOME}/.profile
 ## python 3.6.10 ##
 RUN $HOME/.pyenv/bin/pyenv install 3.6.10
 RUN $HOME/.pyenv/bin/pyenv global 3.6.10
+ENV $FLOWCI_AGENT_PY_ROOT=$HOME/.pyenv/versions/3.6.10/bin
 
 ## install api lib
-RUN $HOME/.pyenv/versions/3.6.10/bin/pip3 install requests
-RUN $HOME/.pyenv/versions/3.6.10/bin/pip3 install python-lib-flow.ci
+RUN $FLOWCI_AGENT_PY_ROOT/pip3 install requests
+RUN $FLOWCI_AGENT_PY_ROOT/pip3 install python-lib-flow.ci
 
 ## ssh config
 RUN mkdir -p $HOME/.ssh
