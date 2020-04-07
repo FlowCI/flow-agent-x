@@ -25,4 +25,4 @@ WORKDIR $FLOWCI_AGENT_WORKSPACE
 COPY ./bin/flow-agent-x-linux /usr/bin
 
 ## start docker ##
-CMD service docker start && flow-agent-x-linux
+CMD flow-agent-x-linux
