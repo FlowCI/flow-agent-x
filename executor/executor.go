@@ -57,7 +57,7 @@ type Options struct {
 	PluginDir string
 	Cmd       *domain.CmdIn
 	Vars      domain.Variables
-	Volumes   []*DockerVolume
+	Volumes   []*domain.DockerVolume
 }
 
 func NewExecutor(options Options) Executor {

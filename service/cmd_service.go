@@ -114,9 +114,15 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func (s *CmdService) execShell(in *domain.CmdIn) error {
-	config := config.GetInstance()
+func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+			s.failureBeforeExecute(in, out)
+		}
+	}()
 
+	config := config.GetInstance()
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -124,17 +130,13 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		return ErrorCmdIsRunning
 	}
 
-	if err := verifyAndInitShellCmd(in); err != nil {
-		s.failureBeforeExecute(in, err)
-		return err
-	}
+	err := verifyAndInitShellCmd(in)
+	util.PanicIfErr(err)
 
 	if in.HasPlugin() {
 		plugins := util.NewPlugins(config.PluginDir, config.Server)
-		if err := plugins.Load(in.Plugin); err != nil {
-			s.failureBeforeExecute(in, err)
-			return err
-		}
+		err := plugins.Load(in.Plugin)
+		util.PanicIfErr(err)
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
@@ -143,12 +145,11 @@ func (s *CmdService) execShell(in *domain.CmdIn) error {
 		PluginDir: config.PluginDir,
 		Cmd:       in,
 		Vars:      s.initEnv(),
+		Volumes:   domain.NewVolumesFromString(config.Volumes),
 	})
 
-	if err := s.executor.Init(); err != nil {
-		s.failureBeforeExecute(in, err)
-		return err
-	}
+	err = s.executor.Init()
+	util.PanicIfErr(err)
 
 	go logConsumer(s.executor, config.LoggingDir)
 

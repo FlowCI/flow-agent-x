@@ -14,6 +14,7 @@ const (
 	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
 	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
+	VarAgentVolumes    = "FLOWCI_AGENT_VOLUMES"
 )
 
 // Variables applied for environment variable as key, value

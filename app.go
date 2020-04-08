@@ -62,6 +62,13 @@ func main() {
 		},
 
 		cli.StringFlag{
+			Name:        "volumes, v",
+			Usage:       "List of volume that will mount to docker from step \n" +
+							"format: name=xxx,dest=xxx,script=xxx;name=xxx,dest=xxx,script=xxx;...",
+			EnvVar:      domain.VarAgentVolumes,
+		},
+
+		cli.StringFlag{
 			Name:  "script",
 			Value: "",
 			Usage: "Execute shell script locally, ex: --script \"echo hello world\"",
@@ -90,6 +97,7 @@ func start(c *cli.Context) error {
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
+	config.Volumes = c.String("volumes")
 
 	// exec given cmd
 	script := c.String("script")

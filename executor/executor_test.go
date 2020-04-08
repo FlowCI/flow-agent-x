@@ -35,7 +35,7 @@ func newExecutor(cmd *domain.CmdIn) Executor {
 		Workspace: app.Workspace,
 		PluginDir: app.PluginDir,
 		Cmd:       cmd,
-		Volumes: []*DockerVolume{
+		Volumes: []*domain.DockerVolume{
 			{
 				Name:   "pyenv",
 				Script: "init.sh",

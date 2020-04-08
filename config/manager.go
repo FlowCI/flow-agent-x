@@ -44,6 +44,7 @@ type (
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
+		Volumes    string
 
 		AppCtx context.Context
 		Cancel context.CancelFunc

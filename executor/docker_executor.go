@@ -29,7 +29,7 @@ const (
 type (
 	DockerExecutor struct {
 		BaseExecutor
-		volumes         []*DockerVolume
+		volumes         []*domain.DockerVolume
 		flowVolume      types.Volume
 		cli             *client.Client
 		containerConfig *container.Config
@@ -159,7 +159,7 @@ func (d *DockerExecutor) initConfig() {
 			util.LogWarn("Volume %s not found", v.Name)
 			continue
 		}
-		d.hostConfig.Binds = append(d.hostConfig.Binds, v.toBindStr())
+		d.hostConfig.Binds = append(d.hostConfig.Binds, v.ToBindStr())
 	}
 }
 
@@ -289,7 +289,7 @@ func (d *DockerExecutor) runCmdInContainer() string {
 				continue
 			}
 
-			in <- "source " + v.scriptPath()
+			in <- "source " + v.ScriptPath()
 		}
 	}
 
