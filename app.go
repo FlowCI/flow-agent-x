@@ -62,7 +62,7 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:        "volumes, v",
+			Name:        "volumes, m",
 			Usage:       "List of volume that will mount to docker from step \n" +
 							"format: name=xxx,dest=xxx,script=xxx;name=xxx,dest=xxx,script=xxx;...",
 			EnvVar:      domain.VarAgentVolumes,
