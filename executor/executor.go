@@ -177,6 +177,10 @@ func (b *BaseExecutor) closeChannels() {
 func (b *BaseExecutor) writeLog(reader io.Reader) {
 	go func() {
 		defer func() {
+			if err := recover(); err != nil {
+				util.LogWarn(err.(error).Error())
+			}
+
 			b.stdOutWg.Done()
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
 		}()
