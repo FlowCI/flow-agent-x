@@ -87,7 +87,7 @@ func NewExecutor(options Options) Executor {
 	if cmd.HasDockerOption() {
 		return &DockerExecutor{
 			BaseExecutor: base,
-			volumes: options.Volumes,
+			volumes:      options.Volumes,
 		}
 	}
 
@@ -174,14 +174,17 @@ func (b *BaseExecutor) closeChannels() {
 	close(b.logChannel)
 }
 
-func (b *BaseExecutor) writeLog(reader io.Reader) {
+func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
 				util.LogWarn(err.(error).Error())
 			}
 
-			b.stdOutWg.Done()
+			if doneOnWaitGroup {
+				b.stdOutWg.Done()
+			}
+
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
 		}()
 
@@ -206,6 +209,13 @@ func (b *BaseExecutor) writeLog(reader io.Reader) {
 			}
 		}
 	}()
+}
+
+func (b *BaseExecutor) writeSingleLog(msg string) {
+	b.logChannel <- &domain.LogItem{
+		CmdId:   b.CmdId(),
+		Content: []byte(msg),
+	}
 }
 
 func (b *BaseExecutor) toStartStatus(pid int) {

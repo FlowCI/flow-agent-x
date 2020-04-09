@@ -73,8 +73,8 @@ func (b *BashExecutor) Start() (out error) {
 		}
 	}
 
-	b.writeLog(stdout)
-	b.writeLog(stderr)
+	b.writeLog(stdout, true)
+	b.writeLog(stderr, true)
 	b.writeCmd(stdin, nil, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 

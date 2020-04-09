@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
@@ -24,6 +25,7 @@ const (
 	dockerWorkspace = "/ws"
 	dockerPluginDir = dockerWorkspace + "/.plugins"
 	dockerEnvFile   = "/tmp/.env"
+	dockerPullRetry = 3
 )
 
 type (
@@ -70,7 +72,7 @@ func (d *DockerExecutor) Start() (out error) {
 	}()
 
 	// one for pull image output, and one for cmd output
-	d.stdOutWg.Add(2)
+	d.stdOutWg.Add(1)
 
 	d.pullImage()
 	d.startContainer()
@@ -190,9 +192,17 @@ func (d *DockerExecutor) pullImage() {
 		fullRef = "docker.io/" + image
 	}
 
-	reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+	var err error
+	for i := 0; i < dockerPullRetry; i++ {
+		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+		if err != nil {
+			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s, retrying", image))
+			continue
+		}
+		d.writeLog(reader, false)
+	}
+
 	util.PanicIfErr(err)
-	d.writeLog(reader)
 }
 
 func (d *DockerExecutor) startContainer() {
@@ -297,7 +307,7 @@ func (d *DockerExecutor) runCmdInContainer() string {
 		in <- "env > " + dockerEnvFile
 	}
 
-	d.writeLog(attach.Reader)
+	d.writeLog(attach.Reader, true)
 	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
 
 	return exec.ID
