@@ -199,7 +199,9 @@ func (d *DockerExecutor) pullImage() {
 			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s, retrying", image))
 			continue
 		}
+
 		d.writeLog(reader, false)
+		break
 	}
 
 	util.PanicIfErr(err)
