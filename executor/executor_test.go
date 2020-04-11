@@ -107,7 +107,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	// then:
 	result := executor.GetResult()
 	assert.True(result.LogSize > 0)
-	assert.Equal(0, result.Code)
+	assert.Equal(127, result.Code)
 	assert.Equal(domain.CmdStatusSuccess, result.Status)
 	assert.NotNil(result.FinishAt)
 }

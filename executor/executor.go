@@ -143,12 +143,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	// start
 	go consumer()
 
-	set := "set -e"
-	if b.inCmd.AllowFailure {
-		set = "set +e"
-	}
-
-	b.bashChannel <- set
+	b.bashChannel <- "set -e"
 
 	if before != nil {
 		before(b.bashChannel)
@@ -247,10 +242,17 @@ func (b *BaseExecutor) toFinishStatus(exitCode int) {
 	b.CmdResult.FinishAt = time.Now()
 	b.CmdResult.Code = exitCode
 
-	if exitCode != 0 {
-		_ = b.toErrorStatus(fmt.Errorf("exit status %d", exitCode))
+	if exitCode == 0 {
+		b.CmdResult.Status = domain.CmdStatusSuccess
 		return
 	}
 
-	b.CmdResult.Status = domain.CmdStatusSuccess
+	if b.inCmd.AllowFailure {
+		b.CmdResult.Status = domain.CmdStatusSuccess
+		return
+	}
+
+	_ = b.toErrorStatus(fmt.Errorf("exit status %d", exitCode))
+	return
+
 }
