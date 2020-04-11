@@ -2,16 +2,15 @@ package util
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"reflect"
 	"runtime"
 	"strings"
 )
 
 const (
-	CRLF          = "\r\n"
-	UnixLineBreak = "\n"
+	CRLF             = "\r\n"
+	UnixLineBreak    = '\n'
+	UnixLineBreakStr = "\n"
 
 	EmptyStr = ""
 
@@ -20,7 +19,7 @@ const (
 	OSMac   = "darwin"
 )
 
-func OS () string {
+func OS() string {
 	if IsMac() {
 		return "MAC"
 	}
@@ -48,47 +47,6 @@ func IsWindows() bool {
 	return runtime.GOOS == OSWin
 }
 
-func HasError(err error) bool {
-	return err != nil
-}
-
-// FailOnError exit program with err
-func FailOnError(err error, msg string) {
-	if err != nil {
-		log.Fatalf("%s: %s", msg, err)
-	}
-}
-
-// IsEmptyString to check input s is empty
-func IsEmptyString(s string) bool {
-	return s == ""
-}
-
-// IsPointerType to check the input v is pointer type
-func IsPointerType(v interface{}) bool {
-	return reflect.ValueOf(v).Kind() == reflect.Ptr
-}
-
-// GetType get type of pointer
-func GetType(v interface{}) reflect.Type {
-	if IsPointerType(v) {
-		val := reflect.ValueOf(v)
-		return val.Elem().Type()
-	}
-
-	return reflect.TypeOf(v)
-}
-
-func GetValue(v interface{}) reflect.Value {
-	val := reflect.ValueOf(v)
-
-	if val.Kind() == reflect.Ptr {
-		return val.Elem()
-	}
-
-	return val
-}
-
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
 	return parseVariablesFrom(src, os.Getenv)
@@ -101,7 +59,7 @@ func ParseStringWithSource(src string, source map[string]string) string {
 }
 
 // replace ${VAR} with actual variable value
-func parseVariablesFrom(src string, getVariable func(string)string) string {
+func parseVariablesFrom(src string, getVariable func(string) string) string {
 	if IsEmptyString(src) {
 		return src
 	}
@@ -150,10 +108,4 @@ func GetEnv(env, def string) string {
 
 func ByteToMB(bytes uint64) uint64 {
 	return (bytes / 1024) / 1024
-}
-
-func PanicIfErr(err error) {
-	if err != nil {
-		panic(err)
-	}
 }

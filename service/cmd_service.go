@@ -2,7 +2,7 @@ package service
 
 import (
 	"encoding/json"
-	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -26,7 +26,7 @@ type (
 
 	// CmdService receive and execute cmd
 	CmdService struct {
-		executor *executor.BashExecutor
+		executor executor.Executor
 		mux      sync.Mutex
 		session  CmdInteractSession
 	}
@@ -49,19 +49,16 @@ func (s *CmdService) IsRunning() bool {
 
 // Execute execute cmd according to the type
 func (s *CmdService) Execute(in *domain.CmdIn) error {
-	if in.Type == domain.CmdTypeShell {
-		return execShellCmd(s, in)
+	switch in.Type {
+	case domain.CmdTypeShell:
+		return s.execShell(in)
+	case domain.CmdTypeKill:
+		return s.execKill(in)
+	case domain.CmdTypeClose:
+		return s.execClose(in)
+	default:
+		return ErrorCmdUnsupportedType
 	}
-
-	if in.Type == domain.CmdTypeKill {
-		return execKillCmd(s, in)
-	}
-
-	if in.Type == domain.CmdTypeClose {
-		return execCloseCmd(s, in)
-	}
-
-	return ErrorCmdUnsupportedType
 }
 
 // new thread to consume rabbitmq message
@@ -117,9 +114,15 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func execShellCmd(s *CmdService, in *domain.CmdIn) error {
-	config := config.GetInstance()
+func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+			s.failureBeforeExecute(in, out)
+		}
+	}()
 
+	config := config.GetInstance()
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -127,34 +130,26 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 		return ErrorCmdIsRunning
 	}
 
-	if err := verifyAndInitShellCmd(in); util.HasError(err) {
-		return err
-	}
+	err := verifyAndInitShellCmd(in)
+	util.PanicIfErr(err)
 
-	// git clone required plugin
-	if in.HasPlugin() && !config.IsOffline {
+	if in.HasPlugin() {
 		plugins := util.NewPlugins(config.PluginDir, config.Server)
 		err := plugins.Load(in.Plugin)
-
-		if util.LogIfError(err) {
-			result := &domain.ExecutedCmd{
-				Cmd: domain.Cmd{
-					ID: in.ID,
-				},
-				Status:  domain.CmdStatusException,
-				Error:   err.Error(),
-				StartAt: time.Now(),
-			}
-
-			saveAndPushBack(result)
-			return nil
-		}
+		util.PanicIfErr(err)
 	}
 
-	// init and start executor
-	vars := config.Vars.Copy()
-	vars[domain.VarAgentJobDir] = in.WorkDir
-	s.executor = executor.NewBashExecutor(config.AppCtx, in, vars)
+	s.executor = executor.NewExecutor(executor.Options{
+		Parent:    config.AppCtx,
+		Workspace: config.Workspace,
+		PluginDir: config.PluginDir,
+		Cmd:       in,
+		Vars:      s.initEnv(),
+		Volumes:   domain.NewVolumesFromString(config.Volumes),
+	})
+
+	err = s.executor.Init()
+	util.PanicIfErr(err)
 
 	go logConsumer(s.executor, config.LoggingDir)
 
@@ -162,7 +157,7 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 		defer s.release()
 		_ = s.executor.Start()
 
-		result := s.executor.CmdResult
+		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
 		saveAndPushBack(result)
 	}()
@@ -170,15 +165,29 @@ func execShellCmd(s *CmdService, in *domain.CmdIn) error {
 	return nil
 }
 
-func execKillCmd(s *CmdService, in *domain.CmdIn) error {
+func (s *CmdService) initEnv() domain.Variables {
+	config := config.GetInstance()
+
+	vars := domain.NewVariables()
+	vars[domain.VarAgentPluginDir] = config.PluginDir
+	vars[domain.VarServerUrl] = config.Server
+	vars[domain.VarAgentToken] = config.Token
+	vars[domain.VarAgentPort] = strconv.Itoa(config.Port)
+	vars[domain.VarAgentWorkspace] = config.Workspace
+	vars[domain.VarAgentPluginDir] = config.PluginDir
+	vars[domain.VarAgentLogDir] = config.LoggingDir
+
+	return vars
+}
+
+func (s *CmdService) execKill(in *domain.CmdIn) error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
-
 	return nil
 }
 
-func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
+func (s *CmdService) execClose(in *domain.CmdIn) error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
@@ -187,6 +196,19 @@ func execCloseCmd(s *CmdService, in *domain.CmdIn) error {
 	config.Cancel()
 
 	return nil
+}
+
+func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
+	result := &domain.ExecutedCmd{
+		Cmd: domain.Cmd{
+			ID: in.ID,
+		},
+		Status:  domain.CmdStatusException,
+		Error:   err.Error(),
+		StartAt: time.Now(),
+	}
+
+	saveAndPushBack(result)
 }
 
 func verifyAndInitShellCmd(in *domain.CmdIn) error {
@@ -204,8 +226,6 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 		in.Inputs = make(domain.Variables, 10)
 	}
 
-	config := config.GetInstance()
-	in.WorkDir = filepath.Join(config.Workspace, util.ParseString(in.WorkDir))
 	return nil
 }
 
