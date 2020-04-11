@@ -247,6 +247,7 @@ func (b *BaseExecutor) toFinishStatus(exitCode int) {
 		return
 	}
 
+	// no exported environment since it's failure
 	if b.inCmd.AllowFailure {
 		b.CmdResult.Status = domain.CmdStatusSuccess
 		return
