@@ -1,6 +1,8 @@
 package domain
 
-import "time"
+import (
+	"time"
+)
 
 type CmdType string
 
@@ -57,32 +59,44 @@ const (
 )
 
 type (
+	DockerOption struct {
+		Image             string   `json:"image"`
+		Entrypoint        []string `json:"entrypoint"` // host:container
+		Ports             []string `json:"ports"`
+		NetworkMode       string   `json:"networkMode"`
+		IsStopContainer   bool     `json:"isStopContainer"`
+		IsDeleteContainer bool     `json:"isDeleteContainer"`
+	}
+
 	Cmd struct {
-		ID           string `json:"id"`
-		AllowFailure bool   `json:"allowFailure"`
-		Plugin       string `json:"plugin"`
+		ID           string        `json:"id"`
+		AllowFailure bool          `json:"allowFailure"`
+		Plugin       string        `json:"plugin"`
+		Docker       *DockerOption `json:"docker"`
 	}
 
 	CmdIn struct {
 		Cmd
-		Type       CmdType   `json:"type"`
-		Scripts    []string  `json:"scripts"`
-		WorkDir    string    `json:"workDir"`
-		Timeout    int     `json:"timeout"`
-		Inputs     Variables `json:"inputs"`
-		EnvFilters []string  `json:"envFilters"`
+		Type        CmdType   `json:"type"`
+		Scripts     []string  `json:"scripts"`
+		FlowId      string    `json:"flowId"`
+		ContainerId string    `json:"containerId"` // container id prefer to reuse
+		Timeout     int       `json:"timeout"`
+		Inputs      Variables `json:"inputs"`
+		EnvFilters  []string  `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {
 		Cmd
-		ProcessId int       `json:"processId"`
-		Status    CmdStatus `json:"status"`
-		Code      int       `json:"code"`
-		Output    Variables `json:"output"`
-		StartAt   time.Time `json:"startAt"`
-		FinishAt  time.Time `json:"finishAt"`
-		Error     string    `json:"error"`
-		LogSize   int64     `json:"logSize"`
+		ProcessId   int       `json:"processId"`
+		ContainerId string    `json:"containerId"`
+		Status      CmdStatus `json:"status"`
+		Code        int       `json:"code"`
+		Output      Variables `json:"output"`
+		StartAt     time.Time `json:"startAt"`
+		FinishAt    time.Time `json:"finishAt"`
+		Error       string    `json:"error"`
+		LogSize     int64     `json:"logSize"`
 	}
 )
 
@@ -92,6 +106,10 @@ type (
 
 func (cmd *Cmd) HasPlugin() bool {
 	return cmd.Plugin != ""
+}
+
+func (cmd *Cmd) HasDockerOption() bool {
+	return cmd.Docker != nil
 }
 
 // ===================================
@@ -131,9 +149,25 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 			ID:           in.ID,
 			AllowFailure: in.AllowFailure,
 			Plugin:       in.Plugin,
+			Docker:       in.Docker,
 		},
 		Code:   CmdExitCodeUnknown,
 		Status: CmdStatusPending,
 		Output: NewVariables(),
+	}
+}
+
+func (e *ExecutedCmd) IsFinishStatus() bool {
+	switch e.Status {
+	case CmdStatusKilled:
+		return true
+	case CmdStatusTimeout:
+		return true
+	case CmdStatusException:
+		return true
+	case CmdStatusSuccess:
+		return true
+	default:
+		return false
 	}
 }

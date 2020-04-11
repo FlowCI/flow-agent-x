@@ -14,7 +14,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -42,13 +41,10 @@ type (
 		Token  string
 		Port   int
 
-		// app vars settings
-		Vars domain.Variables
-
-		IsOffline  bool
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
+		Volumes    string
 
 		AppCtx context.Context
 		Cancel context.CancelFunc
@@ -59,7 +55,6 @@ type (
 func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = new(Manager)
-		singleton.IsOffline = false
 	})
 	return singleton
 }
@@ -69,15 +64,6 @@ func (m *Manager) Init() {
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
 	_ = os.MkdirAll(m.PluginDir, os.ModePerm)
-
-	m.Vars = domain.Variables{
-		domain.VarServerUrl:      m.Server,
-		domain.VarAgentToken:     m.Token,
-		domain.VarAgentPort:      strconv.Itoa(m.Port),
-		domain.VarAgentWorkspace: m.Workspace,
-		domain.VarAgentPluginDir: m.PluginDir,
-		domain.VarAgentLogDir:    m.LoggingDir,
-	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.AppCtx = ctx
@@ -99,7 +85,7 @@ func (m *Manager) Init() {
 	}()
 
 	if util.LogIfError(err) {
-		toOfflineMode(m)
+		panic(fmt.Errorf("failed to connect to server %s", m.Server))
 		return
 	}
 
@@ -146,11 +132,6 @@ func (m *Manager) Close() {
 // --------------------------------
 //		Util Functions
 // --------------------------------
-
-func toOfflineMode(m *Manager) {
-	util.LogInfo("Mode: 'offline'")
-	m.IsOffline = true
-}
 
 func loadSettings(m *Manager) (out error) {
 	defer func() {

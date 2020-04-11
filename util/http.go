@@ -2,7 +2,7 @@ package util
 
 const (
 	HttpMimeJson  = "application/json"
-	HttpTextPlain = "text/plain"
+	HttpProtobuf = "application/x-protobuf"
 
 	HttpHeaderContentType = "Content-Type"
 	HttpHeaderAgentToken = "AGENT-TOKEN"

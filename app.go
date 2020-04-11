@@ -19,7 +19,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const version = "0.19.42"
+const version = "0.20.16"
 
 func init() {
 	util.LogInit()
@@ -62,17 +62,10 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:   "plugindir, pd",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "plugins"),
-			Usage:  "Directory for plugin",
-			EnvVar: domain.VarAgentPluginDir,
-		},
-
-		cli.StringFlag{
-			Name:   "logdir, ld",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent", "logs"),
-			Usage:  "Directory for logging",
-			EnvVar: domain.VarAgentLogDir,
+			Name:        "volumes, m",
+			Usage:       "List of volume that will mount to docker from step \n" +
+							"format: name=xxx,dest=xxx,script=xxx;name=xxx,dest=xxx,script=xxx;...",
+			EnvVar:      domain.VarAgentVolumes,
 		},
 
 		cli.StringFlag{
@@ -88,7 +81,12 @@ func main() {
 
 func start(c *cli.Context) error {
 	util.LogInfo("Staring flow.ci agent...")
-	defer util.LogInfo("Agent stopped")
+	defer func() {
+		if err := recover(); err != nil {
+			util.LogIfError(err.(error))
+		}
+		util.LogInfo("Agent stopped")
+	}()
 
 	config := config.GetInstance()
 	defer config.Close()
@@ -97,8 +95,9 @@ func start(c *cli.Context) error {
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
 	config.Workspace = util.ParseString(c.String("workspace"))
-	config.PluginDir = util.ParseString(c.String("plugindir"))
-	config.LoggingDir = util.ParseString(c.String("logdir"))
+	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
+	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
+	config.Volumes = c.String("volumes")
 
 	// exec given cmd
 	script := c.String("script")
@@ -130,7 +129,10 @@ func execCmd(script string) {
 		}
 	}
 
-	bashExecutor := executor.NewBashExecutor(context.Background(), cmd, nil)
+	bashExecutor := executor.NewExecutor(executor.Options{
+		Parent: context.Background(),
+		Cmd:    cmd,
+	})
 	go printer(bashExecutor.LogChannel())
 
 	_ = bashExecutor.Start()
