@@ -101,6 +101,10 @@ func (b *BaseExecutor) CmdId() string {
 	return b.inCmd.ID
 }
 
+func (b *BaseExecutor) JobId() string {
+	return b.inCmd.JobId
+}
+
 // BashChannel for input bash script
 func (b *BaseExecutor) BashChannel() chan<- string {
 	return b.bashChannel
@@ -197,6 +201,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 
 				b.logChannel <- &domain.LogItem{
 					CmdId:   b.CmdId(),
+					JobId:   b.JobId(),
 					Content: removeDockerHeader(buffer[0:n]),
 				}
 
@@ -209,6 +214,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 func (b *BaseExecutor) writeSingleLog(msg string) {
 	b.logChannel <- &domain.LogItem{
 		CmdId:   b.CmdId(),
+		JobId:   b.JobId(),
 		Content: []byte(msg),
 	}
 }
