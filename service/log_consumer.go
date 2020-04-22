@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/golang/protobuf/proto"
@@ -60,9 +61,11 @@ func logConsumer(executor executor.Executor, logDir string) {
 				continue
 			}
 
+			b64 := base64.StdEncoding.EncodeToString(raw)
+
 			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
 				ContentType: util.HttpProtobuf,
-				Body:        raw,
+				Body:        []byte(b64),
 			})
 		}
 	}
