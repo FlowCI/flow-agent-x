@@ -201,7 +201,6 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 
 				b.logChannel <- &domain.LogItem{
 					CmdId:   b.CmdId(),
-					JobId:   b.JobId(),
 					Content: removeDockerHeader(buffer[0:n]),
 				}
 
@@ -214,7 +213,6 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 func (b *BaseExecutor) writeSingleLog(msg string) {
 	b.logChannel <- &domain.LogItem{
 		CmdId:   b.CmdId(),
-		JobId:   b.JobId(),
 		Content: []byte(msg),
 	}
 }

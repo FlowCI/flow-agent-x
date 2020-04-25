@@ -3,10 +3,8 @@ package service
 import (
 	"bufio"
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github/flowci/flow-agent-x/executor"
 	"io"
 	"io/ioutil"
@@ -19,6 +17,10 @@ import (
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+)
+
+var (
+	logBuffer = bytes.NewBuffer(make([]byte, 1024 * 1024 * 1)) // 1mb buffer
 )
 
 // Push stdout, stderr log back to server
@@ -51,24 +53,24 @@ func logConsumer(executor executor.Executor, logDir string) {
 		writer.Write(log.Content)
 		util.LogDebug("[LOG]: %s", log.Content)
 
-		// send to queue
-		if config.HasQueue() {
-			exchange := config.Settings.Queue.LogsExchange
-			channel := config.Queue.LogChannel
-
-			raw, err := proto.Marshal(log)
-			if err != nil {
-				continue
-			}
-
-			b64 := base64.StdEncoding.EncodeToString(raw)
-
-			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
-				ContentType: util.HttpProtobuf,
-				Body:        []byte(b64),
-			})
-		}
+		pushLog(config, log)
 	}
+}
+
+func pushLog(config *config.Manager, log *domain.LogItem) {
+	if !config.HasQueue() {
+		return
+	}
+
+	defer logBuffer.Reset()
+
+	exchange := config.Settings.Queue.LogsExchange
+	channel := config.Queue.LogChannel
+
+	_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+		ContentType: util.HttpProtobuf,
+		Body:        log.Write(logBuffer),
+	})
 }
 
 func uploadLog(logFile string) error {
