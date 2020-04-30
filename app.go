@@ -97,7 +97,7 @@ func start(c *cli.Context) error {
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
-	config.Volumes = c.String("volumes")
+	config.VolumesStr = c.String("volumes")
 
 	// exec given cmd
 	script := c.String("script")

@@ -26,7 +26,7 @@ func TestShouldFetchSystemResource(t *testing.T)  {
 	m := GetInstance()
 	assert.NotNil(m)
 
-	resource := m.FetchResource()
+	resource := m.FetchProfile()
 	assert.NotNil(resource)
 
 	assert.True(resource.Cpu > 0)

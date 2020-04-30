@@ -145,7 +145,7 @@ func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
 		PluginDir: config.PluginDir,
 		Cmd:       in,
 		Vars:      s.initEnv(),
-		Volumes:   domain.NewVolumesFromString(config.Volumes),
+		Volumes:   config.Volumes,
 	})
 
 	err = s.executor.Init()
