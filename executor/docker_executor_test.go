@@ -68,8 +68,8 @@ func TestShouldReuseContainer(t *testing.T) {
 
 func createDockerTestCmd() *domain.CmdIn {
 	return &domain.CmdIn{
-		FlowId: "flowid", // same as dir flowid in _testdata
 		Cmd: domain.Cmd{
+			FlowId: "flowid", // same as dir flowid in _testdata
 			ID: "1-1-1",
 			Docker: &domain.DockerOption{
 				Image:             "ubuntu:18.04",

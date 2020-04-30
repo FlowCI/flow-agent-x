@@ -73,14 +73,19 @@ func pushLog(config *config.Manager, log *domain.LogItem) {
 	})
 }
 
-func uploadLog(logFile string) error {
+func uploadLog(logFile string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
 	config := config.GetInstance()
 
 	// read file
 	file, err := os.Open(logFile)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
+
 	defer file.Close()
 
 	// construct multi part
@@ -88,14 +93,10 @@ func uploadLog(logFile string) error {
 	writer := multipart.NewWriter(body)
 
 	part, err := writer.CreateFormFile("file", filepath.Base(logFile))
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	_, err = io.Copy(part, file)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// flush file to writer
 	writer.Close()
@@ -107,17 +108,13 @@ func uploadLog(logFile string) error {
 	request.Header.Set(util.HttpHeaderContentType, writer.FormDataContentType())
 
 	response, err := http.DefaultClient.Do(request)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// get response data
 	raw, _ := ioutil.ReadAll(response.Body)
 	var message domain.Response
 	err = json.Unmarshal(raw, &message)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	if message.IsOk() {
 		util.LogDebug("[Uploaded]: %s", logFile)
