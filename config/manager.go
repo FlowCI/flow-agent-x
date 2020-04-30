@@ -126,12 +126,12 @@ func (m *Manager) initVolumes() {
 		return
 	}
 
-	volumes := domain.NewVolumesFromString(m.VolumesStr)
+	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
 
 	cli, err := client.NewEnvClient()
 	util.PanicIfErr(err)
 
-	for _, vol := range volumes {
+	for _, vol := range m.Volumes {
 		filter := filters.NewArgs()
 		filter.Add("name", vol.Name)
 
