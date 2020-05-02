@@ -26,7 +26,7 @@ func (b *BashExecutor) Init() (out error) {
 		return
 	}
 
-	b.workDir = filepath.Join(b.workspace, util.ParseString(b.JobId()))
+	b.workDir = filepath.Join(b.workspace, util.ParseString(b.FlowId()))
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	out = os.MkdirAll(b.workDir, os.ModePerm)
 	return

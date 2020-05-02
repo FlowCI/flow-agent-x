@@ -118,8 +118,8 @@ func (d *DockerExecutor) initAgentVolume() {
 func (d *DockerExecutor) initConfig() {
 	docker := d.inCmd.Docker
 
-	// set job work dir in the container = /ws/{job id}
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.JobId()))
+	// set job work dir in the container = /ws/{flow id}
+	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.FlowId()))
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir

@@ -108,6 +108,10 @@ func (b *BaseExecutor) JobId() string {
 	return b.inCmd.JobId
 }
 
+func (b *BaseExecutor) FlowId() string {
+	return b.inCmd.FlowId
+}
+
 // BashChannel for input bash script
 func (b *BaseExecutor) BashChannel() chan<- string {
 	return b.bashChannel
