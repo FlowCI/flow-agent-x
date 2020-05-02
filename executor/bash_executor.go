@@ -20,15 +20,13 @@ type (
 )
 
 func (b *BashExecutor) Init() (out error) {
-	cmd := b.inCmd
-
 	if util.IsEmptyString(b.workspace) {
 		b.workDir, out = ioutil.TempDir("", "agent_")
 		b.vars[domain.VarAgentJobDir] = b.workDir
 		return
 	}
 
-	b.workDir = filepath.Join(b.workspace, util.ParseString(cmd.FlowId))
+	b.workDir = filepath.Join(b.workspace, util.ParseString(b.JobId()))
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	out = os.MkdirAll(b.workDir, os.ModePerm)
 	return

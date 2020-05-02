@@ -39,6 +39,7 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
+	agentId     string // should be agent token
 	workspace   string
 	pluginDir   string
 	context     context.Context
@@ -52,6 +53,7 @@ type BaseExecutor struct {
 }
 
 type Options struct {
+	AgentId   string
 	Parent    context.Context
 	Workspace string
 	PluginDir string
@@ -71,6 +73,7 @@ func NewExecutor(options Options) Executor {
 	vars.Resolve()
 
 	base := BaseExecutor{
+		agentId:     options.AgentId,
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
