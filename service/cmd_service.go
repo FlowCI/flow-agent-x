@@ -140,6 +140,7 @@ func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
+		AgentId:   config.Token,
 		Parent:    config.AppCtx,
 		Workspace: config.Workspace,
 		PluginDir: config.PluginDir,

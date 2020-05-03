@@ -32,7 +32,7 @@ type (
 	DockerExecutor struct {
 		BaseExecutor
 		volumes         []*domain.DockerVolume
-		flowVolume      types.Volume
+		agentVolume     types.Volume
 		cli             *client.Client
 		containerConfig *container.Config
 		hostConfig      *container.HostConfig
@@ -52,7 +52,7 @@ func (d *DockerExecutor) Init() (out error) {
 	d.cli, out = client.NewEnvClient()
 	util.PanicIfErr(out)
 
-	d.initJobVolume()
+	d.initAgentVolume()
 	d.initConfig()
 
 	return
@@ -94,34 +94,33 @@ func (d *DockerExecutor) Start() (out error) {
 // private methods
 //--------------------------------------------
 
-// create job volume based on flow id
-func (d *DockerExecutor) initJobVolume() {
-	name := "flow-" + d.inCmd.FlowId
+// agent volume that bind to /ws inside docker
+func (d *DockerExecutor) initAgentVolume() {
+	name := "agent-" + d.agentId
 	ok, v := d.getVolume(name)
 
-	if ok {
-		d.flowVolume = *v
-		util.LogInfo("Job volume '%s' existed", name)
-		return
+	if !ok {
+		body := volume.VolumesCreateBody{
+			Name: name,
+		}
+
+		created, err := d.cli.VolumeCreate(d.context, body)
+		util.PanicIfErr(err)
+
+		d.agentVolume = created
+		util.LogInfo("Agent volume '%s' created", name)
+	} else {
+		d.agentVolume = *v
+		util.LogInfo("Agent volume '%s' existed", name)
 	}
-
-	body := volume.VolumesCreateBody{
-		Name: name,
-	}
-
-	created, err := d.cli.VolumeCreate(d.context, body)
-	util.PanicIfErr(err)
-
-	d.flowVolume = created
-	util.LogInfo("Job volume '%s' created", name)
-	return
 }
 
 func (d *DockerExecutor) initConfig() {
 	docker := d.inCmd.Docker
 
-	// set work dir in the container
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
+	// set job work dir in the container = /ws/{flow id}
+	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.FlowId()))
+	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 
@@ -152,7 +151,7 @@ func (d *DockerExecutor) initConfig() {
 	d.hostConfig = &container.HostConfig{
 		NetworkMode:  container.NetworkMode(docker.NetworkMode),
 		PortBindings: portMap,
-		Binds:        []string{d.flowVolume.Name + ":" + d.workDir},
+		Binds:        []string{d.agentVolume.Name + ":" + dockerWorkspace},
 	}
 
 	for _, v := range d.volumes {
@@ -265,6 +264,7 @@ func (d *DockerExecutor) tryToResume() bool {
 	return false
 }
 
+// copy plugin to docker container from real plugin dir
 func (d *DockerExecutor) copyPlugins() {
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
