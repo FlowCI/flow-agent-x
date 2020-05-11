@@ -73,6 +73,8 @@ type (
 		FlowId       string        `json:"flowId"`
 		JobId        string        `json:"jobId"`
 		NodePath     string        `json:"nodePath"`
+		BuildNumber  int           `json:"buildNumber"`
+		IsAfter      bool          `json:"after"`
 		ContainerId  string        `json:"containerId"` // container id prefer to reuse
 		AllowFailure bool          `json:"allowFailure"`
 		Plugin       string        `json:"plugin"`
@@ -151,6 +153,8 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 			FlowId:       in.FlowId,
 			JobId:        in.JobId,
 			NodePath:     in.NodePath,
+			BuildNumber:  in.BuildNumber,
+			IsAfter:      in.IsAfter,
 			AllowFailure: in.AllowFailure,
 			ContainerId:  in.ContainerId,
 			Plugin:       in.Plugin,
