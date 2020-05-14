@@ -1,7 +1,0 @@
-syntax = "proto3";
-package domain;
-
-message LogItem {
-  string cmdId = 1;
-  bytes  content = 2;
-}

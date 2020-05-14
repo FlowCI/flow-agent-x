@@ -140,12 +140,13 @@ func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
+		AgentId:   config.Token,
 		Parent:    config.AppCtx,
 		Workspace: config.Workspace,
 		PluginDir: config.PluginDir,
 		Cmd:       in,
 		Vars:      s.initEnv(),
-		Volumes:   domain.NewVolumesFromString(config.Volumes),
+		Volumes:   config.Volumes,
 	})
 
 	err = s.executor.Init()

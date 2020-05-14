@@ -70,6 +70,12 @@ type (
 
 	Cmd struct {
 		ID           string        `json:"id"`
+		FlowId       string        `json:"flowId"`
+		JobId        string        `json:"jobId"`
+		NodePath     string        `json:"nodePath"`
+		BuildNumber  int           `json:"buildNumber"`
+		IsAfter      bool          `json:"after"`
+		ContainerId  string        `json:"containerId"` // container id prefer to reuse
 		AllowFailure bool          `json:"allowFailure"`
 		Plugin       string        `json:"plugin"`
 		Docker       *DockerOption `json:"docker"`
@@ -77,26 +83,23 @@ type (
 
 	CmdIn struct {
 		Cmd
-		Type        CmdType   `json:"type"`
-		Scripts     []string  `json:"scripts"`
-		FlowId      string    `json:"flowId"`
-		ContainerId string    `json:"containerId"` // container id prefer to reuse
-		Timeout     int       `json:"timeout"`
-		Inputs      Variables `json:"inputs"`
-		EnvFilters  []string  `json:"envFilters"`
+		Type       CmdType   `json:"type"`
+		Scripts    []string  `json:"scripts"`
+		Timeout    int       `json:"timeout"`
+		Inputs     Variables `json:"inputs"`
+		EnvFilters []string  `json:"envFilters"`
 	}
 
 	ExecutedCmd struct {
 		Cmd
-		ProcessId   int       `json:"processId"`
-		ContainerId string    `json:"containerId"`
-		Status      CmdStatus `json:"status"`
-		Code        int       `json:"code"`
-		Output      Variables `json:"output"`
-		StartAt     time.Time `json:"startAt"`
-		FinishAt    time.Time `json:"finishAt"`
-		Error       string    `json:"error"`
-		LogSize     int64     `json:"logSize"`
+		ProcessId int       `json:"processId"`
+		Status    CmdStatus `json:"status"`
+		Code      int       `json:"code"`
+		Output    Variables `json:"output"`
+		StartAt   time.Time `json:"startAt"`
+		FinishAt  time.Time `json:"finishAt"`
+		Error     string    `json:"error"`
+		LogSize   int64     `json:"logSize"`
 	}
 )
 
@@ -147,7 +150,13 @@ func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
 	return &ExecutedCmd{
 		Cmd: Cmd{
 			ID:           in.ID,
+			FlowId:       in.FlowId,
+			JobId:        in.JobId,
+			NodePath:     in.NodePath,
+			BuildNumber:  in.BuildNumber,
+			IsAfter:      in.IsAfter,
 			AllowFailure: in.AllowFailure,
+			ContainerId:  in.ContainerId,
 			Plugin:       in.Plugin,
 			Docker:       in.Docker,
 		},

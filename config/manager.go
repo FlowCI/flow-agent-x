@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -44,7 +46,9 @@ type (
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
-		Volumes    string
+
+		VolumesStr string
+		Volumes    []*domain.DockerVolume
 
 		AppCtx context.Context
 		Cancel context.CancelFunc
@@ -69,27 +73,11 @@ func (m *Manager) Init() {
 	m.AppCtx = ctx
 	m.Cancel = cancel
 
-	// load config and init rabbitmq, zookeeper
-	err := func() error {
-		var err = loadSettings(m)
-		if util.HasError(err) {
-			return err
-		}
-
-		err = initRabbitMQ(m)
-		if util.HasError(err) {
-			return err
-		}
-
-		return initZookeeper(m)
-	}()
-
-	if util.LogIfError(err) {
-		panic(fmt.Errorf("failed to connect to server %s", m.Server))
-		return
-	}
-
-	sendCurrentResource(m)
+	m.initVolumes()
+	m.loadSettings()
+	m.initRabbitMQ()
+	m.initZookeeper()
+	m.sendAgentProfile()
 }
 
 // HasQueue has rabbit mq connected
@@ -102,7 +90,7 @@ func (m *Manager) HasZookeeper() bool {
 	return m.Zk != nil
 }
 
-func (m *Manager) FetchResource() *domain.Resource {
+func (m *Manager) FetchProfile() *domain.Resource {
 	nCpu, _ := cpu.Counts(true)
 	vmStat, _ := mem.VirtualMemory()
 	diskStat, _ := disk.Usage("/")
@@ -130,21 +118,38 @@ func (m *Manager) Close() {
 }
 
 // --------------------------------
-//		Util Functions
+//		Private Functions
 // --------------------------------
 
-func loadSettings(m *Manager) (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
-	}()
+func (m *Manager) initVolumes() {
+	if util.IsEmptyString(m.VolumesStr) {
+		return
+	}
 
+	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
+
+	cli, err := client.NewEnvClient()
+	util.PanicIfErr(err)
+
+	for _, vol := range m.Volumes {
+		filter := filters.NewArgs()
+		filter.Add("name", vol.Name)
+
+		list, err := cli.VolumeList(m.AppCtx, filter)
+		util.PanicIfErr(err)
+
+		if len(list.Volumes) == 0 {
+			panic(fmt.Errorf("docker volume '%s' not found", vol.Name))
+		}
+	}
+}
+
+func (m *Manager) loadSettings() {
 	uri := m.Server + "/agents/connect"
 	body, _ := json.Marshal(domain.AgentInit{
 		Port:     m.Port,
 		Os:       util.OS(),
-		Resource: m.FetchResource(),
+		Resource: m.FetchProfile(),
 	})
 
 	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
@@ -162,24 +167,17 @@ func loadSettings(m *Manager) (out error) {
 	util.PanicIfErr(errFromJSON)
 
 	if !message.IsOk() {
-		return fmt.Errorf(message.Message)
+		panic(fmt.Errorf(message.Message))
 	}
 
 	m.Settings = message.Data
 	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
-	return nil
 }
 
-func initRabbitMQ(m *Manager) (out error) {
+func (m *Manager) initRabbitMQ() {
 	if m.Settings == nil {
-		return ErrSettingsNotBeenLoaded
+		panic(ErrSettingsNotBeenLoaded)
 	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
-	}()
 
 	// get connection
 	connStr := m.Settings.Queue.GetConnectionString()
@@ -206,12 +204,11 @@ func initRabbitMQ(m *Manager) (out error) {
 
 	qc.JobQueue = &jobQueue
 	m.Queue = qc
-	return nil
 }
 
-func initZookeeper(m *Manager) error {
+func (m *Manager) initZookeeper() {
 	if m.Settings == nil {
-		return ErrSettingsNotBeenLoaded
+		panic(ErrSettingsNotBeenLoaded)
 	}
 
 	zkConfig := m.Settings.Zookeeper
@@ -220,7 +217,7 @@ func initZookeeper(m *Manager) error {
 	client := new(util.ZkClient)
 	err := client.Connect(zkConfig.Host)
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	m.Zk = client
@@ -229,19 +226,14 @@ func initZookeeper(m *Manager) error {
 	agentPath := getZkPath(m.Settings)
 	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
-	if nodeErr == nil {
-		util.LogInfo("The zk node '%s' has been registered", agentPath)
-		return nil
+	if nodeErr != nil {
+		panic(nodeErr)
 	}
 
-	return nodeErr
+	util.LogInfo("The zk node '%s' has been registered", agentPath)
 }
 
-func getZkPath(s *domain.Settings) string {
-	return s.Zookeeper.Root + "/" + s.Agent.ID
-}
-
-func sendCurrentResource(m *Manager) {
+func (m *Manager) sendAgentProfile() {
 	uri := m.Server + "/agents/resource"
 	ctx, cancel := context.WithCancel(m.AppCtx)
 
@@ -256,7 +248,7 @@ func sendCurrentResource(m *Manager) {
 				time.Sleep(1 * time.Minute)
 			}
 
-			body, err := json.Marshal(m.FetchResource())
+			body, err := json.Marshal(m.FetchProfile())
 			if err != nil {
 				continue
 			}
@@ -268,4 +260,8 @@ func sendCurrentResource(m *Manager) {
 			_, _ = http.DefaultClient.Do(request)
 		}
 	}()
+}
+
+func getZkPath(s *domain.Settings) string {
+	return s.Zookeeper.Root + "/" + s.Agent.ID
 }

@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github/flowci/flow-agent-x/executor"
 	"io"
 	"io/ioutil"
@@ -18,6 +17,10 @@ import (
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+)
+
+var (
+	logBuffer = bytes.NewBuffer(make([]byte, 1024 * 1024 * 1)) // 1mb buffer
 )
 
 // Push stdout, stderr log back to server
@@ -50,32 +53,39 @@ func logConsumer(executor executor.Executor, logDir string) {
 		writer.Write(log.Content)
 		util.LogDebug("[LOG]: %s", log.Content)
 
-		// send to queue
-		if config.HasQueue() {
-			exchange := config.Settings.Queue.LogsExchange
-			channel := config.Queue.LogChannel
-
-			raw, err := proto.Marshal(log)
-			if err != nil {
-				continue
-			}
-
-			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
-				ContentType: util.HttpProtobuf,
-				Body:        raw,
-			})
-		}
+		pushLog(config, log)
 	}
 }
 
-func uploadLog(logFile string) error {
+func pushLog(config *config.Manager, log *domain.LogItem) {
+	if !config.HasQueue() {
+		return
+	}
+
+	defer logBuffer.Reset()
+
+	exchange := config.Settings.Queue.LogsExchange
+	channel := config.Queue.LogChannel
+
+	_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+		ContentType: util.HttpProtobuf,
+		Body:        log.Write(logBuffer),
+	})
+}
+
+func uploadLog(logFile string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
 	config := config.GetInstance()
 
 	// read file
 	file, err := os.Open(logFile)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
+
 	defer file.Close()
 
 	// construct multi part
@@ -83,14 +93,10 @@ func uploadLog(logFile string) error {
 	writer := multipart.NewWriter(body)
 
 	part, err := writer.CreateFormFile("file", filepath.Base(logFile))
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	_, err = io.Copy(part, file)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// flush file to writer
 	writer.Close()
@@ -102,17 +108,13 @@ func uploadLog(logFile string) error {
 	request.Header.Set(util.HttpHeaderContentType, writer.FormDataContentType())
 
 	response, err := http.DefaultClient.Do(request)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	// get response data
 	raw, _ := ioutil.ReadAll(response.Body)
 	var message domain.Response
 	err = json.Unmarshal(raw, &message)
-	if util.HasError(err) {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	if message.IsOk() {
 		util.LogDebug("[Uploaded]: %s", logFile)
