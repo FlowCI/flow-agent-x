@@ -139,6 +139,7 @@ func (d *DockerExecutor) initConfig() {
 		Env:          d.vars.ToStringArray(),
 		Entrypoint:   entrypoint,
 		ExposedPorts: portSet,
+		User:         docker.User,
 		Tty:          false,
 		AttachStdin:  true,
 		AttachStderr: true,
