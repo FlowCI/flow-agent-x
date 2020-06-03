@@ -49,7 +49,7 @@ func main() {
 
 		cli.StringFlag{
 			Name:   "port, p",
-			Value: 	"",
+			Value:  "",
 			Usage:  "Port for agent",
 			EnvVar: domain.VarAgentPort,
 		},
@@ -62,10 +62,10 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:        "volumes, m",
-			Usage:       "List of volume that will mount to docker from step \n" +
-							"format: name=xxx,dest=xxx,script=xxx;name=xxx,dest=xxx,script=xxx;...",
-			EnvVar:      domain.VarAgentVolumes,
+			Name: "volumes, m",
+			Usage: "List of volume that will mount to docker from step \n" +
+				"format: name=xxx,dest=xxx,script=xxx;name=xxx,dest=xxx,script=xxx;...",
+			EnvVar: domain.VarAgentVolumes,
 		},
 
 		cli.StringFlag{
@@ -114,10 +114,8 @@ func start(c *cli.Context) error {
 }
 
 func execCmd(script string) {
-	cmd := &domain.CmdIn{
-		Cmd: domain.Cmd{
-			ID: "local",
-		},
+	cmd := &domain.ShellCmd{
+		ID:      "local",
 		Scripts: []string{script},
 		Inputs:  domain.Variables{},
 		Timeout: 1800,

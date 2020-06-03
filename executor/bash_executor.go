@@ -82,7 +82,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	b.exportEnv()
 
-	if b.CmdResult.IsFinishStatus() {
+	if b.result.IsFinishStatus() {
 		return nil
 	}
 
@@ -106,7 +106,7 @@ func (b *BashExecutor) exportEnv() {
 	}
 
 	defer file.Close()
-	b.CmdResult.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
+	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
 }
 
 func (b *BashExecutor) startToHandleContext() {

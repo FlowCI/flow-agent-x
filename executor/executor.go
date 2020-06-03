@@ -35,7 +35,7 @@ type Executor interface {
 
 	Kill()
 
-	GetResult() *domain.ExecutedCmd
+	GetResult() *domain.ShellResult
 }
 
 type BaseExecutor struct {
@@ -44,12 +44,12 @@ type BaseExecutor struct {
 	pluginDir   string
 	context     context.Context
 	cancelFunc  context.CancelFunc
-	inCmd       *domain.CmdIn
+	inCmd       *domain.ShellCmd
+	result      *domain.ShellResult
 	vars        domain.Variables     // vars from input and in cmd
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
-	CmdResult   *domain.ExecutedCmd
-	stdOutWg    sync.WaitGroup // init on subclasses
+	stdOutWg    sync.WaitGroup       // init on subclasses
 }
 
 type Options struct {
@@ -57,7 +57,7 @@ type Options struct {
 	Parent    context.Context
 	Workspace string
 	PluginDir string
-	Cmd       *domain.CmdIn
+	Cmd       *domain.ShellCmd
 	Vars      domain.Variables
 	Volumes   []*domain.DockerVolume
 }
@@ -80,7 +80,7 @@ func NewExecutor(options Options) Executor {
 		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
 		inCmd:       cmd,
 		vars:        vars,
-		CmdResult:   domain.NewExecutedCmd(cmd),
+		result:      domain.NewShellOutput(cmd),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -104,10 +104,6 @@ func (b *BaseExecutor) CmdId() string {
 	return b.inCmd.ID
 }
 
-func (b *BaseExecutor) JobId() string {
-	return b.inCmd.JobId
-}
-
 func (b *BaseExecutor) FlowId() string {
 	return b.inCmd.FlowId
 }
@@ -122,8 +118,8 @@ func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
 
-func (b *BaseExecutor) GetResult() *domain.ExecutedCmd {
-	return b.CmdResult
+func (b *BaseExecutor) GetResult() *domain.ShellResult {
+	return b.result
 }
 
 // Stop stop current running script
@@ -191,7 +187,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 				b.stdOutWg.Done()
 			}
 
-			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.CmdResult.LogSize)
+			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.result.LogSize)
 		}()
 
 		buffer := make([]byte, defaultReaderBufferSize)
@@ -211,7 +207,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 					Content: removeDockerHeader(buffer[0:n]),
 				}
 
-				atomic.AddInt64(&b.CmdResult.LogSize, int64(n))
+				atomic.AddInt64(&b.result.LogSize, int64(n))
 			}
 		}
 	}()
@@ -225,42 +221,42 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 }
 
 func (b *BaseExecutor) toStartStatus(pid int) {
-	b.CmdResult.Status = domain.CmdStatusRunning
-	b.CmdResult.ProcessId = pid
-	b.CmdResult.StartAt = time.Now()
+	b.result.Status = domain.CmdStatusRunning
+	b.result.ProcessId = pid
+	b.result.StartAt = time.Now()
 }
 
 func (b *BaseExecutor) toErrorStatus(err error) error {
-	b.CmdResult.Status = domain.CmdStatusException
-	b.CmdResult.Error = err.Error()
-	b.CmdResult.FinishAt = time.Now()
+	b.result.Status = domain.CmdStatusException
+	b.result.Error = err.Error()
+	b.result.FinishAt = time.Now()
 	return err
 }
 
 func (b *BaseExecutor) toTimeOutStatus() {
-	b.CmdResult.Status = domain.CmdStatusTimeout
-	b.CmdResult.Code = domain.CmdExitCodeTimeOut
-	b.CmdResult.FinishAt = time.Now()
+	b.result.Status = domain.CmdStatusTimeout
+	b.result.Code = domain.CmdExitCodeTimeOut
+	b.result.FinishAt = time.Now()
 }
 
 func (b *BaseExecutor) toKilledStatus() {
-	b.CmdResult.Status = domain.CmdStatusKilled
-	b.CmdResult.Code = domain.CmdExitCodeKilled
-	b.CmdResult.FinishAt = time.Now()
+	b.result.Status = domain.CmdStatusKilled
+	b.result.Code = domain.CmdExitCodeKilled
+	b.result.FinishAt = time.Now()
 }
 
 func (b *BaseExecutor) toFinishStatus(exitCode int) {
-	b.CmdResult.FinishAt = time.Now()
-	b.CmdResult.Code = exitCode
+	b.result.FinishAt = time.Now()
+	b.result.Code = exitCode
 
 	if exitCode == 0 {
-		b.CmdResult.Status = domain.CmdStatusSuccess
+		b.result.Status = domain.CmdStatusSuccess
 		return
 	}
 
 	// no exported environment since it's failure
 	if b.inCmd.AllowFailure {
-		b.CmdResult.Status = domain.CmdStatusSuccess
+		b.result.Status = domain.CmdStatusSuccess
 		return
 	}
 

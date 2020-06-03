@@ -82,7 +82,7 @@ func (d *DockerExecutor) Start() (out error) {
 	exitCode := d.waitForExit(eid)
 	d.exportEnv()
 
-	if d.CmdResult.IsFinishStatus() {
+	if d.result.IsFinishStatus() {
 		return nil
 	}
 
@@ -217,7 +217,7 @@ func (d *DockerExecutor) startContainer() {
 
 	cid := resp.ID
 	d.containerId = cid
-	d.CmdResult.ContainerId = cid
+	d.result.ContainerId = cid
 	util.LogDebug("Container created %s", cid)
 
 	err = d.cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
@@ -251,7 +251,7 @@ func (d *DockerExecutor) tryToResume() bool {
 	// resume
 	if err == nil {
 		d.containerId = containerIdToReuse
-		d.CmdResult.ContainerId = containerIdToReuse
+		d.result.ContainerId = containerIdToReuse
 		util.LogInfo("Container %s resumed", inspect.ID)
 		return true
 	}
@@ -323,7 +323,7 @@ func (d *DockerExecutor) exportEnv() {
 	}
 
 	defer reader.Close()
-	d.CmdResult.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
+	d.result.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
 }
 
 func (d *DockerExecutor) cleanupContainer() {

@@ -48,14 +48,21 @@ func (s *CmdService) IsRunning() bool {
 }
 
 // Execute execute cmd according to the type
-func (s *CmdService) Execute(in *domain.CmdIn) error {
+func (s *CmdService) Execute(bytes []byte) error {
+	var in domain.CmdIn
+	err := json.Unmarshal(bytes, &in)
+	util.PanicIfErr(err)
+
 	switch in.Type {
 	case domain.CmdTypeShell:
-		return s.execShell(in)
+		var shell domain.ShellCmd
+		err := json.Unmarshal(bytes, &shell)
+		util.PanicIfErr(err)
+		return s.execShell(&shell)
 	case domain.CmdTypeKill:
-		return s.execKill(in)
+		return s.execKill()
 	case domain.CmdTypeClose:
-		return s.execClose(in)
+		return s.execClose()
 	default:
 		return ErrorCmdUnsupportedType
 	}
@@ -89,19 +96,10 @@ func (s *CmdService) start() {
 				}
 
 				util.LogDebug("Received a message: %s", d.Body)
-
-				var cmdIn domain.CmdIn
-				err := json.Unmarshal(d.Body, &cmdIn)
-
-				if util.LogIfError(err) {
-					continue
-				}
-
-				err = s.Execute(&cmdIn)
+				err = s.Execute(d.Body)
 				if err != nil {
 					util.LogDebug(err.Error())
 				}
-
 			case <-time.After(time.Second * 10):
 				util.LogDebug("...")
 			}
@@ -114,7 +112,7 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
+func (s *CmdService) execShell(in *domain.ShellCmd) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -181,14 +179,14 @@ func (s *CmdService) initEnv() domain.Variables {
 	return vars
 }
 
-func (s *CmdService) execKill(in *domain.CmdIn) error {
+func (s *CmdService) execKill() error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
 	return nil
 }
 
-func (s *CmdService) execClose(in *domain.CmdIn) error {
+func (s *CmdService) execClose() error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
@@ -199,11 +197,9 @@ func (s *CmdService) execClose(in *domain.CmdIn) error {
 	return nil
 }
 
-func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
-	result := &domain.ExecutedCmd{
-		Cmd: domain.Cmd{
-			ID: in.ID,
-		},
+func (s *CmdService) failureBeforeExecute(in *domain.ShellCmd, err error) {
+	result := &domain.ShellResult{
+		ID:      in.ID,
 		Status:  domain.CmdStatusException,
 		Error:   err.Error(),
 		StartAt: time.Now(),
@@ -212,7 +208,7 @@ func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
 	saveAndPushBack(result)
 }
 
-func verifyAndInitShellCmd(in *domain.CmdIn) error {
+func verifyAndInitShellCmd(in *domain.ShellCmd) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
@@ -231,7 +227,7 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 }
 
 // Save result to local db and send back the result to server
-func saveAndPushBack(r *domain.ExecutedCmd) {
+func saveAndPushBack(r *domain.ShellResult) {
 	config := config.GetInstance()
 
 	// TODO: save to local db

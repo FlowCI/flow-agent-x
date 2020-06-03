@@ -69,56 +69,47 @@ type (
 		IsDeleteContainer bool     `json:"isDeleteContainer"`
 	}
 
-	Cmd struct {
+	CmdIn struct {
+		Type CmdType `json:"type"`
+	}
+
+	ShellCmd struct {
+		CmdIn
 		ID           string        `json:"id"`
 		FlowId       string        `json:"flowId"`
-		JobId        string        `json:"jobId"`
-		NodePath     string        `json:"nodePath"`
-		BuildNumber  int           `json:"buildNumber"`
 		ContainerId  string        `json:"containerId"` // container id prefer to reuse
 		AllowFailure bool          `json:"allowFailure"`
 		Plugin       string        `json:"plugin"`
 		Docker       *DockerOption `json:"docker"`
+		Scripts      []string      `json:"scripts"`
+		Timeout      int           `json:"timeout"`
+		Inputs       Variables     `json:"inputs"`
+		EnvFilters   []string      `json:"envFilters"`
 	}
 
-	CmdIn struct {
-		Cmd
-		Type       CmdType   `json:"type"`
-		Scripts    []string  `json:"scripts"`
-		Timeout    int       `json:"timeout"`
-		Inputs     Variables `json:"inputs"`
-		EnvFilters []string  `json:"envFilters"`
-	}
-
-	ExecutedCmd struct {
-		Cmd
-		ProcessId int       `json:"processId"`
-		Status    CmdStatus `json:"status"`
-		Code      int       `json:"code"`
-		Output    Variables `json:"output"`
-		StartAt   time.Time `json:"startAt"`
-		FinishAt  time.Time `json:"finishAt"`
-		Error     string    `json:"error"`
-		LogSize   int64     `json:"logSize"`
+	ShellResult struct {
+		ID          string    `json:"id"`
+		ProcessId   int       `json:"processId"`
+		ContainerId string    `json:"containerId"` // container id prefer to reuse
+		Status      CmdStatus `json:"status"`
+		Code        int       `json:"code"`
+		Output      Variables `json:"output"`
+		StartAt     time.Time `json:"startAt"`
+		FinishAt    time.Time `json:"finishAt"`
+		Error       string    `json:"error"`
+		LogSize     int64     `json:"logSize"`
 	}
 )
 
-// ===================================
-//		Cmd Methods
-// ===================================
-
-func (cmd *Cmd) HasPlugin() bool {
-	return cmd.Plugin != ""
+func (in *ShellCmd) HasPlugin() bool {
+	return in.Plugin != ""
 }
 
-func (cmd *Cmd) HasDockerOption() bool {
-	return cmd.Docker != nil
+func (in *ShellCmd) HasDockerOption() bool {
+	return in.Docker != nil
 }
 
-// ===================================
-//		CmdIn Methods
-// ===================================
-func (in *CmdIn) HasScripts() bool {
+func (in *ShellCmd) HasScripts() bool {
 	if in.Scripts == nil {
 		return false
 	}
@@ -126,7 +117,7 @@ func (in *CmdIn) HasScripts() bool {
 	return len(in.Scripts) != 0
 }
 
-func (in *CmdIn) HasEnvFilters() bool {
+func (in *ShellCmd) HasEnvFilters() bool {
 	if in.EnvFilters == nil {
 		return false
 	}
@@ -134,7 +125,7 @@ func (in *CmdIn) HasEnvFilters() bool {
 	return len(in.EnvFilters) != 0
 }
 
-func (in *CmdIn) VarsToStringArray() []string {
+func (in *ShellCmd) VarsToStringArray() []string {
 	if !NilOrEmpty(in.Inputs) {
 		return in.Inputs.ToStringArray()
 	}
@@ -146,26 +137,16 @@ func (in *CmdIn) VarsToStringArray() []string {
 //		ExecutedCmd Methods
 // ===================================
 
-func NewExecutedCmd(in *CmdIn) *ExecutedCmd {
-	return &ExecutedCmd{
-		Cmd: Cmd{
-			ID:           in.ID,
-			FlowId:       in.FlowId,
-			JobId:        in.JobId,
-			NodePath:     in.NodePath,
-			BuildNumber:  in.BuildNumber,
-			AllowFailure: in.AllowFailure,
-			ContainerId:  in.ContainerId,
-			Plugin:       in.Plugin,
-			Docker:       in.Docker,
-		},
+func NewShellOutput(in *ShellCmd) *ShellResult {
+	return &ShellResult{
+		ID:     in.ID,
 		Code:   CmdExitCodeUnknown,
 		Status: CmdStatusPending,
 		Output: NewVariables(),
 	}
 }
 
-func (e *ExecutedCmd) IsFinishStatus() bool {
+func (e *ShellResult) IsFinishStatus() bool {
 	switch e.Status {
 	case CmdStatusKilled:
 		return true

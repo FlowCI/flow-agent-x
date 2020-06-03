@@ -223,6 +223,7 @@ func (m *Manager) initZookeeper() {
 	m.Zk = client
 
 	// register agent on zk
+	_, _ = client.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
 	agentPath := getZkPath(m.Settings)
 	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
