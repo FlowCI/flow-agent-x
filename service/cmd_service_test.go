@@ -69,7 +69,7 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 
 		util.LogDebug("Result of cmd '%s' been received", m.Body)
 
-		var r domain.ShellResult
+		var r domain.ShellOut
 		err := json.Unmarshal(m.Body, &r)
 		assert.Nil(err)
 

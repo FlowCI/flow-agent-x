@@ -198,7 +198,7 @@ func (s *CmdService) execClose() error {
 }
 
 func (s *CmdService) failureBeforeExecute(in *domain.ShellCmd, err error) {
-	result := &domain.ShellResult{
+	result := &domain.ShellOut{
 		ID:      in.ID,
 		Status:  domain.CmdStatusException,
 		Error:   err.Error(),
@@ -227,7 +227,7 @@ func verifyAndInitShellCmd(in *domain.ShellCmd) error {
 }
 
 // Save result to local db and send back the result to server
-func saveAndPushBack(r *domain.ShellResult) {
+func saveAndPushBack(r *domain.ShellOut) {
 	config := config.GetInstance()
 
 	// TODO: save to local db

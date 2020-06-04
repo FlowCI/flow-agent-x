@@ -35,7 +35,7 @@ type Executor interface {
 
 	Kill()
 
-	GetResult() *domain.ShellResult
+	GetResult() *domain.ShellOut
 }
 
 type BaseExecutor struct {
@@ -45,7 +45,7 @@ type BaseExecutor struct {
 	context     context.Context
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.ShellCmd
-	result      *domain.ShellResult
+	result      *domain.ShellOut
 	vars        domain.Variables     // vars from input and in cmd
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
@@ -118,7 +118,7 @@ func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
 
-func (b *BaseExecutor) GetResult() *domain.ShellResult {
+func (b *BaseExecutor) GetResult() *domain.ShellOut {
 	return b.result
 }
 

@@ -30,17 +30,11 @@ const (
 
 const (
 	CmdStatusPending CmdStatus = "PENDING"
-
 	CmdStatusRunning CmdStatus = "RUNNING"
-
 	CmdStatusSuccess CmdStatus = "SUCCESS"
-
 	CmdStatusSkipped CmdStatus = "SKIPPED"
-
 	CmdStatusException CmdStatus = "EXCEPTION"
-
 	CmdStatusKilled CmdStatus = "KILLED"
-
 	CmdStatusTimeout CmdStatus = "TIMEOUT"
 )
 
@@ -87,7 +81,7 @@ type (
 		EnvFilters   []string      `json:"envFilters"`
 	}
 
-	ShellResult struct {
+	ShellOut struct {
 		ID          string    `json:"id"`
 		ProcessId   int       `json:"processId"`
 		ContainerId string    `json:"containerId"` // container id prefer to reuse
@@ -137,8 +131,8 @@ func (in *ShellCmd) VarsToStringArray() []string {
 //		ExecutedCmd Methods
 // ===================================
 
-func NewShellOutput(in *ShellCmd) *ShellResult {
-	return &ShellResult{
+func NewShellOutput(in *ShellCmd) *ShellOut {
+	return &ShellOut{
 		ID:     in.ID,
 		Code:   CmdExitCodeUnknown,
 		Status: CmdStatusPending,
@@ -146,7 +140,7 @@ func NewShellOutput(in *ShellCmd) *ShellResult {
 	}
 }
 
-func (e *ShellResult) IsFinishStatus() bool {
+func (e *ShellOut) IsFinishStatus() bool {
 	switch e.Status {
 	case CmdStatusKilled:
 		return true
