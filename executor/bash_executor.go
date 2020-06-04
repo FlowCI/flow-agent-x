@@ -4,6 +4,7 @@ import (
 	"context"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -13,9 +14,10 @@ import (
 type (
 	BashExecutor struct {
 		BaseExecutor
-		command *exec.Cmd
-		workDir string
-		envFile string
+		command  *exec.Cmd
+		interact *exec.Cmd
+		workDir  string
+		envFile  string
 	}
 )
 
@@ -89,6 +91,69 @@ func (b *BashExecutor) Start() (out error) {
 	// to finish status
 	b.toFinishStatus(getExitCode(command))
 	return b.context.Err()
+}
+
+func (b *BashExecutor) StartInteract() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
+	c := exec.Command(linuxBash)
+	c.Dir = b.workDir
+	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
+	b.interact = c
+
+	startInput := func(writer io.Writer) {
+		for {
+			select {
+			case <-b.context.Done():
+				return
+			case input := <-b.streamIn:
+				_, _ = writer.Write([]byte(input))
+			}
+		}
+	}
+
+	startOutput := func(reader io.Reader) {
+		buffer := make([]byte, defaultReaderBufferSize)
+
+		for {
+			select {
+			case <-b.context.Done():
+				return
+			default:
+				n, err := reader.Read(buffer)
+				if err != nil {
+					return
+				}
+				b.streamOut <- string(buffer[0:n])
+			}
+		}
+	}
+
+	stdin, err := c.StdinPipe()
+	util.PanicIfErr(err)
+
+	stdout, err := c.StdoutPipe()
+	util.PanicIfErr(err)
+
+	stderr, err := c.StderrPipe()
+	util.PanicIfErr(err)
+
+	go startInput(stdin)
+	go startOutput(stdout)
+	go startOutput(stderr)
+
+	err = c.Start()
+	util.PanicIfErr(err)
+
+	go func() {
+		_ = c.Wait()
+	}()
+
+	return
 }
 
 //====================================================================

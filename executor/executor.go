@@ -15,9 +15,9 @@ const (
 	linuxBash = "/bin/bash"
 	//linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
 
-	defaultLogChannelBufferSize = 10000
-	defaultLogWaitingDuration   = 5 * time.Second
-	defaultReaderBufferSize     = 8 * 1024 // 8k
+	defaultChannelBufferSize  = 1000
+	defaultLogWaitingDuration = 5 * time.Second
+	defaultReaderBufferSize   = 8 * 1024 // 8k
 )
 
 type TypeOfExecutor int
@@ -27,11 +27,15 @@ type Executor interface {
 
 	CmdId() string
 
-	BashChannel() chan<- string
-
 	LogChannel() <-chan *domain.LogItem
 
+	InputStream() chan<- string
+
+	OutputStream() <-chan string
+
 	Start() error
+
+	StartInteract() error
 
 	Kill()
 
@@ -50,6 +54,9 @@ type BaseExecutor struct {
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
 	stdOutWg    sync.WaitGroup       // init on subclasses
+
+	streamIn  chan string
+	streamOut chan string
 }
 
 type Options struct {
@@ -77,10 +84,12 @@ func NewExecutor(options Options) Executor {
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
-		logChannel:  make(chan *domain.LogItem, defaultLogChannelBufferSize),
+		logChannel:  make(chan *domain.LogItem, defaultChannelBufferSize),
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
+		streamIn:    make(chan string, defaultChannelBufferSize),
+		streamOut:   make(chan string, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -108,14 +117,17 @@ func (b *BaseExecutor) FlowId() string {
 	return b.inCmd.FlowId
 }
 
-// BashChannel for input bash script
-func (b *BaseExecutor) BashChannel() chan<- string {
-	return b.bashChannel
-}
-
 // LogChannel for output log from stdout, stdin
 func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
+}
+
+func (b *BaseExecutor) InputStream() chan<- string {
+	return b.streamIn
+}
+
+func (b *BaseExecutor) OutputStream() <-chan string{
+	return b.streamOut
 }
 
 func (b *BaseExecutor) GetResult() *domain.ShellOut {

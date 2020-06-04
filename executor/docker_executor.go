@@ -90,6 +90,65 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
+func (d *DockerExecutor) StartInteract() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
+	if d.containerId == "" {
+		return fmt.Errorf("container not started")
+	}
+
+	config := types.ExecConfig{
+		Tty:          false,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          []string{linuxBash},
+	}
+
+	startInput := func(writer io.Writer) {
+		for {
+			select {
+			case <-d.context.Done():
+				return
+			case input := <-d.streamIn:
+				_, _ = writer.Write([]byte(input))
+			}
+		}
+	}
+
+	startOutput := func(reader io.Reader) {
+		buffer := make([]byte, defaultReaderBufferSize)
+
+		for {
+			select {
+			case <-d.context.Done():
+				return
+			default:
+				n, err := reader.Read(buffer)
+				if err != nil {
+					return
+				}
+				d.streamOut <- string(buffer[0:n])
+			}
+		}
+	}
+
+	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
+	util.PanicIfErr(err)
+
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
+	util.PanicIfErr(err)
+
+	go startInput(attach.Conn)
+	go startOutput(attach.Reader)
+
+	return
+}
+
 //--------------------------------------------
 // private methods
 //--------------------------------------------

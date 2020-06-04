@@ -66,17 +66,18 @@ func TestShouldReuseContainer(t *testing.T) {
 	assert.Equal(result.ContainerId, resultFromReuse.ContainerId)
 }
 
-func createDockerTestCmd() *domain.CmdIn {
-	return &domain.CmdIn{
-		Cmd: domain.Cmd{
-			FlowId: "flowid", // same as dir flowid in _testdata
-			ID: "1-1-1",
-			Docker: &domain.DockerOption{
-				Image:             "ubuntu:18.04",
-				Entrypoint:        []string{"/bin/bash"},
-				IsDeleteContainer: true,
-				IsStopContainer:   true,
-			},
+func createDockerTestCmd() *domain.ShellCmd {
+	return &domain.ShellCmd{
+		CmdIn: domain.CmdIn{
+			Type: domain.CmdTypeShell,
+		},
+		FlowId: "flowid", // same as dir flowid in _testdata
+		ID: "1-1-1",
+		Docker: &domain.DockerOption{
+			Image:             "ubuntu:18.04",
+			Entrypoint:        []string{"/bin/bash"},
+			IsDeleteContainer: true,
+			IsStopContainer:   true,
 		},
 		Scripts: []string{
 			"echo bbb",

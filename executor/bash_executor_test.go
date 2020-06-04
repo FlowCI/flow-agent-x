@@ -45,11 +45,12 @@ func TestShouldExitByKill(t *testing.T) {
 	shouldExecButKilled(assert, cmd)
 }
 
-func createBashTestCmd() *domain.CmdIn {
-	return &domain.CmdIn{
-		Cmd: domain.Cmd{
-			ID: "1-1-1",
+func createBashTestCmd() *domain.ShellCmd {
+	return &domain.ShellCmd{
+		CmdIn: domain.CmdIn{
+			Type: domain.CmdTypeShell,
 		},
+		ID: "1-1-1",
 		Scripts: []string{
 			"set -e",
 			"echo bbb",

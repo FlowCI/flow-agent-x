@@ -12,6 +12,9 @@ const (
 	// CmdTypeShell shell command
 	CmdTypeShell CmdType = "SHELL"
 
+	// interact with current executor
+	CmdTypeStream CmdType = "STREAM"
+
 	// CmdTypeKill kill command
 	CmdTypeKill CmdType = "KILL"
 

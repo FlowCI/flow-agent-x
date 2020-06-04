@@ -22,13 +22,10 @@ var (
 )
 
 type (
-	CmdInteractSession map[string]*executor.BashExecutor
-
 	// CmdService receive and execute cmd
 	CmdService struct {
 		executor executor.Executor
 		mux      sync.Mutex
-		session  CmdInteractSession
 	}
 )
 
@@ -36,7 +33,6 @@ type (
 func GetCmdService() *CmdService {
 	once.Do(func() {
 		singleton = new(CmdService)
-		singleton.session = make(CmdInteractSession, 10)
 		singleton.start()
 	})
 	return singleton
@@ -59,6 +55,9 @@ func (s *CmdService) Execute(bytes []byte) error {
 		err := json.Unmarshal(bytes, &shell)
 		util.PanicIfErr(err)
 		return s.execShell(&shell)
+	case domain.CmdTypeStream:
+		// TODO:
+		return nil
 	case domain.CmdTypeKill:
 		return s.execKill()
 	case domain.CmdTypeClose:
