@@ -99,6 +99,9 @@ func (d *DockerExecutor) StartTty() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
+			d.streamOut <- &domain.TtyOut{
+				Error: out.Error(),
+			}
 		}
 
 		d.interactExecId = ""

@@ -95,15 +95,19 @@ func TestShouldStartDockerInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug("[INTERACT]: %s", log)
+			util.LogDebug("[INTERACT]: %s", log.Output)
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "echo helloworld...\n"
+		executor.InputStream() <- &domain.TtyIn{
+			Script: "echo helloworld...\n",
+		}
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "exit\n"
+		executor.InputStream() <- &domain.TtyIn{
+			Script: "exit\n",
+		}
 	}()
 
 	// docker should start container for cmd before interact
@@ -132,7 +136,7 @@ func createDockerTestCmd() *domain.ShellCmd {
 			Type: domain.CmdTypeShell,
 		},
 		FlowId: "flowid", // same as dir flowid in _testdata
-		ID: "1-1-1",
+		ID:     "1-1-1",
 		Docker: &domain.DockerOption{
 			Image:             "ubuntu:18.04",
 			Entrypoint:        []string{"/bin/bash"},

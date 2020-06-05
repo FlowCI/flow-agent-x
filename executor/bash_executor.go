@@ -109,6 +109,9 @@ func (b *BashExecutor) StartTty() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
+			b.streamOut <- &domain.TtyOut{
+				Error: out.Error(),
+			}
 		}
 
 		b.interact = nil

@@ -234,7 +234,6 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 	}
 }
 
-
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for {
 		input, ok := <-b.streamIn

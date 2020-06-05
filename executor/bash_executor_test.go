@@ -64,15 +64,19 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug(log)
+			util.LogDebug(log.Output)
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "ls\n"
+		executor.InputStream() <- &domain.TtyIn{
+			Script: "ls\n",
+		}
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "exit\n"
+		executor.InputStream() <- &domain.TtyIn{
+			Script: "exit\n",
+		}
 	}()
 
 	err := executor.StartTty()

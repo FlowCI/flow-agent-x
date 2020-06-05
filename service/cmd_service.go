@@ -192,7 +192,7 @@ func (s *CmdService) execTtyOpen() (err error) {
 	go func() {
 		_ = s.executor.StartTty()
 	}()
-≠
+
 	return
 }
 
