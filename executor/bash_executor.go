@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"github.com/creack/pty"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
@@ -105,12 +106,16 @@ func (b *BashExecutor) Start() (out error) {
 	return b.context.Err()
 }
 
-func (b *BashExecutor) StartInteract() (out error) {
+func (b *BashExecutor) StartTty() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 	}()
+
+	if b.IsInteracting() {
+		panic(fmt.Errorf("interaction is ongoning"))
+	}
 
 	c := exec.Command(linuxBash)
 	c.Dir = b.workDir

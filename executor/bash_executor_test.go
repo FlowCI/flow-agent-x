@@ -46,7 +46,7 @@ func TestShouldExitByKill(t *testing.T) {
 	shouldExecButKilled(assert, cmd)
 }
 
-func TestShouldStartInteract(t *testing.T) {
+func TestShouldStartBashInteract(t *testing.T) {
 	assert := assert.New(t)
 
 	executor := newExecutor(&domain.ShellCmd{
@@ -75,7 +75,7 @@ func TestShouldStartInteract(t *testing.T) {
 		executor.InputStream() <- "exit\n"
 	}()
 
-	err := executor.StartInteract()
+	err := executor.StartTty()
 	assert.NoError(err)
 	assert.False(executor.IsInteracting())
 }

@@ -35,7 +35,7 @@ type Executor interface {
 
 	Start() error
 
-	StartInteract() error
+	StartTty() error
 
 	IsInteracting() bool
 

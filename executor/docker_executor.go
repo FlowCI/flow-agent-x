@@ -37,6 +37,7 @@ type (
 		containerConfig *container.Config
 		hostConfig      *container.HostConfig
 		containerId     string
+		interactExecId  string
 		workDir         string
 		envFile         string
 	}
@@ -79,7 +80,11 @@ func (d *DockerExecutor) Start() (out error) {
 	d.copyPlugins()
 
 	eid := d.runCmdInContainer()
-	exitCode := d.waitForExit(eid)
+	util.LogDebug("Exec %s is running", eid)
+
+	exitCode := d.waitForExit(eid, func(pid int) {
+		d.toStartStatus(pid)
+	})
 	d.exportEnv()
 
 	if d.result.IsFinishStatus() {
@@ -90,19 +95,23 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
-func (d *DockerExecutor) StartInteract() (out error) {
+func (d *DockerExecutor) StartTty() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 	}()
 
+	if d.IsInteracting() {
+		return fmt.Errorf("interaction is ongoning")
+	}
+
 	if d.containerId == "" {
 		return fmt.Errorf("container not started")
 	}
 
 	config := types.ExecConfig{
-		Tty:          false,
+		Tty:          true,
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
@@ -132,13 +141,14 @@ func (d *DockerExecutor) StartInteract() (out error) {
 				if err != nil {
 					return
 				}
-				d.streamOut <- string(buffer[0:n])
+				d.streamOut <- string(removeDockerHeader(buffer[0:n]))
 			}
 		}
 	}
 
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
+	d.interactExecId = exec.ID
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
@@ -146,11 +156,13 @@ func (d *DockerExecutor) StartInteract() (out error) {
 	go startInput(attach.Conn)
 	go startOutput(attach.Reader)
 
+	d.waitForExit(exec.ID, nil)
+	d.interactExecId = ""
 	return
 }
 
 func (d *DockerExecutor) IsInteracting() bool {
-	return true
+	return d.interactExecId != ""
 }
 
 //--------------------------------------------
@@ -408,10 +420,12 @@ func (d *DockerExecutor) cleanupContainer() {
 	}
 }
 
-func (d *DockerExecutor) waitForExit(eid string) int {
+func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
 	util.PanicIfErr(err)
-	d.toStartStatus(inspect.Pid)
+	if onStarted != nil {
+		onStarted(inspect.Pid)
+	}
 
 	for {
 		inspect, err = d.cli.ContainerExecInspect(d.context, eid)

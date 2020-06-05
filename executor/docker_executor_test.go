@@ -6,6 +6,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -64,6 +65,65 @@ func TestShouldReuseContainer(t *testing.T) {
 	resultFromReuse := shouldExecCmd(assert, cmd)
 	assert.NotEmpty(resultFromReuse.ContainerId)
 	assert.Equal(result.ContainerId, resultFromReuse.ContainerId)
+}
+
+func TestShouldStartDockerInteract(t *testing.T) {
+	assert := assert.New(t)
+
+	executor := newExecutor(&domain.ShellCmd{
+		ID:     "test111",
+		FlowId: "test111",
+		Scripts: []string{
+			"echo hello",
+			"sleep 9999",
+		},
+		Docker: &domain.DockerOption{
+			Image: "ubuntu:18.04",
+		},
+		Timeout: 9999,
+	})
+
+	dockerExecutor := executor.(*DockerExecutor)
+	assert.NotNil(dockerExecutor)
+
+	err := dockerExecutor.Init()
+	assert.NoError(err)
+
+	go func() {
+		for {
+			log, ok := <-executor.OutputStream()
+			if !ok {
+				return
+			}
+			util.LogDebug("[INTERACT]: %s", log)
+		}
+	}()
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "echo helloworld...\n"
+		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "exit\n"
+	}()
+
+	// docker should start container for cmd before interact
+	go func() {
+		err := executor.Start()
+		assert.NoError(err)
+	}()
+
+	for {
+		if dockerExecutor.containerId == "" {
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	err = executor.StartTty()
+	assert.NoError(err)
+
+	assert.False(executor.IsInteracting())
 }
 
 func createDockerTestCmd() *domain.ShellCmd {
