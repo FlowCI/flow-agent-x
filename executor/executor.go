@@ -29,9 +29,9 @@ type Executor interface {
 
 	LogChannel() <-chan *domain.LogItem
 
-	InputStream() chan<- string
+	InputStream() chan<- *domain.TtyIn
 
-	OutputStream() <-chan string
+	OutputStream() <-chan *domain.TtyOut
 
 	Start() error
 
@@ -57,8 +57,8 @@ type BaseExecutor struct {
 	logChannel  chan *domain.LogItem // output log
 	stdOutWg    sync.WaitGroup       // init on subclasses
 
-	streamIn  chan string
-	streamOut chan string
+	streamIn  chan *domain.TtyIn
+	streamOut chan *domain.TtyOut
 }
 
 type Options struct {
@@ -90,8 +90,8 @@ func NewExecutor(options Options) Executor {
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
-		streamIn:    make(chan string, defaultChannelBufferSize),
-		streamOut:   make(chan string, defaultChannelBufferSize),
+		streamIn:    make(chan *domain.TtyIn, defaultChannelBufferSize),
+		streamOut:   make(chan *domain.TtyOut, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -124,11 +124,11 @@ func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
 
-func (b *BaseExecutor) InputStream() chan<- string {
+func (b *BaseExecutor) InputStream() chan<- *domain.TtyIn {
 	return b.streamIn
 }
 
-func (b *BaseExecutor) OutputStream() <-chan string{
+func (b *BaseExecutor) OutputStream() <-chan *domain.TtyOut {
 	return b.streamOut
 }
 
@@ -234,6 +234,35 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 	}
 }
 
+
+func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
+	for {
+		input, ok := <-b.streamIn
+		if !ok {
+			return
+		}
+		_, _ = writer.Write([]byte(input.Script))
+	}
+}
+
+func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
+	buffer := make([]byte, defaultReaderBufferSize)
+	for {
+		select {
+		case <-b.context.Done():
+			return
+		default:
+			n, err := reader.Read(buffer)
+			if err != nil {
+				return
+			}
+			b.streamOut <- &domain.TtyOut{
+				Output: string(removeDockerHeader(buffer[0:n])),
+			}
+		}
+	}
+}
+
 func (b *BaseExecutor) toStartStatus(pid int) {
 	b.result.Status = domain.CmdStatusRunning
 	b.result.ProcessId = pid
@@ -276,5 +305,4 @@ func (b *BaseExecutor) toFinishStatus(exitCode int) {
 
 	_ = b.toErrorStatus(fmt.Errorf("exit status %d", exitCode))
 	return
-
 }

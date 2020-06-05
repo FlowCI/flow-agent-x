@@ -100,6 +100,10 @@ func (d *DockerExecutor) StartTty() (out error) {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
+
+		d.interactExecId = ""
+		close(d.streamIn)
+		close(d.streamOut)
 	}()
 
 	if d.IsInteracting() {
@@ -118,34 +122,6 @@ func (d *DockerExecutor) StartTty() (out error) {
 		Cmd:          []string{linuxBash},
 	}
 
-	startInput := func(writer io.Writer) {
-		for {
-			select {
-			case <-d.context.Done():
-				return
-			case input := <-d.streamIn:
-				_, _ = writer.Write([]byte(input))
-			}
-		}
-	}
-
-	startOutput := func(reader io.Reader) {
-		buffer := make([]byte, defaultReaderBufferSize)
-
-		for {
-			select {
-			case <-d.context.Done():
-				return
-			default:
-				n, err := reader.Read(buffer)
-				if err != nil {
-					return
-				}
-				d.streamOut <- string(removeDockerHeader(buffer[0:n]))
-			}
-		}
-	}
-
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
 	d.interactExecId = exec.ID
@@ -153,11 +129,10 @@ func (d *DockerExecutor) StartTty() (out error) {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	go startInput(attach.Conn)
-	go startOutput(attach.Reader)
+	go d.writeTtyIn(attach.Conn)
+	go d.writeTtyOut(attach.Reader)
 
 	d.waitForExit(exec.ID, nil)
-	d.interactExecId = ""
 	return
 }
 

@@ -9,36 +9,22 @@ type CmdType string
 type CmdStatus string
 
 const (
-	// CmdTypeShell shell command
-	CmdTypeShell CmdType = "SHELL"
-
-	// interact with current executor
-	CmdTypeStream CmdType = "STREAM"
-
-	// CmdTypeKill kill command
-	CmdTypeKill CmdType = "KILL"
-
-	// CmdTypeClose close command
-	CmdTypeClose CmdType = "CLOSE"
-
-	// CmdTypeSessionOpen open new session to interact mode
-	CmdTypeSessionOpen CmdType = "SESSION_OPEN"
-
-	// CmdTypeSessionShell send cmd with interact mode
-	CmdTypeSessionShell CmdType = "SESSION_SHELL"
-
-	// CmdTypeSessionClose close session of interact mode
-	CmdTypeSessionClose CmdType = "SESSION_CLOSE"
+	CmdTypeShell    CmdType = "SHELL"
+	CmdTypeKill     CmdType = "KILL"
+	CmdTypeClose    CmdType = "CLOSE"
+	CmdTypeTtyOpen  CmdType = "TTY_OPEN"
+	CmdTypeTtyShell CmdType = "TTY_SHELL"
+	CmdTypeTtyClose CmdType = "TTY_CLOSE"
 )
 
 const (
-	CmdStatusPending CmdStatus = "PENDING"
-	CmdStatusRunning CmdStatus = "RUNNING"
-	CmdStatusSuccess CmdStatus = "SUCCESS"
-	CmdStatusSkipped CmdStatus = "SKIPPED"
+	CmdStatusPending   CmdStatus = "PENDING"
+	CmdStatusRunning   CmdStatus = "RUNNING"
+	CmdStatusSuccess   CmdStatus = "SUCCESS"
+	CmdStatusSkipped   CmdStatus = "SKIPPED"
 	CmdStatusException CmdStatus = "EXCEPTION"
-	CmdStatusKilled CmdStatus = "KILLED"
-	CmdStatusTimeout CmdStatus = "TIMEOUT"
+	CmdStatusKilled    CmdStatus = "KILLED"
+	CmdStatusTimeout   CmdStatus = "TIMEOUT"
 )
 
 const (
@@ -95,6 +81,16 @@ type (
 		FinishAt    time.Time `json:"finishAt"`
 		Error       string    `json:"error"`
 		LogSize     int64     `json:"logSize"`
+	}
+
+	TtyIn struct {
+		Script string
+	}
+
+	TtyOut struct {
+		ID     string
+		Output string
+		Error  string
 	}
 )
 

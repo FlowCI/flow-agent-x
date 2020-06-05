@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -55,7 +56,12 @@ func (s *CmdService) Execute(bytes []byte) error {
 		err := json.Unmarshal(bytes, &shell)
 		util.PanicIfErr(err)
 		return s.execShell(&shell)
-	case domain.CmdTypeStream:
+	case domain.CmdTypeTtyOpen:
+		return s.execTtyOpen()
+	case domain.CmdTypeTtyOpen:
+		// TODO:
+		return nil
+	case domain.CmdTypeTtyOpen:
 		// TODO:
 		return nil
 	case domain.CmdTypeKill:
@@ -70,14 +76,12 @@ func (s *CmdService) Execute(bytes []byte) error {
 // new thread to consume rabbitmq message
 func (s *CmdService) start() {
 	config := config.GetInstance()
-
 	if !config.HasQueue() {
 		return
 	}
 
 	channel := config.Queue.Channel
 	queue := config.Queue.JobQueue
-
 	msgs, err := channel.Consume(queue.Name, "", true, false, false, false, nil)
 	if util.HasError(err) {
 		util.LogIfError(err)
@@ -176,6 +180,20 @@ func (s *CmdService) initEnv() domain.Variables {
 	vars[domain.VarAgentLogDir] = config.LoggingDir
 
 	return vars
+}
+
+func (s *CmdService) execTtyOpen() (err error) {
+	if !s.IsRunning() {
+		return fmt.Errorf("No running shell script")
+	}
+
+	go ttyConsumer(s.executor)
+
+	go func() {
+		_ = s.executor.StartTty()
+	}()
+≠
+	return
 }
 
 func (s *CmdService) execKill() error {

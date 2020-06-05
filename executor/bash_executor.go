@@ -6,7 +6,6 @@ import (
 	"github.com/creack/pty"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -111,6 +110,10 @@ func (b *BashExecutor) StartTty() (out error) {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
+
+		b.interact = nil
+		close(b.streamIn)
+		close(b.streamOut)
 	}()
 
 	if b.IsInteracting() {
@@ -129,38 +132,10 @@ func (b *BashExecutor) StartTty() (out error) {
 		_ = ptmx.Close()
 	}()
 
-	startInput := func(writer io.Writer) {
-		for {
-			select {
-			case <-b.context.Done():
-				return
-			case input := <-b.streamIn:
-				_, _ = writer.Write([]byte(input))
-			}
-		}
-	}
-
-	startOutput := func(reader io.Reader) {
-		buffer := make([]byte, defaultReaderBufferSize)
-		for {
-			select {
-			case <-b.context.Done():
-				return
-			default:
-				n, err := reader.Read(buffer)
-				if err != nil {
-					return
-				}
-				b.streamOut <- string(buffer[0:n])
-			}
-		}
-	}
-
-	go startInput(ptmx)
-	go startOutput(ptmx)
+	go b.writeTtyIn(ptmx)
+	go b.writeTtyOut(ptmx)
 
 	_ = c.Wait()
-	b.interact = nil
 	return
 }
 

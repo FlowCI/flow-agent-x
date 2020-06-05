@@ -23,6 +23,10 @@ var (
 	logBuffer = bytes.NewBuffer(make([]byte, 1024 * 1024 * 1)) // 1mb buffer
 )
 
+func ttyConsumer(exec executor.Executor) {
+
+}
+
 // Push stdout, stderr log back to server
 func logConsumer(executor executor.Executor, logDir string) {
 	config := config.GetInstance()
