@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"github.com/creack/pty"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
@@ -52,9 +53,20 @@ func (b *BashExecutor) Start() (out error) {
 	command.Dir = b.workDir
 	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
 
-	stdin, _ := command.StdinPipe()
-	stdout, _ := command.StdoutPipe()
-	stderr, _ := command.StderrPipe()
+	stdin, err := command.StdinPipe()
+	util.PanicIfErr(err)
+
+	stdout, err := command.StdoutPipe()
+	util.PanicIfErr(err)
+
+	stderr, err := command.StderrPipe()
+	util.PanicIfErr(err)
+
+	defer func() {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+	}()
 
 	b.command = command
 	b.startToHandleContext()
@@ -105,6 +117,13 @@ func (b *BashExecutor) StartInteract() (out error) {
 	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
 	b.interact = c
 
+	ptmx, err := pty.Start(c)
+	util.PanicIfErr(err)
+
+	defer func() {
+		_ = ptmx.Close()
+	}()
+
 	startInput := func(writer io.Writer) {
 		for {
 			select {
@@ -118,7 +137,6 @@ func (b *BashExecutor) StartInteract() (out error) {
 
 	startOutput := func(reader io.Reader) {
 		buffer := make([]byte, defaultReaderBufferSize)
-
 		for {
 			select {
 			case <-b.context.Done():
@@ -133,27 +151,16 @@ func (b *BashExecutor) StartInteract() (out error) {
 		}
 	}
 
-	stdin, err := c.StdinPipe()
-	util.PanicIfErr(err)
+	go startInput(ptmx)
+	go startOutput(ptmx)
 
-	stdout, err := c.StdoutPipe()
-	util.PanicIfErr(err)
-
-	stderr, err := c.StderrPipe()
-	util.PanicIfErr(err)
-
-	go startInput(stdin)
-	go startOutput(stdout)
-	go startOutput(stderr)
-
-	err = c.Start()
-	util.PanicIfErr(err)
-
-	go func() {
-		_ = c.Wait()
-	}()
-
+	_ = c.Wait()
+	b.interact = nil
 	return
+}
+
+func (b *BashExecutor) IsInteracting() bool {
+	return b.interact != nil
 }
 
 //====================================================================
@@ -189,6 +196,10 @@ func (b *BashExecutor) handleErrors(err error) {
 	kill := func() {
 		if b.command != nil {
 			_ = b.command.Process.Kill()
+		}
+
+		if b.interact != nil {
+			_ = b.interact.Process.Kill()
 		}
 	}
 

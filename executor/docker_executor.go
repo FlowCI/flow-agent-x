@@ -149,6 +149,10 @@ func (d *DockerExecutor) StartInteract() (out error) {
 	return
 }
 
+func (d *DockerExecutor) IsInteracting() bool {
+	return true
+}
+
 //--------------------------------------------
 // private methods
 //--------------------------------------------

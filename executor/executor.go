@@ -37,6 +37,8 @@ type Executor interface {
 
 	StartInteract() error
 
+	IsInteracting() bool
+
 	Kill()
 
 	GetResult() *domain.ShellOut

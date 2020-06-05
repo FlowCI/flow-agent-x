@@ -5,6 +5,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -14,9 +15,9 @@ func init() {
 func TestShouldExecInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
-
-	ok, _ := hasPyenv()
-	assert.True(ok)
+	//
+	//ok, _ := hasPyenv()
+	//assert.True(ok)
 
 	shouldExecCmd(assert, cmd)
 }
@@ -43,6 +44,40 @@ func TestShouldExitByKill(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
 	shouldExecButKilled(assert, cmd)
+}
+
+func TestShouldStartInteract(t *testing.T) {
+	assert := assert.New(t)
+
+	executor := newExecutor(&domain.ShellCmd{
+		ID:     "test111",
+		FlowId: "test111",
+		Scripts: []string{
+			"echo hello",
+		},
+		Timeout: 9999,
+	})
+
+	go func() {
+		for {
+			log, ok := <-executor.OutputStream()
+			if !ok {
+				return
+			}
+			util.LogDebug(log)
+		}
+	}()
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "ls\n"
+		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "exit\n"
+	}()
+
+	err := executor.StartInteract()
+	assert.NoError(err)
+	assert.False(executor.IsInteracting())
 }
 
 func createBashTestCmd() *domain.ShellCmd {
