@@ -404,8 +404,11 @@ func (d *DockerExecutor) runShell() string {
 	return exec.ID
 }
 
+// run single bash script with new context
 func (d *DockerExecutor) runSingleScript(script string) error {
-	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, types.ExecConfig{
+	ctx := context.Background()
+
+	exec, err := d.cli.ContainerExecCreate(ctx, d.containerId, types.ExecConfig{
 		Cmd: []string{"/bin/bash", "-c", script},
 	})
 
@@ -413,7 +416,8 @@ func (d *DockerExecutor) runSingleScript(script string) error {
 		return err
 	}
 
-	return d.cli.ContainerExecStart(d.context, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
+	util.LogDebug("Script: %s will run", script)
+	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 }
 
 func (d *DockerExecutor) exportEnv() {
