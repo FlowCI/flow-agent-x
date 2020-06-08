@@ -64,7 +64,7 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug(log.Log)
+			util.LogDebug(log.Content)
 		}
 	}()
 

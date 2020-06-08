@@ -259,8 +259,8 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 				return
 			}
 			b.streamOut <- &domain.TtyLog{
-				ID:  b.ttyId,
-				Log: string(removeDockerHeader(buffer[0:n])),
+				ID:      b.ttyId,
+				Content: string(removeDockerHeader(buffer[0:n])),
 			}
 		}
 	}

@@ -16,15 +16,15 @@ type (
 
 	// Open, Close control action response
 	TtyOut struct {
-		ID        string
-		Action    string // Open or Close
-		IsSuccess bool
-		Error     string
+		ID        string `json:"id"`
+		Action    string `json:"action"`
+		IsSuccess bool   `json:"isSuccess"`
+		Error     string `json:"error"`
 	}
 
 	// Shell log output
 	TtyLog struct {
-		ID  string
-		Log string
+		ID      string `json:"id"`
+		Content string `json:"content"`
 	}
 )
