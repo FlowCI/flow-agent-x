@@ -18,6 +18,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -26,6 +27,12 @@ const (
 	dockerPluginDir = dockerWorkspace + "/.plugins"
 	dockerEnvFile   = "/tmp/.env"
 	dockerPullRetry = 3
+
+	writeShellPid = "echo $$ > ~/.shell.pid\n"
+	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
+
+	killShell = "kill -9 $(cat ~/.shell.pid)"
+	killTty   = "kill -9 $(cat ~/.tty.pid)"
 )
 
 type (
@@ -38,6 +45,7 @@ type (
 		hostConfig      *container.HostConfig
 		containerId     string
 		ttyExecId       string
+		ttyWait         sync.WaitGroup
 		workDir         string
 		envFile         string
 	}
@@ -79,13 +87,19 @@ func (d *DockerExecutor) Start() (out error) {
 	d.startContainer()
 	d.copyPlugins()
 
-	eid := d.runCmdInContainer()
+	eid := d.runShell()
 	util.LogDebug("Exec %s is running", eid)
 
 	exitCode := d.waitForExit(eid, func(pid int) {
 		d.toStartStatus(pid)
 	})
 	d.exportEnv()
+
+	// wait for tty if it's running
+	if d.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		d.ttyWait.Wait()
+	}
 
 	if d.result.IsFinishStatus() {
 		return nil
@@ -95,7 +109,7 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
-func (d *DockerExecutor) StartTty(ttyId string) (out error) {
+func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -103,6 +117,7 @@ func (d *DockerExecutor) StartTty(ttyId string) (out error) {
 
 		d.ttyExecId = ""
 		d.ttyId = ""
+		d.ttyWait.Done()
 
 		close(d.streamIn)
 		close(d.streamOut)
@@ -129,15 +144,25 @@ func (d *DockerExecutor) StartTty(ttyId string) (out error) {
 
 	d.ttyExecId = exec.ID
 	d.ttyId = ttyId
+	d.ttyWait.Add(1)
 
-	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, config)
 	util.PanicIfErr(err)
+	onStarted(ttyId)
+
+	// write pid for tty bash
+	_, _ = attach.Conn.Write([]byte(writeTtyPid))
 
 	go d.writeTtyIn(attach.Conn)
 	go d.writeTtyOut(attach.Reader)
 
 	d.waitForExit(exec.ID, nil)
 	return
+}
+
+func (d *DockerExecutor) StopTty() {
+	err := d.runSingleScript(killTty)
+	util.LogIfError(err)
 }
 
 func (d *DockerExecutor) IsInteracting() bool {
@@ -220,8 +245,14 @@ func (d *DockerExecutor) initConfig() {
 }
 
 func (d *DockerExecutor) handleErrors(err error) error {
+	kill := func() {
+		_ = d.runSingleScript(killShell)
+		_ = d.runSingleScript(killTty)
+	}
+
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
+		kill()
 		d.toTimeOutStatus()
 		d.context = context.Background() // reset context for further docker operation
 		return nil
@@ -229,6 +260,7 @@ func (d *DockerExecutor) handleErrors(err error) error {
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
+		kill()
 		d.toKilledStatus()
 		d.context = context.Background() // reset context for further docker operation
 		return nil
@@ -335,7 +367,7 @@ func (d *DockerExecutor) copyPlugins() {
 	}
 }
 
-func (d *DockerExecutor) runCmdInContainer() string {
+func (d *DockerExecutor) runShell() string {
 	config := types.ExecConfig{
 		Tty:          false,
 		AttachStdin:  true,
@@ -364,10 +396,24 @@ func (d *DockerExecutor) runCmdInContainer() string {
 		in <- "env > " + dockerEnvFile
 	}
 
+	_, _ = attach.Conn.Write([]byte(writeShellPid))
+
 	d.writeLog(attach.Reader, true)
 	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
 
 	return exec.ID
+}
+
+func (d *DockerExecutor) runSingleScript(script string) error {
+	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, types.ExecConfig{
+		Cmd: []string{"/bin/bash", "-c", script},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	return d.cli.ContainerExecStart(d.context, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 }
 
 func (d *DockerExecutor) exportEnv() {
@@ -414,7 +460,7 @@ func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	return inspect.ExitCode

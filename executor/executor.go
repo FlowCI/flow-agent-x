@@ -35,7 +35,9 @@ type Executor interface {
 
 	Start() error
 
-	StartTty(ttyId string) error
+	StartTty(ttyId string, onStarted func(ttyId string)) error
+
+	StopTty()
 
 	IsInteracting() bool
 

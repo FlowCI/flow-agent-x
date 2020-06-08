@@ -17,6 +17,7 @@ type (
 	// Open, Close control action response
 	TtyOut struct {
 		ID        string
+		Action    string // Open or Close
 		IsSuccess bool
 		Error     string
 	}

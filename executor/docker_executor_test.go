@@ -103,6 +103,8 @@ func TestShouldStartDockerInteract(t *testing.T) {
 		time.Sleep(2 * time.Second)
 		executor.InputStream() <- "echo helloworld...\n"
 		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "sleep 9999\n"
+		time.Sleep(2 * time.Second)
 		executor.InputStream() <- "exit\n"
 	}()
 
@@ -120,7 +122,15 @@ func TestShouldStartDockerInteract(t *testing.T) {
 		break
 	}
 
-	err = executor.StartTty("fakeId")
+	// kill after 10 seconds
+	go func() {
+		time.Sleep(10 * time.Second)
+		executor.StopTty()
+	}()
+
+	err = executor.StartTty("fakeId", func(ttyId string) {
+		util.LogDebug("Tty started")
+	})
 	assert.NoError(err)
 	assert.False(executor.IsInteracting())
 }

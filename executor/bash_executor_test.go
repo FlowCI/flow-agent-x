@@ -75,7 +75,9 @@ func TestShouldStartBashInteract(t *testing.T) {
 		executor.InputStream() <- "exit\n"
 	}()
 
-	err := executor.StartTty("fakeId")
+	err := executor.StartTty("fakeId", func(ttyId string) {
+		util.LogDebug("Tty Started")
+	})
 	assert.NoError(err)
 	assert.False(executor.IsInteracting())
 }

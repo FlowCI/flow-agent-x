@@ -177,9 +177,16 @@ func (s *CmdService) initEnv() domain.Variables {
 	return vars
 }
 
-func (s *CmdService) execTty(cmd []byte) {
+func (s *CmdService) execTty(bytes []byte) {
+	var in domain.TtyIn
+	err := json.Unmarshal(bytes, &in)
+	if err != nil {
+		util.LogWarn("Unable to decode message to TtyIn")
+		return
+	}
+
 	defer func() {
-		if err = recover(); err != nil {
+		if err := recover(); err != nil {
 			saveAndPushBack(&domain.TtyOut{
 				ID:        in.ID,
 				IsSuccess: false,
@@ -188,35 +195,51 @@ func (s *CmdService) execTty(cmd []byte) {
 		}
 	}()
 
-	var in domain.TtyIn
-	err := json.Unmarshal(bytes, &in)
-	util.PanicIfErr(err)
-
 	e := s.executor
+	if !s.IsRunning() {
+		panic(fmt.Errorf("No running cmd"))
+	}
 
 	switch in.Action {
 	case domain.TtyActionOpen:
-		if !s.IsRunning() {
-			panic(fmt.Errorf("No running cmd"))
-		}
-
 		if e.IsInteracting() {
 			panic(fmt.Errorf("Tty already started"))
 		}
 
+		resp := &domain.TtyOut{
+			ID:     in.ID,
+			Action: domain.TtyActionOpen,
+		}
+
 		go func() {
-			err = e.StartTty(in.ID)
+			err = e.StartTty(in.ID, func(ttyId string) {
+				resp.IsSuccess = true
+				saveAndPushBack(resp)
+			})
+
 			if err != nil {
-				saveAndPushBack(&domain.TtyOut{
-					ID:        in.ID,
-					IsSuccess: false,
-					Error:     err.Error(),
-				})
+				resp.IsSuccess = false
+				resp.Error = err.Error()
+				saveAndPushBack(resp)
 			}
 		}()
 	case domain.TtyActionShell:
+		if !e.IsInteracting() {
+			panic(fmt.Errorf("Tty not started, please send open cmd"))
+		}
 
+		e.InputStream() <- in.Input
 	case domain.TtyActionClose:
+		if !e.IsInteracting() {
+			panic(fmt.Errorf("Tty not started, please send open cmd"))
+		}
+
+		e.StopTty()
+		saveAndPushBack(&domain.TtyOut{
+			ID:        in.ID,
+			Action:    domain.TtyActionClose,
+			IsSuccess: true,
+		})
 	}
 }
 
@@ -290,6 +313,6 @@ func saveAndPushBack(v interface{}) {
 	})
 
 	if !util.LogIfError(err) {
-		util.LogDebug("Result of cmd %s been pushed", r.ID)
+		util.LogDebug("Result of cmd been pushed")
 	}
 }

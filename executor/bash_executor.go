@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 )
 
 type (
@@ -17,6 +18,7 @@ type (
 		BaseExecutor
 		command *exec.Cmd
 		tty     *exec.Cmd
+		ttyWait sync.WaitGroup
 		workDir string
 		envFile string
 	}
@@ -96,6 +98,12 @@ func (b *BashExecutor) Start() (out error) {
 
 	b.exportEnv()
 
+	// wait for tty if it's running
+	if b.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		b.ttyWait.Wait()
+	}
+
 	if b.result.IsFinishStatus() {
 		return nil
 	}
@@ -105,7 +113,7 @@ func (b *BashExecutor) Start() (out error) {
 	return b.context.Err()
 }
 
-func (b *BashExecutor) StartTty(ttyId string) (out error) {
+func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -113,6 +121,7 @@ func (b *BashExecutor) StartTty(ttyId string) (out error) {
 
 		b.tty = nil
 		b.ttyId = ""
+		b.ttyWait.Done()
 
 		close(b.streamIn)
 		close(b.streamOut)
@@ -128,9 +137,11 @@ func (b *BashExecutor) StartTty(ttyId string) (out error) {
 
 	b.tty = c
 	b.ttyId = ttyId
+	b.ttyWait.Add(1)
 
 	ptmx, err := pty.Start(c)
 	util.PanicIfErr(err)
+	onStarted(ttyId)
 
 	defer func() {
 		_ = ptmx.Close()
@@ -141,6 +152,12 @@ func (b *BashExecutor) StartTty(ttyId string) (out error) {
 
 	_ = c.Wait()
 	return
+}
+
+func (b *BashExecutor) StopTty() {
+	if b.tty != nil {
+		_ = b.tty.Process.Kill()
+	}
 }
 
 func (b *BashExecutor) IsInteracting() bool {
