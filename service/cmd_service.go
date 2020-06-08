@@ -52,17 +52,12 @@ func (s *CmdService) Execute(bytes []byte) error {
 
 	switch in.Type {
 	case domain.CmdTypeShell:
-		var shell domain.ShellCmd
+		var shell domain.ShellIn
 		err := json.Unmarshal(bytes, &shell)
 		util.PanicIfErr(err)
 		return s.execShell(&shell)
-	case domain.CmdTypeTtyOpen:
-		return s.execTtyOpen()
-	case domain.CmdTypeTtyOpen:
-		// TODO:
-		return nil
-	case domain.CmdTypeTtyOpen:
-		// TODO:
+	case domain.CmdTypeTty:
+		s.execTty(bytes)
 		return nil
 	case domain.CmdTypeKill:
 		return s.execKill()
@@ -115,7 +110,7 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func (s *CmdService) execShell(in *domain.ShellCmd) (out error) {
+func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -182,18 +177,47 @@ func (s *CmdService) initEnv() domain.Variables {
 	return vars
 }
 
-func (s *CmdService) execTtyOpen() (err error) {
-	if !s.IsRunning() {
-		return fmt.Errorf("No running shell script")
-	}
-
-	go ttyConsumer(s.executor)
-
-	go func() {
-		_ = s.executor.StartTty()
+func (s *CmdService) execTty(cmd []byte) {
+	defer func() {
+		if err = recover(); err != nil {
+			saveAndPushBack(&domain.TtyOut{
+				ID:        in.ID,
+				IsSuccess: false,
+				Error:     err.(error).Error(),
+			})
+		}
 	}()
 
-	return
+	var in domain.TtyIn
+	err := json.Unmarshal(bytes, &in)
+	util.PanicIfErr(err)
+
+	e := s.executor
+
+	switch in.Action {
+	case domain.TtyActionOpen:
+		if !s.IsRunning() {
+			panic(fmt.Errorf("No running cmd"))
+		}
+
+		if e.IsInteracting() {
+			panic(fmt.Errorf("Tty already started"))
+		}
+
+		go func() {
+			err = e.StartTty(in.ID)
+			if err != nil {
+				saveAndPushBack(&domain.TtyOut{
+					ID:        in.ID,
+					IsSuccess: false,
+					Error:     err.Error(),
+				})
+			}
+		}()
+	case domain.TtyActionShell:
+
+	case domain.TtyActionClose:
+	}
 }
 
 func (s *CmdService) execKill() error {
@@ -214,7 +238,7 @@ func (s *CmdService) execClose() error {
 	return nil
 }
 
-func (s *CmdService) failureBeforeExecute(in *domain.ShellCmd, err error) {
+func (s *CmdService) failureBeforeExecute(in *domain.ShellIn, err error) {
 	result := &domain.ShellOut{
 		ID:      in.ID,
 		Status:  domain.CmdStatusException,
@@ -225,7 +249,10 @@ func (s *CmdService) failureBeforeExecute(in *domain.ShellCmd, err error) {
 	saveAndPushBack(result)
 }
 
-func verifyAndInitShellCmd(in *domain.ShellCmd) error {
+// ---------------------------------
+// 	Utils
+// ---------------------------------
+func verifyAndInitShellCmd(in *domain.ShellIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
@@ -244,7 +271,7 @@ func verifyAndInitShellCmd(in *domain.ShellCmd) error {
 }
 
 // Save result to local db and send back the result to server
-func saveAndPushBack(r *domain.ShellOut) {
+func saveAndPushBack(v interface{}) {
 	config := config.GetInstance()
 
 	// TODO: save to local db
@@ -254,7 +281,7 @@ func saveAndPushBack(r *domain.ShellOut) {
 	}
 
 	queue := config.Queue
-	json, _ := json.Marshal(r)
+	json, _ := json.Marshal(v)
 	callback := config.Settings.Queue.Callback
 
 	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{

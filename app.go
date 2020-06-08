@@ -114,7 +114,7 @@ func start(c *cli.Context) error {
 }
 
 func execCmd(script string) {
-	cmd := &domain.ShellCmd{
+	cmd := &domain.ShellIn{
 		ID:      "local",
 		Scripts: []string{script},
 		Inputs:  domain.Variables{},

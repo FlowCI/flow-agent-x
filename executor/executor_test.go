@@ -26,7 +26,7 @@ func getTestDataDir() string {
 	return path.Join(base, "_testdata")
 }
 
-func newExecutor(cmd *domain.ShellCmd) Executor {
+func newExecutor(cmd *domain.ShellIn) Executor {
 	ctx, _ := context.WithCancel(context.Background())
 	app := config.GetInstance()
 
@@ -47,7 +47,7 @@ func newExecutor(cmd *domain.ShellCmd) Executor {
 	return NewExecutor(options)
 }
 
-func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellCmd) *domain.ShellOut {
+func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.ShellOut {
 	// when:
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
@@ -68,7 +68,7 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellCmd) *domain.Shel
 	return executor.GetResult()
 }
 
-func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellCmd) {
+func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = false
 	cmd.Scripts = []string{"notCommand should exit with error"}
@@ -90,7 +90,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellCmd) {
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.ShellCmd) {
+func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = true
 	cmd.Scripts = []string{"notCommand should exit with error"}
@@ -112,7 +112,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellCmd) {
+func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Timeout = 5
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
@@ -134,7 +134,7 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellCmd) {
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellCmd) {
+func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 

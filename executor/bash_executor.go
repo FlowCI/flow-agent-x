@@ -15,10 +15,10 @@ import (
 type (
 	BashExecutor struct {
 		BaseExecutor
-		command  *exec.Cmd
-		interact *exec.Cmd
-		workDir  string
-		envFile  string
+		command *exec.Cmd
+		tty     *exec.Cmd
+		workDir string
+		envFile string
 	}
 )
 
@@ -105,16 +105,15 @@ func (b *BashExecutor) Start() (out error) {
 	return b.context.Err()
 }
 
-func (b *BashExecutor) StartTty() (out error) {
+func (b *BashExecutor) StartTty(ttyId string) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-			b.streamOut <- &domain.TtyOut{
-				Error: out.Error(),
-			}
 		}
 
-		b.interact = nil
+		b.tty = nil
+		b.ttyId = ""
+
 		close(b.streamIn)
 		close(b.streamOut)
 	}()
@@ -126,7 +125,9 @@ func (b *BashExecutor) StartTty() (out error) {
 	c := exec.Command(linuxBash)
 	c.Dir = b.workDir
 	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
-	b.interact = c
+
+	b.tty = c
+	b.ttyId = ttyId
 
 	ptmx, err := pty.Start(c)
 	util.PanicIfErr(err)
@@ -143,7 +144,7 @@ func (b *BashExecutor) StartTty() (out error) {
 }
 
 func (b *BashExecutor) IsInteracting() bool {
-	return b.interact != nil
+	return b.tty != nil
 }
 
 //====================================================================
@@ -181,8 +182,8 @@ func (b *BashExecutor) handleErrors(err error) {
 			_ = b.command.Process.Kill()
 		}
 
-		if b.interact != nil {
-			_ = b.interact.Process.Kill()
+		if b.tty != nil {
+			_ = b.tty.Process.Kill()
 		}
 	}
 

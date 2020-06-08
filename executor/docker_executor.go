@@ -37,7 +37,7 @@ type (
 		containerConfig *container.Config
 		hostConfig      *container.HostConfig
 		containerId     string
-		interactExecId  string
+		ttyExecId       string
 		workDir         string
 		envFile         string
 	}
@@ -95,16 +95,15 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
-func (d *DockerExecutor) StartTty() (out error) {
+func (d *DockerExecutor) StartTty(ttyId string) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-			d.streamOut <- &domain.TtyOut{
-				Error: out.Error(),
-			}
 		}
 
-		d.interactExecId = ""
+		d.ttyExecId = ""
+		d.ttyId = ""
+
 		close(d.streamIn)
 		close(d.streamOut)
 	}()
@@ -127,7 +126,9 @@ func (d *DockerExecutor) StartTty() (out error) {
 
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
-	d.interactExecId = exec.ID
+
+	d.ttyExecId = exec.ID
+	d.ttyId = ttyId
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
@@ -140,7 +141,7 @@ func (d *DockerExecutor) StartTty() (out error) {
 }
 
 func (d *DockerExecutor) IsInteracting() bool {
-	return d.interactExecId != ""
+	return d.ttyExecId != ""
 }
 
 //--------------------------------------------

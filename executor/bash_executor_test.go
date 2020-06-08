@@ -49,7 +49,7 @@ func TestShouldExitByKill(t *testing.T) {
 func TestShouldStartBashInteract(t *testing.T) {
 	assert := assert.New(t)
 
-	executor := newExecutor(&domain.ShellCmd{
+	executor := newExecutor(&domain.ShellIn{
 		ID:     "test111",
 		FlowId: "test111",
 		Scripts: []string{
@@ -64,28 +64,24 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug(log.Output)
+			util.LogDebug(log.Log)
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- &domain.TtyIn{
-			Script: "ls\n",
-		}
+		executor.InputStream() <- "ls\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- &domain.TtyIn{
-			Script: "exit\n",
-		}
+		executor.InputStream() <- "exit\n"
 	}()
 
-	err := executor.StartTty()
+	err := executor.StartTty("fakeId")
 	assert.NoError(err)
 	assert.False(executor.IsInteracting())
 }
 
-func createBashTestCmd() *domain.ShellCmd {
-	return &domain.ShellCmd{
+func createBashTestCmd() *domain.ShellIn {
+	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{
 			Type: domain.CmdTypeShell,
 		},

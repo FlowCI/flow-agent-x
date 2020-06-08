@@ -70,7 +70,7 @@ func TestShouldReuseContainer(t *testing.T) {
 func TestShouldStartDockerInteract(t *testing.T) {
 	assert := assert.New(t)
 
-	executor := newExecutor(&domain.ShellCmd{
+	executor := newExecutor(&domain.ShellIn{
 		ID:     "test111",
 		FlowId: "test111",
 		Scripts: []string{
@@ -95,22 +95,18 @@ func TestShouldStartDockerInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug("[INTERACT]: %s", log.Output)
+			util.LogDebug("[INTERACT]: %s", log.Log)
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- &domain.TtyIn{
-			Script: "echo helloworld...\n",
-		}
+		executor.InputStream() <- "echo helloworld...\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- &domain.TtyIn{
-			Script: "exit\n",
-		}
+		executor.InputStream() <- "exit\n"
 	}()
 
-	// docker should start container for cmd before interact
+	// docker should start container for cmd before tty
 	go func() {
 		err := executor.Start()
 		assert.NoError(err)
@@ -124,14 +120,13 @@ func TestShouldStartDockerInteract(t *testing.T) {
 		break
 	}
 
-	err = executor.StartTty()
+	err = executor.StartTty("fakeId")
 	assert.NoError(err)
-
 	assert.False(executor.IsInteracting())
 }
 
-func createDockerTestCmd() *domain.ShellCmd {
-	return &domain.ShellCmd{
+func createDockerTestCmd() *domain.ShellIn {
+	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{
 			Type: domain.CmdTypeShell,
 		},

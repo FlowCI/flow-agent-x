@@ -29,13 +29,13 @@ type Executor interface {
 
 	LogChannel() <-chan *domain.LogItem
 
-	InputStream() chan<- *domain.TtyIn
+	InputStream() chan<- string
 
-	OutputStream() <-chan *domain.TtyOut
+	OutputStream() <-chan *domain.TtyLog
 
 	Start() error
 
-	StartTty() error
+	StartTty(ttyId string) error
 
 	IsInteracting() bool
 
@@ -50,15 +50,16 @@ type BaseExecutor struct {
 	pluginDir   string
 	context     context.Context
 	cancelFunc  context.CancelFunc
-	inCmd       *domain.ShellCmd
+	inCmd       *domain.ShellIn
 	result      *domain.ShellOut
 	vars        domain.Variables     // vars from input and in cmd
 	bashChannel chan string          // bash script comes from
 	logChannel  chan *domain.LogItem // output log
 	stdOutWg    sync.WaitGroup       // init on subclasses
 
-	streamIn  chan *domain.TtyIn
-	streamOut chan *domain.TtyOut
+	streamIn  chan string
+	streamOut chan *domain.TtyLog
+	ttyId     string
 }
 
 type Options struct {
@@ -66,7 +67,7 @@ type Options struct {
 	Parent    context.Context
 	Workspace string
 	PluginDir string
-	Cmd       *domain.ShellCmd
+	Cmd       *domain.ShellIn
 	Vars      domain.Variables
 	Volumes   []*domain.DockerVolume
 }
@@ -90,8 +91,8 @@ func NewExecutor(options Options) Executor {
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
-		streamIn:    make(chan *domain.TtyIn, defaultChannelBufferSize),
-		streamOut:   make(chan *domain.TtyOut, defaultChannelBufferSize),
+		streamIn:    make(chan string, defaultChannelBufferSize),
+		streamOut:   make(chan *domain.TtyLog, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -124,11 +125,11 @@ func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
 	return b.logChannel
 }
 
-func (b *BaseExecutor) InputStream() chan<- *domain.TtyIn {
+func (b *BaseExecutor) InputStream() chan<- string {
 	return b.streamIn
 }
 
-func (b *BaseExecutor) OutputStream() <-chan *domain.TtyOut {
+func (b *BaseExecutor) OutputStream() <-chan *domain.TtyLog {
 	return b.streamOut
 }
 
@@ -240,7 +241,7 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 		if !ok {
 			return
 		}
-		_, _ = writer.Write([]byte(input.Script))
+		_, _ = writer.Write([]byte(input))
 	}
 }
 
@@ -255,8 +256,9 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 			if err != nil {
 				return
 			}
-			b.streamOut <- &domain.TtyOut{
-				Output: string(removeDockerHeader(buffer[0:n])),
+			b.streamOut <- &domain.TtyLog{
+				ID:  b.ttyId,
+				Log: string(removeDockerHeader(buffer[0:n])),
 			}
 		}
 	}
