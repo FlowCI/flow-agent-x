@@ -191,6 +191,9 @@ func (b *BaseExecutor) closeChannels() {
 
 	close(b.bashChannel)
 	close(b.logChannel)
+
+	close(b.streamIn)
+	close(b.streamOut)
 }
 
 func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {

@@ -122,9 +122,6 @@ func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out
 		b.tty = nil
 		b.ttyId = ""
 		b.ttyWait.Done()
-
-		close(b.streamIn)
-		close(b.streamOut)
 	}()
 
 	if b.IsInteracting() {
