@@ -21,6 +21,11 @@ const (
 	CmdStatusTimeout   CmdStatus = "TIMEOUT"
 )
 
+var (
+	ShellOutInd = []byte{1}
+	TtyOutInd   = []byte{2}
+)
+
 const (
 	// CmdExitCodeUnknown default exit code
 	CmdExitCodeUnknown = -1
@@ -48,5 +53,9 @@ type (
 
 	CmdIn struct {
 		Type CmdType `json:"type"`
+	}
+
+	CmdOut interface {
+		ToBytes() []byte
 	}
 )

@@ -115,9 +115,12 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 			out = err.(error)
 		}
 
+		if d.IsInteracting() {
+			d.ttyWait.Done()
+		}
+
 		d.ttyExecId = ""
 		d.ttyId = ""
-		d.ttyWait.Done()
 
 		close(d.streamIn)
 		close(d.streamOut)

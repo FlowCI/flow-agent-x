@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type (
 	ShellIn struct {
@@ -93,4 +96,9 @@ func (e *ShellOut) IsFinishStatus() bool {
 	default:
 		return false
 	}
+}
+
+func (e *ShellOut) ToBytes() []byte {
+	bytes, _ := json.Marshal(e)
+	return append(ShellOutInd, bytes...)
 }

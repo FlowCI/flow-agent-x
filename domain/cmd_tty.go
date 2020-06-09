@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 const (
 	TtyActionOpen  = "OPEN"
 	TtyActionClose = "CLOSE"
@@ -18,7 +20,7 @@ type (
 	TtyOut struct {
 		ID        string `json:"id"`
 		Action    string `json:"action"`
-		IsSuccess bool   `json:"isSuccess"`
+		IsSuccess bool   `json:"success"`
 		Error     string `json:"error"`
 	}
 
@@ -28,3 +30,8 @@ type (
 		Content string `json:"content"`
 	}
 )
+
+func (obj *TtyOut) ToBytes() []byte {
+	bytes, _ := json.Marshal(obj)
+	return append(TtyOutInd, bytes...)
+}
