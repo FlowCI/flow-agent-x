@@ -185,14 +185,16 @@ func (s *CmdService) execTty(bytes []byte) {
 		return
 	}
 
+	response := &domain.TtyOut{
+		ID:     in.ID,
+		Action: in.Action,
+	}
+
 	defer func() {
 		if err := recover(); err != nil {
-			saveAndPushBack(&domain.TtyOut{
-				ID:        in.ID,
-				Action:    in.Action,
-				IsSuccess: false,
-				Error:     err.(error).Error(),
-			})
+			response.IsSuccess = false
+			response.Error = err.(error).Error()
+			saveAndPushBack(response)
 		}
 	}()
 
@@ -207,21 +209,16 @@ func (s *CmdService) execTty(bytes []byte) {
 			panic(fmt.Errorf("Tty already started"))
 		}
 
-		resp := &domain.TtyOut{
-			ID:     in.ID,
-			Action: domain.TtyActionOpen,
-		}
-
 		go func() {
 			err = e.StartTty(in.ID, func(ttyId string) {
-				resp.IsSuccess = true
-				saveAndPushBack(resp)
+				response.IsSuccess = true
+				saveAndPushBack(response)
 			})
 
 			if err != nil {
-				resp.IsSuccess = false
-				resp.Error = err.Error()
-				saveAndPushBack(resp)
+				response.IsSuccess = false
+				response.Error = err.Error()
+				saveAndPushBack(response)
 			}
 		}()
 	case domain.TtyActionShell:
@@ -236,11 +233,9 @@ func (s *CmdService) execTty(bytes []byte) {
 		}
 
 		e.StopTty()
-		saveAndPushBack(&domain.TtyOut{
-			ID:        in.ID,
-			Action:    domain.TtyActionClose,
-			IsSuccess: true,
-		})
+
+		response.IsSuccess = true
+		saveAndPushBack(response)
 	}
 }
 
