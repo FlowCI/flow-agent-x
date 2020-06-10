@@ -13,9 +13,10 @@ type (
 
 	// RabbitMQConfig the mq config data
 	RabbitMQConfig struct {
-		Uri          string
-		Callback     string
-		LogsExchange string
+		Uri        string
+		Callback   string
+		ShellLogEx string
+		TtyLogEx   string
 	}
 
 	// Settings the setting info from server side
@@ -36,7 +37,7 @@ func (c *RabbitMQConfig) GetConnectionString() string {
 }
 
 func (c *RabbitMQConfig) String() string {
-	return fmt.Sprintf("RABBIT:[uri=%s, callback=%s, logsExchange=%s]", c.Uri, c.Callback, c.LogsExchange)
+	return fmt.Sprintf("RABBIT:[uri=%s, callback=%s, exchanges=%s %s]", c.Uri, c.Callback, c.ShellLogEx, c.TtyLogEx)
 }
 
 // ===================================

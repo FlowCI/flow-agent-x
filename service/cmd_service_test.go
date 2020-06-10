@@ -47,20 +47,15 @@ func TestShouldReceiveExecutedCmdCallbackMessage(t *testing.T) {
 	callbackQueue := config.Settings.Queue.Callback
 	ch := config.Queue.Channel
 	_, _ = ch.QueueDeclare(callbackQueue, false, true, false, false, nil)
-	defer func() {
-		_, err := ch.QueueDelete(callbackQueue, false, false, true)
-		assert.NoError(err)
-	}()
-
 	msgs, err := ch.Consume(callbackQueue, "test", true, false, false, false, nil)
 	assert.Nil(err)
 
 	service := GetCmdService()
-
 	raw, _ := ioutil.ReadFile("./_testdata/shell_cmd.json")
 	err = service.Execute(raw)
 	assert.Nil(err)
 
+	// shell out should sent to queue
 	select {
 	case m, ok := <-msgs:
 		if !ok {

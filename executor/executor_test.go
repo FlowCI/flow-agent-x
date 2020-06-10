@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func printLog(channel <-chan *domain.LogItem) {
+func printLog(channel <-chan *domain.ShellLog) {
 	for {
 		item, ok := <-channel
 		if !ok {

@@ -27,7 +27,7 @@ type Executor interface {
 
 	CmdId() string
 
-	LogChannel() <-chan *domain.LogItem
+	LogChannel() <-chan *domain.ShellLog
 
 	InputStream() chan<- string
 
@@ -54,10 +54,10 @@ type BaseExecutor struct {
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.ShellIn
 	result      *domain.ShellOut
-	vars        domain.Variables     // vars from input and in cmd
-	bashChannel chan string          // bash script comes from
-	logChannel  chan *domain.LogItem // output log
-	stdOutWg    sync.WaitGroup       // init on subclasses
+	vars        domain.Variables      // vars from input and in cmd
+	bashChannel chan string           // bash script comes from
+	logChannel  chan *domain.ShellLog // output log
+	stdOutWg    sync.WaitGroup        // init on subclasses
 
 	streamIn  chan string
 	streamOut chan *domain.TtyLog
@@ -89,7 +89,7 @@ func NewExecutor(options Options) Executor {
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
-		logChannel:  make(chan *domain.LogItem, defaultChannelBufferSize),
+		logChannel:  make(chan *domain.ShellLog, defaultChannelBufferSize),
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
@@ -123,7 +123,7 @@ func (b *BaseExecutor) FlowId() string {
 }
 
 // LogChannel for output log from stdout, stdin
-func (b *BaseExecutor) LogChannel() <-chan *domain.LogItem {
+func (b *BaseExecutor) LogChannel() <-chan *domain.ShellLog {
 	return b.logChannel
 }
 
@@ -222,7 +222,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 					return
 				}
 
-				b.logChannel <- &domain.LogItem{
+				b.logChannel <- &domain.ShellLog{
 					CmdId:   b.CmdId(),
 					Content: removeDockerHeader(buffer[0:n]),
 				}
@@ -234,7 +234,7 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
-	b.logChannel <- &domain.LogItem{
+	b.logChannel <- &domain.ShellLog{
 		CmdId:   b.CmdId(),
 		Content: []byte(msg),
 	}
@@ -263,7 +263,7 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 			}
 			b.streamOut <- &domain.TtyLog{
 				ID:      b.ttyId,
-				Content: string(removeDockerHeader(buffer[0:n])),
+				Content: removeDockerHeader(buffer[0:n]),
 			}
 		}
 	}

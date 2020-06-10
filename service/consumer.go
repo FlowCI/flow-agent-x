@@ -19,19 +19,8 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
-var (
-	logBuffer = bytes.NewBuffer(make([]byte, 1024 * 1024 * 1)) // 1mb buffer
-)
-
-func ttyConsumer(exec executor.Executor) {
-
-}
-
 // Push stdout, stderr log back to server
 func logConsumer(executor executor.Executor, logDir string) {
-	config := config.GetInstance()
-	logChannel := executor.LogChannel()
-
 	// init path for shell, log and raw log
 	logPath := filepath.Join(logDir, executor.CmdId()+".log")
 	f, _ := os.Create(logPath)
@@ -48,32 +37,51 @@ func logConsumer(executor executor.Executor, logDir string) {
 		util.LogDebug("[Exit]: logConsumer")
 	}()
 
-	for {
-		log, ok := <-logChannel
-		if !ok {
-			break
+	consumeShellLog := func() {
+		config := config.GetInstance()
+		buffer := bytes.NewBuffer(make([]byte, 1024*1024*1)) // 1mb buffer
+		for {
+			log, ok := <-executor.LogChannel()
+			if !ok {
+				return
+			}
+			// write to file
+			writer.Write(log.Content)
+			util.LogDebug("[ShellLog]: %s", log.Content)
+			if config.HasQueue() {
+				channel := config.Queue.Channel
+				exchange := config.Settings.Queue.ShellLogEx
+				pushLog(channel, exchange, buffer, log)
+			}
 		}
-
-		writer.Write(log.Content)
-		util.LogDebug("[LOG]: %s", log.Content)
-
-		pushLog(config, log)
 	}
+
+	consumeTtyLog := func() {
+		config := config.GetInstance()
+		buffer := bytes.NewBuffer(make([]byte, 1024*1024*1)) // 1mb buffer
+		for {
+			log, ok := <-executor.OutputStream()
+			if !ok {
+				return
+			}
+			util.LogDebug("[TtyLog]: %s", log.Content)
+			if config.HasQueue() {
+				channel := config.Queue.Channel
+				exchange := config.Settings.Queue.TtyLogEx
+				pushLog(channel, exchange, buffer, log)
+			}
+		}
+	}
+
+	go consumeShellLog()
+	go consumeTtyLog()
 }
 
-func pushLog(config *config.Manager, log *domain.LogItem) {
-	if !config.HasQueue() {
-		return
-	}
-
-	defer logBuffer.Reset()
-
-	exchange := config.Settings.Queue.LogsExchange
-	channel := config.Queue.LogChannel
-
-	_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+func pushLog(c *amqp.Channel, exchange string, buffer *bytes.Buffer, log domain.CmdLog) {
+	defer buffer.Reset()
+	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpProtobuf,
-		Body:        log.Write(logBuffer),
+		Body:        log.ToBytes(buffer),
 	})
 }
 

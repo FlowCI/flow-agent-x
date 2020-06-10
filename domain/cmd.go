@@ -1,5 +1,7 @@
 package domain
 
+import "bytes"
+
 type CmdType string
 
 type CmdStatus string
@@ -22,8 +24,8 @@ const (
 )
 
 var (
-	ShellOutInd = []byte{1}
-	TtyOutInd   = []byte{2}
+	shellOutInd = []byte{1}
+	ttyOutInd   = []byte{2}
 )
 
 const (
@@ -38,6 +40,8 @@ const (
 
 	// CmdExitCodeSuccess exit code for command executed successfully
 	CmdExitCodeSuccess = 0
+
+	logSeparator = '\003'
 )
 
 type (
@@ -57,5 +61,9 @@ type (
 
 	CmdOut interface {
 		ToBytes() []byte
+	}
+
+	CmdLog interface {
+		ToBytes(buffer *bytes.Buffer) []byte
 	}
 )
