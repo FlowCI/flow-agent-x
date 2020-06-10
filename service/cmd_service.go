@@ -206,7 +206,9 @@ func (s *CmdService) execTty(bytes []byte) {
 	switch in.Action {
 	case domain.TtyActionOpen:
 		if e.IsInteracting() {
-			panic(fmt.Errorf("Tty already started"))
+			response.IsSuccess = true
+			saveAndPushBack(response)
+			return
 		}
 
 		go func() {
