@@ -47,10 +47,8 @@ func (obj *TtyOut) ToBytes() []byte {
 //		TtyLog Methods
 // ===================================
 
-// format: {ind}{length of id}003{cmd id}003{content}
+// format: {length of id}003{cmd id}003{content}
 func (log *TtyLog) ToBytes(buffer *bytes.Buffer) []byte {
-	buffer.Write(ttyOutInd)
-
 	i := len(log.ID)
 	buffer.WriteByte(uint8(i))
 	buffer.WriteByte(logSeparator)

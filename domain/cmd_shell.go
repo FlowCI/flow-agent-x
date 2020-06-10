@@ -113,10 +113,8 @@ func (e *ShellOut) ToBytes() []byte {
 //		ShellLog Methods
 // ===================================
 
-// format: {ind}{length of id}003{cmd id}003{content}
+// format: {length of id}003{cmd id}003{content}
 func (log *ShellLog) ToBytes(buffer *bytes.Buffer) []byte {
-	buffer.Write(shellOutInd)
-
 	i := len(log.CmdId)
 	buffer.WriteByte(uint8(i))
 	buffer.WriteByte(logSeparator)
