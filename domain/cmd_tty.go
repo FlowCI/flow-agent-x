@@ -8,7 +8,7 @@ import (
 const (
 	TtyActionOpen  = "OPEN"
 	TtyActionClose = "CLOSE"
-	TtyActionShell = "SheLL"
+	TtyActionShell = "SHELL"
 )
 
 type (

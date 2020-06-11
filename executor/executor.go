@@ -6,6 +6,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -242,11 +243,16 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for {
-		input, ok := <-b.streamIn
+		inputStr, ok := <-b.streamIn
 		if !ok {
 			return
 		}
-		_, _ = writer.Write([]byte(input))
+
+		in := []byte(inputStr)
+		if strings.LastIndexByte(inputStr, util.UnixLineBreak) == -1 {
+			in = append(in, util.UnixLineBreak)
+		}
+		_, _ = writer.Write(in)
 	}
 }
 
