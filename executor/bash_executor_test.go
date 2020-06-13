@@ -64,15 +64,15 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug(string(log.Content))
+			util.LogDebug("------ %s", string(log.Content))
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "ls\n"
+		executor.InputStream() <- "ls -l\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "exit\n"
+		executor.InputStream() <- string([]byte{4})
 	}()
 
 	err := executor.StartTty("fakeId", func(ttyId string) {

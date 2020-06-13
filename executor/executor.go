@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github/flowci/flow-agent-x/domain"
@@ -197,7 +198,7 @@ func (b *BaseExecutor) closeChannels() {
 	close(b.streamOut)
 }
 
-func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
+func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
 	go func() {
 		defer func() {
 			if err := recover(); err != nil {
@@ -211,24 +212,23 @@ func (b *BaseExecutor) writeLog(reader io.Reader, doneOnWaitGroup bool) {
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.result.LogSize)
 		}()
 
-		buffer := make([]byte, defaultReaderBufferSize)
-
+		reader := bufio.NewReaderSize(src, defaultReaderBufferSize)
 		for {
 			select {
 			case <-b.context.Done():
 				return
 			default:
-				n, err := reader.Read(buffer)
+				line, _, err := reader.ReadLine()
 				if err != nil {
 					return
 				}
 
 				b.logChannel <- &domain.ShellLog{
 					CmdId:   b.CmdId(),
-					Content: removeDockerHeader(buffer[0:n]),
+					Content: removeDockerHeader(line),
 				}
 
-				atomic.AddInt64(&b.result.LogSize, int64(n))
+				atomic.AddInt64(&b.result.LogSize, int64(len(line)))
 			}
 		}
 	}()
@@ -257,19 +257,20 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 }
 
 func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
-	buffer := make([]byte, defaultReaderBufferSize)
+	r := bufio.NewReaderSize(reader, defaultReaderBufferSize)
 	for {
 		select {
 		case <-b.context.Done():
 			return
 		default:
-			n, err := reader.Read(buffer)
+			line, _, err := r.ReadLine()
 			if err != nil {
 				return
 			}
+
 			b.streamOut <- &domain.TtyLog{
 				ID:      b.ttyId,
-				Content: removeDockerHeader(buffer[0:n]),
+				Content: removeDockerHeader(line),
 			}
 		}
 	}
