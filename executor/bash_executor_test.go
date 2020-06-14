@@ -64,12 +64,13 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug("------ %s", string(log.Content))
+			util.LogDebug("------ %s", string(log))
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
+		executor.InputStream() <- "cd ~/\n"
 		executor.InputStream() <- "ls -l\n"
 		time.Sleep(2 * time.Second)
 		executor.InputStream() <- string([]byte{4})

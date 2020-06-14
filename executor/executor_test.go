@@ -11,13 +11,13 @@ import (
 	"time"
 )
 
-func printLog(channel <-chan *domain.ShellLog) {
+func printLog(channel <-chan []byte) {
 	for {
 		item, ok := <-channel
 		if !ok {
 			break
 		}
-		util.LogDebug("[LOG]: %s", item.Content)
+		util.LogDebug("[LOG]: %s", item)
 	}
 }
 func getTestDataDir() string {

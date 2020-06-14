@@ -3,6 +3,7 @@ package service
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github/flowci/flow-agent-x/executor"
@@ -20,55 +21,56 @@ import (
 )
 
 // Push stdout, stderr log back to server
-func logConsumer(executor executor.Executor, logDir string) {
+func startLogConsumer(executor executor.Executor, logDir string) {
 	// init path for shell, log and raw log
-	logPath := filepath.Join(logDir, executor.CmdId()+".log")
-	f, _ := os.Create(logPath)
-	writer := bufio.NewWriter(f)
-
-	// upload log after flush!!
-	defer func() {
-		_ = writer.Flush()
-		_ = f.Close()
-
-		err := uploadLog(logPath)
-		util.LogIfError(err)
-
-		util.LogDebug("[Exit]: logConsumer")
-	}()
-
 	consumeShellLog := func() {
+		logPath := filepath.Join(logDir, executor.CmdId()+".log")
+		f, _ := os.Create(logPath)
+		logFileWriter := bufio.NewWriter(f)
+
+		defer func() {
+			// upload log after flush!!
+			_ = logFileWriter.Flush()
+			_ = f.Close()
+			err := uploadLog(logPath)
+			util.LogIfError(err)
+
+			util.LogDebug("[Exit]: tLogConsumer")
+		}()
+
 		config := config.GetInstance()
-		buffer := bytes.NewBuffer(make([]byte, 1024*1024*1)) // 1mb buffer
-		for {
-			log, ok := <-executor.LogChannel()
-			if !ok {
-				return
-			}
+		for log := range executor.LogChannel() {
 			// write to file
-			writer.Write(log.Content)
-			util.LogDebug("[ShellLog]: %s", log.Content)
+			logFileWriter.Write(log)
+			util.LogDebug("[ShellLog]: %s", string(log))
+
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.ShellLogEx
-				pushLog(channel, exchange, buffer, log)
+
+				cmdLog := &domain.CmdLog{
+					ID:      executor.CmdId(),
+					Content: base64.StdEncoding.EncodeToString(log),
+				}
+				pushLog(channel, exchange, cmdLog)
 			}
 		}
 	}
 
 	consumeTtyLog := func() {
 		config := config.GetInstance()
-		buffer := bytes.NewBuffer(make([]byte, 1024*1024*1)) // 1mb buffer
-		for {
-			log, ok := <-executor.OutputStream()
-			if !ok {
-				return
-			}
-			util.LogDebug("[TtyLog]: %s", log.Content)
+		for log := range executor.OutputStream() {
+			util.LogDebug("[TtyLog]: %s", string(log))
+
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.TtyLogEx
-				pushLog(channel, exchange, buffer, log)
+
+				cmdLog := &domain.CmdLog{
+					ID:      executor.TtyId(),
+					Content: base64.StdEncoding.EncodeToString(log),
+				}
+				pushLog(channel, exchange, cmdLog)
 			}
 		}
 	}
@@ -77,11 +79,16 @@ func logConsumer(executor executor.Executor, logDir string) {
 	go consumeTtyLog()
 }
 
-func pushLog(c *amqp.Channel, exchange string, buffer *bytes.Buffer, log domain.CmdLog) {
-	defer buffer.Reset()
+func pushLog(c *amqp.Channel, exchange string, log *domain.CmdLog) {
+	raw, err := json.Marshal(log)
+	if err != nil {
+		util.LogWarn("Cannot marshal CmdLog to json")
+		return
+	}
+
 	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpProtobuf,
-		Body:        log.ToBytes(buffer),
+		Body:        raw,
 	})
 }
 

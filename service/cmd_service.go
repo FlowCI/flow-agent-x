@@ -148,7 +148,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	err = s.executor.Init()
 	util.PanicIfErr(err)
 
-	go logConsumer(s.executor, config.LoggingDir)
+	startLogConsumer(s.executor, config.LoggingDir)
 
 	go func() {
 		defer s.release()

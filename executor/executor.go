@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"github/flowci/flow-agent-x/domain"
@@ -29,11 +28,13 @@ type Executor interface {
 
 	CmdId() string
 
-	LogChannel() <-chan *domain.ShellLog
+	TtyId() string
+
+	LogChannel() <-chan []byte
 
 	InputStream() chan<- string
 
-	OutputStream() <-chan *domain.TtyLog
+	OutputStream() <-chan []byte
 
 	Start() error
 
@@ -56,13 +57,13 @@ type BaseExecutor struct {
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.ShellIn
 	result      *domain.ShellOut
-	vars        domain.Variables      // vars from input and in cmd
-	bashChannel chan string           // bash script comes from
-	logChannel  chan *domain.ShellLog // output log
-	stdOutWg    sync.WaitGroup        // init on subclasses
+	vars        domain.Variables // vars from input and in cmd
+	bashChannel chan string      // bash script comes from
+	logChannel  chan []byte      // output log
+	stdOutWg    sync.WaitGroup   // init on subclasses
 
 	streamIn  chan string
-	streamOut chan *domain.TtyLog
+	streamOut chan []byte
 	ttyId     string
 }
 
@@ -91,12 +92,12 @@ func NewExecutor(options Options) Executor {
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
 		bashChannel: make(chan string),
-		logChannel:  make(chan *domain.ShellLog, defaultChannelBufferSize),
+		logChannel:  make(chan []byte, defaultChannelBufferSize),
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
 		streamIn:    make(chan string, defaultChannelBufferSize),
-		streamOut:   make(chan *domain.TtyLog, defaultChannelBufferSize),
+		streamOut:   make(chan []byte, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -120,12 +121,16 @@ func (b *BaseExecutor) CmdId() string {
 	return b.inCmd.ID
 }
 
+func (b *BaseExecutor) TtyId() string {
+	return b.ttyId
+}
+
 func (b *BaseExecutor) FlowId() string {
 	return b.inCmd.FlowId
 }
 
 // LogChannel for output log from stdout, stdin
-func (b *BaseExecutor) LogChannel() <-chan *domain.ShellLog {
+func (b *BaseExecutor) LogChannel() <-chan []byte {
 	return b.logChannel
 }
 
@@ -133,7 +138,7 @@ func (b *BaseExecutor) InputStream() chan<- string {
 	return b.streamIn
 }
 
-func (b *BaseExecutor) OutputStream() <-chan *domain.TtyLog {
+func (b *BaseExecutor) OutputStream() <-chan []byte {
 	return b.streamOut
 }
 
@@ -212,33 +217,26 @@ func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
 			util.LogDebug("[Exit]: StdOut/Err, log size = %d", b.result.LogSize)
 		}()
 
-		reader := bufio.NewReaderSize(src, defaultReaderBufferSize)
+		buf := make([]byte, defaultReaderBufferSize)
 		for {
 			select {
 			case <-b.context.Done():
 				return
 			default:
-				line, _, err := reader.ReadLine()
+				n, err := src.Read(buf)
 				if err != nil {
 					return
 				}
 
-				b.logChannel <- &domain.ShellLog{
-					CmdId:   b.CmdId(),
-					Content: removeDockerHeader(line),
-				}
-
-				atomic.AddInt64(&b.result.LogSize, int64(len(line)))
+				b.logChannel <- removeDockerHeader(buf[0:n])
+				atomic.AddInt64(&b.result.LogSize, int64(n))
 			}
 		}
 	}()
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
-	b.logChannel <- &domain.ShellLog{
-		CmdId:   b.CmdId(),
-		Content: []byte(msg),
-	}
+	b.logChannel <- []byte(msg)
 }
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
@@ -257,21 +255,17 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 }
 
 func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
-	r := bufio.NewReaderSize(reader, defaultReaderBufferSize)
+	buf := make([]byte, defaultReaderBufferSize)
 	for {
 		select {
 		case <-b.context.Done():
 			return
 		default:
-			line, _, err := r.ReadLine()
+			n, err := reader.Read(buf)
 			if err != nil {
 				return
 			}
-
-			b.streamOut <- &domain.TtyLog{
-				ID:      b.ttyId,
-				Content: removeDockerHeader(line),
-			}
+			b.streamOut <- removeDockerHeader(buf[0:n])
 		}
 	}
 }

@@ -1,7 +1,5 @@
 package domain
 
-import "bytes"
-
 type CmdType string
 
 type CmdStatus string
@@ -40,8 +38,6 @@ const (
 
 	// CmdExitCodeSuccess exit code for command executed successfully
 	CmdExitCodeSuccess = 0
-
-	logSeparator = '\003'
 )
 
 type (
@@ -63,7 +59,8 @@ type (
 		ToBytes() []byte
 	}
 
-	CmdLog interface {
-		ToBytes(buffer *bytes.Buffer) []byte
+	CmdLog struct {
+		ID      string `json:"id"`
+		Content string `json:"content"` // b64 content
 	}
 )

@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"bytes"
 	"encoding/json"
 )
 
@@ -26,12 +25,6 @@ type (
 		IsSuccess bool   `json:"success"`
 		Error     string `json:"error"`
 	}
-
-	// Shell log output
-	TtyLog struct {
-		ID      string `json:"id"`
-		Content []byte `json:"content"`
-	}
 )
 
 // ===================================
@@ -41,21 +34,4 @@ type (
 func (obj *TtyOut) ToBytes() []byte {
 	data, _ := json.Marshal(obj)
 	return append(ttyOutInd, data...)
-}
-
-// ===================================
-//		TtyLog Methods
-// ===================================
-
-// format: {length of id}003{cmd id}003{content}
-func (log *TtyLog) ToBytes(buffer *bytes.Buffer) []byte {
-	i := len(log.ID)
-	buffer.WriteByte(uint8(i))
-	buffer.WriteByte(logSeparator)
-
-	buffer.WriteString(log.ID)
-	buffer.WriteByte(logSeparator)
-
-	buffer.Write(log.Content)
-	return buffer.Bytes()
 }

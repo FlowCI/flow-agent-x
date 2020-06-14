@@ -95,7 +95,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug("[INTERACT]: %s", log.Content)
+			util.LogDebug("------ %s", string(log))
 		}
 	}()
 

@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"bytes"
 	"encoding/json"
 	"time"
 )
@@ -32,11 +31,6 @@ type (
 		FinishAt    time.Time `json:"finishAt"`
 		Error       string    `json:"error"`
 		LogSize     int64     `json:"logSize"`
-	}
-
-	ShellLog struct {
-		CmdId   string
-		Content []byte
 	}
 )
 
@@ -107,21 +101,4 @@ func (e *ShellOut) IsFinishStatus() bool {
 func (e *ShellOut) ToBytes() []byte {
 	data, _ := json.Marshal(e)
 	return append(shellOutInd, data...)
-}
-
-// ===================================
-//		ShellLog Methods
-// ===================================
-
-// format: {length of id}003{cmd id}003{content}
-func (log *ShellLog) ToBytes(buffer *bytes.Buffer) []byte {
-	i := len(log.CmdId)
-	buffer.WriteByte(uint8(i))
-	buffer.WriteByte(logSeparator)
-
-	buffer.WriteString(log.CmdId)
-	buffer.WriteByte(logSeparator)
-
-	buffer.Write(log.Content)
-	return buffer.Bytes()
 }
