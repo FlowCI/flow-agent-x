@@ -61,7 +61,7 @@ func TestShouldStartBashInteract(t *testing.T) {
 
 	go func() {
 		for {
-			log, ok := <-executor.OutputStream()
+			log, ok := <-executor.TtyOut()
 			if !ok {
 				return
 			}
@@ -73,10 +73,10 @@ func TestShouldStartBashInteract(t *testing.T) {
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "cd ~/\n"
-		executor.InputStream() <- "ls -l\n"
+		executor.TtyIn() <- "cd ~/\n"
+		executor.TtyIn() <- "ls -l\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- string([]byte{4})
+		executor.TtyIn() <- string([]byte{4})
 	}()
 
 	err := executor.StartTty("fakeId", func(ttyId string) {

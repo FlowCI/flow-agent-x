@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"encoding/base64"
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
@@ -91,21 +92,22 @@ func TestShouldStartDockerInteract(t *testing.T) {
 
 	go func() {
 		for {
-			log, ok := <-executor.OutputStream()
+			log, ok := <-executor.TtyOut()
 			if !ok {
 				return
 			}
-			util.LogDebug("------ %s", string(log))
+			content, _ := base64.StdEncoding.DecodeString(log)
+			util.LogDebug("------ %s", content)
 		}
 	}()
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "echo helloworld...\n"
+		executor.TtyIn() <- "echo helloworld...\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "sleep 9999\n"
+		executor.TtyIn() <- "sleep 9999\n"
 		time.Sleep(2 * time.Second)
-		executor.InputStream() <- "exit\n"
+		executor.TtyIn() <- "exit\n"
 	}()
 
 	// docker should start container for cmd before tty
