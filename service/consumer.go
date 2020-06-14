@@ -59,16 +59,14 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 
 	consumeTtyLog := func() {
 		config := config.GetInstance()
-		for log := range executor.OutputStream() {
-			util.LogDebug("[TtyLog]: %s", string(log))
-
+		for b64Log := range executor.TtyOut() {
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.TtyLogEx
 
 				cmdLog := &domain.CmdLog{
 					ID:      executor.TtyId(),
-					Content: base64.StdEncoding.EncodeToString(log),
+					Content: b64Log,
 				}
 				pushLog(channel, exchange, cmdLog)
 			}

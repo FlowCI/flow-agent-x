@@ -1,6 +1,7 @@
 package executor
 
 import (
+	"encoding/base64"
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
@@ -64,7 +65,9 @@ func TestShouldStartBashInteract(t *testing.T) {
 			if !ok {
 				return
 			}
-			util.LogDebug("------ %s", string(log))
+
+			content, _ := base64.StdEncoding.DecodeString(log)
+			util.LogDebug("------ %s", content)
 		}
 	}()
 

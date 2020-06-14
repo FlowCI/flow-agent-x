@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
@@ -32,9 +33,9 @@ type Executor interface {
 
 	LogChannel() <-chan []byte
 
-	InputStream() chan<- string
+	TtyIn() chan<- string
 
-	OutputStream() <-chan []byte
+	TtyOut() <-chan string
 
 	Start() error
 
@@ -62,9 +63,9 @@ type BaseExecutor struct {
 	logChannel  chan []byte      // output log
 	stdOutWg    sync.WaitGroup   // init on subclasses
 
-	streamIn  chan string
-	streamOut chan []byte
-	ttyId     string
+	ttyId  string
+	ttyIn  chan string // base script
+	ttyOut chan string // b64 log content
 }
 
 type Options struct {
@@ -96,8 +97,8 @@ func NewExecutor(options Options) Executor {
 		inCmd:       cmd,
 		vars:        vars,
 		result:      domain.NewShellOutput(cmd),
-		streamIn:    make(chan string, defaultChannelBufferSize),
-		streamOut:   make(chan []byte, defaultChannelBufferSize),
+		ttyIn:       make(chan string, defaultChannelBufferSize),
+		ttyOut:      make(chan string, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -134,12 +135,12 @@ func (b *BaseExecutor) LogChannel() <-chan []byte {
 	return b.logChannel
 }
 
-func (b *BaseExecutor) InputStream() chan<- string {
-	return b.streamIn
+func (b *BaseExecutor) TtyIn() chan<- string {
+	return b.ttyIn
 }
 
-func (b *BaseExecutor) OutputStream() <-chan []byte {
-	return b.streamOut
+func (b *BaseExecutor) TtyOut() <-chan string {
+	return b.ttyOut
 }
 
 func (b *BaseExecutor) GetResult() *domain.ShellOut {
@@ -199,8 +200,8 @@ func (b *BaseExecutor) closeChannels() {
 	close(b.bashChannel)
 	close(b.logChannel)
 
-	close(b.streamIn)
-	close(b.streamOut)
+	close(b.ttyIn)
+	close(b.ttyOut)
 }
 
 func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
@@ -241,7 +242,7 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for {
-		inputStr, ok := <-b.streamIn
+		inputStr, ok := <-b.ttyIn
 		if !ok {
 			return
 		}
@@ -265,7 +266,7 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 			if err != nil {
 				return
 			}
-			b.streamOut <- removeDockerHeader(buf[0:n])
+			b.ttyOut <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 		}
 	}
 }

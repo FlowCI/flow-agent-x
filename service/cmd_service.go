@@ -228,14 +228,13 @@ func (s *CmdService) execTty(bytes []byte) {
 			panic(fmt.Errorf("Tty not started, please send open cmd"))
 		}
 
-		e.InputStream() <- in.Input
+		e.TtyIn() <- in.Input
 	case domain.TtyActionClose:
 		if !e.IsInteracting() {
 			panic(fmt.Errorf("Tty not started, please send open cmd"))
 		}
 
 		e.StopTty()
-
 		response.IsSuccess = true
 		saveAndPushBack(response)
 	}
