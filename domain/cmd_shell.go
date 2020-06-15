@@ -10,6 +10,7 @@ type (
 		CmdIn
 		ID           string        `json:"id"`
 		FlowId       string        `json:"flowId"`
+		JobId        string        `json:"jobId"`
 		ContainerId  string        `json:"containerId"` // container id prefer to reuse
 		AllowFailure bool          `json:"allowFailure"`
 		Plugin       string        `json:"plugin"`

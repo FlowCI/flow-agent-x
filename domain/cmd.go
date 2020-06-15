@@ -59,7 +59,7 @@ type (
 		ToBytes() []byte
 	}
 
-	CmdLog struct {
+	CmdStdLog struct {
 		ID      string `json:"id"`
 		Content string `json:"content"` // b64 content
 	}

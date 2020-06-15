@@ -24,7 +24,7 @@ import (
 func startLogConsumer(executor executor.Executor, logDir string) {
 	// init path for shell, log and raw log
 	consumeShellLog := func() {
-		logPath := filepath.Join(logDir, executor.CmdId()+".log")
+		logPath := filepath.Join(logDir, executor.CmdIn().ID+".log")
 		f, _ := os.Create(logPath)
 		logFileWriter := bufio.NewWriter(f)
 
@@ -47,12 +47,15 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.ShellLogEx
+				jobId := executor.CmdIn().JobId
 
-				cmdLog := &domain.CmdLog{
-					ID:      executor.CmdId(),
+				logContent := &domain.CmdStdLog{
+					ID:      executor.CmdIn().ID,
 					Content: base64.StdEncoding.EncodeToString(log),
 				}
-				pushLog(channel, exchange, cmdLog)
+
+				marshal, _ := json.Marshal(logContent)
+				pushLog(channel, exchange, jobId, marshal)
 			}
 		}
 	}
@@ -63,12 +66,7 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.TtyLogEx
-
-				cmdLog := &domain.CmdLog{
-					ID:      executor.TtyId(),
-					Content: b64Log,
-				}
-				pushLog(channel, exchange, cmdLog)
+				pushLog(channel, exchange, executor.TtyId(), []byte(b64Log))
 			}
 		}
 	}
@@ -77,12 +75,11 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 	go consumeTtyLog()
 }
 
-func pushLog(c *amqp.Channel, exchange string, log *domain.CmdLog) {
+func pushLog(c *amqp.Channel, exchange, id string, body []byte) {
 	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
-		ContentType: util.HttpProtobuf,
-		Body:        []byte(log.Content),
+		Body:        body,
 		Headers: map[string]interface{}{
-			"id": log.ID,
+			"id": id,
 		},
 	})
 }

@@ -26,7 +26,7 @@ type TypeOfExecutor int
 type Executor interface {
 	Init() error
 
-	CmdId() string
+	CmdIn() *domain.ShellIn
 
 	TtyId() string
 
@@ -117,16 +117,12 @@ func NewExecutor(options Options) Executor {
 }
 
 // CmdID current bash executor cmd id
-func (b *BaseExecutor) CmdId() string {
-	return b.inCmd.ID
+func (b *BaseExecutor) CmdIn() *domain.ShellIn {
+	return b.inCmd
 }
 
 func (b *BaseExecutor) TtyId() string {
 	return b.ttyId
-}
-
-func (b *BaseExecutor) FlowId() string {
-	return b.inCmd.FlowId
 }
 
 // LogChannel for output log from stdout, stdin

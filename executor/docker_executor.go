@@ -198,7 +198,7 @@ func (d *DockerExecutor) initConfig() {
 	docker := d.inCmd.Docker
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.FlowId()))
+	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
@@ -436,7 +436,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsDeleteContainer {
 		err := d.cli.ContainerRemove(d.context, d.containerId, types.ContainerRemoveOptions{Force: true})
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.CmdId())
+			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.inCmd.ID)
 		}
 		return
 	}
@@ -444,7 +444,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsStopContainer {
 		err := d.cli.ContainerStop(d.context, d.containerId, nil)
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.CmdId())
+			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.inCmd.ID)
 		}
 	}
 }

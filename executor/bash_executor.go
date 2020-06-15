@@ -31,7 +31,7 @@ func (b *BashExecutor) Init() (out error) {
 		return
 	}
 
-	b.workDir = filepath.Join(b.workspace, util.ParseString(b.FlowId()))
+	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	out = os.MkdirAll(b.workDir, os.ModePerm)
 	return
@@ -94,7 +94,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	// wait or timeout
 	_ = command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.CmdId())
+	util.LogDebug("[Done]: Shell for %s", b.inCmd.ID)
 
 	b.exportEnv()
 
