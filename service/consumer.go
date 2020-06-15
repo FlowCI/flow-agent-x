@@ -78,15 +78,12 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 }
 
 func pushLog(c *amqp.Channel, exchange string, log *domain.CmdLog) {
-	raw, err := json.Marshal(log)
-	if err != nil {
-		util.LogWarn("Cannot marshal CmdLog to json")
-		return
-	}
-
 	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
 		ContentType: util.HttpProtobuf,
-		Body:        raw,
+		Body:        []byte(log.Content),
+		Headers: map[string]interface{}{
+			"id": log.ID,
+		},
 	})
 }
 
