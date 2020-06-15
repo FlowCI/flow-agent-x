@@ -7,7 +7,6 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -64,7 +63,7 @@ type BaseExecutor struct {
 	stdOutWg    sync.WaitGroup   // init on subclasses
 
 	ttyId  string
-	ttyIn  chan string // base script
+	ttyIn  chan string // b64 script
 	ttyOut chan string // b64 log content
 }
 
@@ -248,9 +247,6 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 		}
 
 		in := []byte(inputStr)
-		if strings.LastIndexByte(inputStr, util.UnixLineBreak) == -1 {
-			in = append(in, util.UnixLineBreak)
-		}
 		_, _ = writer.Write(in)
 	}
 }
