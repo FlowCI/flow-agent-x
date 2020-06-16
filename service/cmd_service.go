@@ -221,7 +221,13 @@ func (s *CmdService) execTty(bytes []byte) {
 				response.IsSuccess = false
 				response.Error = err.Error()
 				saveAndPushBack(response)
+				return
 			}
+
+			// send close action when exit
+			response.Action = domain.TtyActionClose
+			response.IsSuccess = true
+			saveAndPushBack(response)
 		}()
 	case domain.TtyActionShell:
 		if !e.IsInteracting() {
