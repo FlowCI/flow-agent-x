@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sync"
 )
 
 type (
@@ -18,7 +17,6 @@ type (
 		BaseExecutor
 		command *exec.Cmd
 		tty     *exec.Cmd
-		ttyWait sync.WaitGroup
 		workDir string
 		envFile string
 	}
@@ -71,7 +69,16 @@ func (b *BashExecutor) Start() (out error) {
 	}()
 
 	b.command = command
-	b.startToHandleContext()
+
+	// handle context error
+	go func() {
+		<-b.context.Done()
+		err := b.context.Err()
+
+		if err != nil {
+			b.handleErrors(err)
+		}
+	}()
 
 	// start command
 	if err := command.Start(); err != nil {
@@ -101,7 +108,7 @@ func (b *BashExecutor) Start() (out error) {
 	// wait for tty if it's running
 	if b.IsInteracting() {
 		util.LogDebug("Tty is running, wait..")
-		b.ttyWait.Wait()
+		<-b.ttyCtx.Done()
 	}
 
 	if b.result.IsFinishStatus() {
@@ -121,7 +128,6 @@ func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out
 
 		b.tty = nil
 		b.ttyId = ""
-		b.ttyWait.Done()
 	}()
 
 	if b.IsInteracting() {
@@ -132,17 +138,21 @@ func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out
 	c.Dir = b.workDir
 	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
 
-	b.tty = c
-	b.ttyId = ttyId
-	b.ttyWait.Add(1)
-
 	ptmx, err := pty.Start(c)
 	util.PanicIfErr(err)
-	onStarted(ttyId)
+
+	b.tty = c
+	b.ttyId = ttyId
+	b.ttyCtx, b.ttyCancel = context.WithCancel(b.context)
 
 	defer func() {
 		_ = ptmx.Close()
+		b.ttyCancel()
+		b.ttyCtx = nil
+		b.ttyCancel = nil
 	}()
+
+	onStarted(ttyId)
 
 	go b.writeTtyIn(ptmx)
 	go b.writeTtyOut(ptmx)
@@ -152,13 +162,9 @@ func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out
 }
 
 func (b *BashExecutor) StopTty() {
-	if b.tty != nil {
+	if b.IsInteracting() {
 		_ = b.tty.Process.Kill()
 	}
-}
-
-func (b *BashExecutor) IsInteracting() bool {
-	return b.tty != nil
 }
 
 //====================================================================
@@ -177,17 +183,6 @@ func (b *BashExecutor) exportEnv() {
 
 	defer file.Close()
 	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
-}
-
-func (b *BashExecutor) startToHandleContext() {
-	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
-
-		if err != nil {
-			b.handleErrors(err)
-		}
-	}()
 }
 
 func (b *BashExecutor) handleErrors(err error) {

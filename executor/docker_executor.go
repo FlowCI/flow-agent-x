@@ -18,7 +18,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -45,7 +44,6 @@ type (
 		hostConfig      *container.HostConfig
 		containerId     string
 		ttyExecId       string
-		ttyWait         sync.WaitGroup
 		workDir         string
 		envFile         string
 	}
@@ -98,7 +96,7 @@ func (d *DockerExecutor) Start() (out error) {
 	// wait for tty if it's running
 	if d.IsInteracting() {
 		util.LogDebug("Tty is running, wait..")
-		d.ttyWait.Wait()
+		<-d.ttyCtx.Done()
 	}
 
 	if d.result.IsFinishStatus() {
@@ -113,10 +111,6 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-		}
-
-		if d.IsInteracting() {
-			d.ttyWait.Done()
 		}
 
 		d.ttyExecId = ""
@@ -142,12 +136,19 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
 	util.PanicIfErr(err)
 
-	d.ttyExecId = exec.ID
-	d.ttyId = ttyId
-	d.ttyWait.Add(1)
-
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, config)
 	util.PanicIfErr(err)
+
+	d.ttyExecId = exec.ID
+	d.ttyId = ttyId
+	d.ttyCtx, d.ttyCancel = context.WithCancel(d.context)
+
+	defer func() {
+		d.ttyCancel()
+		d.ttyCtx = nil
+		d.ttyCancel = nil
+	}()
+
 	onStarted(ttyId)
 
 	// write pid for tty bash
@@ -163,10 +164,6 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 func (d *DockerExecutor) StopTty() {
 	err := d.runSingleScript(killTty)
 	util.LogIfError(err)
-}
-
-func (d *DockerExecutor) IsInteracting() bool {
-	return d.ttyExecId != ""
 }
 
 //--------------------------------------------

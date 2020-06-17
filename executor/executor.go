@@ -62,9 +62,11 @@ type BaseExecutor struct {
 	logChannel  chan []byte      // output log
 	stdOutWg    sync.WaitGroup   // init on subclasses
 
-	ttyId  string
-	ttyIn  chan string // b64 script
-	ttyOut chan string // b64 log content
+	ttyId     string
+	ttyIn     chan string // b64 script
+	ttyOut    chan string // b64 log content
+	ttyCtx    context.Context
+	ttyCancel context.CancelFunc
 }
 
 type Options struct {
@@ -136,6 +138,10 @@ func (b *BaseExecutor) TtyIn() chan<- string {
 
 func (b *BaseExecutor) TtyOut() <-chan string {
 	return b.ttyOut
+}
+
+func (b *BaseExecutor) IsInteracting() bool {
+	return b.ttyCtx != nil && b.ttyCancel != nil
 }
 
 func (b *BaseExecutor) GetResult() *domain.ShellOut {
@@ -237,13 +243,22 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for {
-		inputStr, ok := <-b.ttyIn
-		if !ok {
+		select {
+		case <-b.ttyCtx.Done():
 			return
-		}
+		case inputStr, ok := <-b.ttyIn:
+			if !ok {
+				return
+			}
 
-		in := []byte(inputStr)
-		_, _ = writer.Write(in)
+			in := []byte(inputStr)
+			_, err := writer.Write(in)
+
+			if err != nil {
+				util.LogIfError(err)
+				return
+			}
+		}
 	}
 }
 
@@ -251,7 +266,7 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 	buf := make([]byte, defaultReaderBufferSize)
 	for {
 		select {
-		case <-b.context.Done():
+		case <-b.ttyCtx.Done():
 			return
 		default:
 			n, err := reader.Read(buf)
