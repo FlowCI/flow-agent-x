@@ -240,9 +240,8 @@ func (s *CmdService) execTty(bytes []byte) {
 			panic(fmt.Errorf("Tty not started, please send open cmd"))
 		}
 
+		// close action response send on exit
 		e.StopTty()
-		response.IsSuccess = true
-		saveAndPushBack(response)
 	}
 }
 
