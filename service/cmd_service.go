@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -22,13 +23,10 @@ var (
 )
 
 type (
-	CmdInteractSession map[string]*executor.BashExecutor
-
 	// CmdService receive and execute cmd
 	CmdService struct {
 		executor executor.Executor
 		mux      sync.Mutex
-		session  CmdInteractSession
 	}
 )
 
@@ -36,7 +34,6 @@ type (
 func GetCmdService() *CmdService {
 	once.Do(func() {
 		singleton = new(CmdService)
-		singleton.session = make(CmdInteractSession, 10)
 		singleton.start()
 	})
 	return singleton
@@ -48,14 +45,24 @@ func (s *CmdService) IsRunning() bool {
 }
 
 // Execute execute cmd according to the type
-func (s *CmdService) Execute(in *domain.CmdIn) error {
+func (s *CmdService) Execute(bytes []byte) error {
+	var in domain.CmdIn
+	err := json.Unmarshal(bytes, &in)
+	util.PanicIfErr(err)
+
 	switch in.Type {
 	case domain.CmdTypeShell:
-		return s.execShell(in)
+		var shell domain.ShellIn
+		err := json.Unmarshal(bytes, &shell)
+		util.PanicIfErr(err)
+		return s.execShell(&shell)
+	case domain.CmdTypeTty:
+		s.execTty(bytes)
+		return nil
 	case domain.CmdTypeKill:
-		return s.execKill(in)
+		return s.execKill()
 	case domain.CmdTypeClose:
-		return s.execClose(in)
+		return s.execClose()
 	default:
 		return ErrorCmdUnsupportedType
 	}
@@ -64,14 +71,12 @@ func (s *CmdService) Execute(in *domain.CmdIn) error {
 // new thread to consume rabbitmq message
 func (s *CmdService) start() {
 	config := config.GetInstance()
-
 	if !config.HasQueue() {
 		return
 	}
 
 	channel := config.Queue.Channel
 	queue := config.Queue.JobQueue
-
 	msgs, err := channel.Consume(queue.Name, "", true, false, false, false, nil)
 	if util.HasError(err) {
 		util.LogIfError(err)
@@ -89,19 +94,10 @@ func (s *CmdService) start() {
 				}
 
 				util.LogDebug("Received a message: %s", d.Body)
-
-				var cmdIn domain.CmdIn
-				err := json.Unmarshal(d.Body, &cmdIn)
-
-				if util.LogIfError(err) {
-					continue
-				}
-
-				err = s.Execute(&cmdIn)
+				err = s.Execute(d.Body)
 				if err != nil {
 					util.LogDebug(err.Error())
 				}
-
 			case <-time.After(time.Second * 10):
 				util.LogDebug("...")
 			}
@@ -114,7 +110,7 @@ func (s *CmdService) release() {
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
-func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
+func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -152,7 +148,7 @@ func (s *CmdService) execShell(in *domain.CmdIn) (out error) {
 	err = s.executor.Init()
 	util.PanicIfErr(err)
 
-	go logConsumer(s.executor, config.LoggingDir)
+	startLogConsumer(s.executor, config.LoggingDir)
 
 	go func() {
 		defer s.release()
@@ -181,14 +177,82 @@ func (s *CmdService) initEnv() domain.Variables {
 	return vars
 }
 
-func (s *CmdService) execKill(in *domain.CmdIn) error {
+func (s *CmdService) execTty(bytes []byte) {
+	var in domain.TtyIn
+	err := json.Unmarshal(bytes, &in)
+	if err != nil {
+		util.LogWarn("Unable to decode message to TtyIn")
+		return
+	}
+
+	response := &domain.TtyOut{
+		ID:     in.ID,
+		Action: in.Action,
+	}
+
+	defer func() {
+		if err := recover(); err != nil {
+			response.IsSuccess = false
+			response.Error = err.(error).Error()
+			saveAndPushBack(response)
+		}
+	}()
+
+	e := s.executor
+	if !s.IsRunning() {
+		panic(fmt.Errorf("No running cmd"))
+	}
+
+	switch in.Action {
+	case domain.TtyActionOpen:
+		if e.IsInteracting() {
+			response.IsSuccess = true
+			saveAndPushBack(response)
+			return
+		}
+
+		go func() {
+			err = e.StartTty(in.ID, func(ttyId string) {
+				response.IsSuccess = true
+				saveAndPushBack(response)
+			})
+
+			if err != nil {
+				response.IsSuccess = false
+				response.Error = err.Error()
+				saveAndPushBack(response)
+				return
+			}
+
+			// send close action when exit
+			response.Action = domain.TtyActionClose
+			response.IsSuccess = true
+			saveAndPushBack(response)
+		}()
+	case domain.TtyActionShell:
+		if !e.IsInteracting() {
+			panic(fmt.Errorf("Tty not started, please send open cmd"))
+		}
+
+		e.TtyIn() <- in.Input
+	case domain.TtyActionClose:
+		if !e.IsInteracting() {
+			panic(fmt.Errorf("Tty not started, please send open cmd"))
+		}
+
+		// close action response send on exit
+		e.StopTty()
+	}
+}
+
+func (s *CmdService) execKill() error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
 	return nil
 }
 
-func (s *CmdService) execClose(in *domain.CmdIn) error {
+func (s *CmdService) execClose() error {
 	if s.IsRunning() {
 		s.executor.Kill()
 	}
@@ -199,11 +263,9 @@ func (s *CmdService) execClose(in *domain.CmdIn) error {
 	return nil
 }
 
-func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
-	result := &domain.ExecutedCmd{
-		Cmd: domain.Cmd{
-			ID: in.ID,
-		},
+func (s *CmdService) failureBeforeExecute(in *domain.ShellIn, err error) {
+	result := &domain.ShellOut{
+		ID:      in.ID,
 		Status:  domain.CmdStatusException,
 		Error:   err.Error(),
 		StartAt: time.Now(),
@@ -212,7 +274,10 @@ func (s *CmdService) failureBeforeExecute(in *domain.CmdIn, err error) {
 	saveAndPushBack(result)
 }
 
-func verifyAndInitShellCmd(in *domain.CmdIn) error {
+// ---------------------------------
+// 	Utils
+// ---------------------------------
+func verifyAndInitShellCmd(in *domain.ShellIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
 	}
@@ -231,7 +296,7 @@ func verifyAndInitShellCmd(in *domain.CmdIn) error {
 }
 
 // Save result to local db and send back the result to server
-func saveAndPushBack(r *domain.ExecutedCmd) {
+func saveAndPushBack(out domain.CmdOut) {
 	config := config.GetInstance()
 
 	// TODO: save to local db
@@ -241,15 +306,14 @@ func saveAndPushBack(r *domain.ExecutedCmd) {
 	}
 
 	queue := config.Queue
-	json, _ := json.Marshal(r)
 	callback := config.Settings.Queue.Callback
 
 	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{
 		ContentType: util.HttpMimeJson,
-		Body:        json,
+		Body:        out.ToBytes(),
 	})
 
 	if !util.LogIfError(err) {
-		util.LogDebug("Result of cmd %s been pushed", r.ID)
+		util.LogDebug("Result of cmd been pushed")
 	}
 }

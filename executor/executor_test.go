@@ -11,13 +11,13 @@ import (
 	"time"
 )
 
-func printLog(channel <-chan *domain.LogItem) {
+func printLog(channel <-chan []byte) {
 	for {
 		item, ok := <-channel
 		if !ok {
 			break
 		}
-		util.LogDebug("[LOG]: %s", item.Content)
+		util.LogDebug("[LOG]: %s", item)
 	}
 }
 func getTestDataDir() string {
@@ -26,7 +26,7 @@ func getTestDataDir() string {
 	return path.Join(base, "_testdata")
 }
 
-func newExecutor(cmd *domain.CmdIn) Executor {
+func newExecutor(cmd *domain.ShellIn) Executor {
 	ctx, _ := context.WithCancel(context.Background())
 	app := config.GetInstance()
 
@@ -47,7 +47,7 @@ func newExecutor(cmd *domain.CmdIn) Executor {
 	return NewExecutor(options)
 }
 
-func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) *domain.ExecutedCmd {
+func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.ShellOut {
 	// when:
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
@@ -68,7 +68,7 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.CmdIn) *domain.Execute
 	return executor.GetResult()
 }
 
-func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
+func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = false
 	cmd.Scripts = []string{"notCommand should exit with error"}
@@ -90,7 +90,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.CmdIn) {
+func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = true
 	cmd.Scripts = []string{"notCommand should exit with error"}
@@ -112,7 +112,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.C
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
+func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Timeout = 5
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
@@ -134,7 +134,7 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.CmdIn) {
 	assert.NotNil(result.FinishAt)
 }
 
-func shouldExecButKilled(assert *assert.Assertions, cmd *domain.CmdIn) {
+func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 

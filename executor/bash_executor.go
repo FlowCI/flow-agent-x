@@ -2,6 +2,8 @@ package executor
 
 import (
 	"context"
+	"fmt"
+	"github.com/creack/pty"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
@@ -14,6 +16,7 @@ type (
 	BashExecutor struct {
 		BaseExecutor
 		command *exec.Cmd
+		tty     *exec.Cmd
 		workDir string
 		envFile string
 	}
@@ -26,7 +29,7 @@ func (b *BashExecutor) Init() (out error) {
 		return
 	}
 
-	b.workDir = filepath.Join(b.workspace, util.ParseString(b.FlowId()))
+	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	out = os.MkdirAll(b.workDir, os.ModePerm)
 	return
@@ -50,12 +53,32 @@ func (b *BashExecutor) Start() (out error) {
 	command.Dir = b.workDir
 	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
 
-	stdin, _ := command.StdinPipe()
-	stdout, _ := command.StdoutPipe()
-	stderr, _ := command.StderrPipe()
+	stdin, err := command.StdinPipe()
+	util.PanicIfErr(err)
+
+	stdout, err := command.StdoutPipe()
+	util.PanicIfErr(err)
+
+	stderr, err := command.StderrPipe()
+	util.PanicIfErr(err)
+
+	defer func() {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+	}()
 
 	b.command = command
-	b.startToHandleContext()
+
+	// handle context error
+	go func() {
+		<-b.context.Done()
+		err := b.context.Err()
+
+		if err != nil {
+			b.handleErrors(err)
+		}
+	}()
 
 	// start command
 	if err := command.Start(); err != nil {
@@ -78,17 +101,70 @@ func (b *BashExecutor) Start() (out error) {
 
 	// wait or timeout
 	_ = command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.CmdId())
+	util.LogDebug("[Done]: Shell for %s", b.inCmd.ID)
 
 	b.exportEnv()
 
-	if b.CmdResult.IsFinishStatus() {
+	// wait for tty if it's running
+	if b.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		<-b.ttyCtx.Done()
+	}
+
+	if b.result.IsFinishStatus() {
 		return nil
 	}
 
 	// to finish status
 	b.toFinishStatus(getExitCode(command))
 	return b.context.Err()
+}
+
+func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+
+		b.tty = nil
+		b.ttyId = ""
+	}()
+
+	if b.IsInteracting() {
+		panic(fmt.Errorf("interaction is ongoning"))
+	}
+
+	c := exec.Command(linuxBash)
+	c.Dir = b.workDir
+	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
+
+	ptmx, err := pty.Start(c)
+	util.PanicIfErr(err)
+
+	b.tty = c
+	b.ttyId = ttyId
+	b.ttyCtx, b.ttyCancel = context.WithCancel(b.context)
+
+	defer func() {
+		_ = ptmx.Close()
+		b.ttyCancel()
+		b.ttyCtx = nil
+		b.ttyCancel = nil
+	}()
+
+	onStarted(ttyId)
+
+	go b.writeTtyIn(ptmx)
+	go b.writeTtyOut(ptmx)
+
+	_ = c.Wait()
+	return
+}
+
+func (b *BashExecutor) StopTty() {
+	if b.IsInteracting() {
+		_ = b.tty.Process.Kill()
+	}
 }
 
 //====================================================================
@@ -106,24 +182,17 @@ func (b *BashExecutor) exportEnv() {
 	}
 
 	defer file.Close()
-	b.CmdResult.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
-}
-
-func (b *BashExecutor) startToHandleContext() {
-	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
-
-		if err != nil {
-			b.handleErrors(err)
-		}
-	}()
+	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
 }
 
 func (b *BashExecutor) handleErrors(err error) {
 	kill := func() {
 		if b.command != nil {
 			_ = b.command.Process.Kill()
+		}
+
+		if b.tty != nil {
+			_ = b.tty.Process.Kill()
 		}
 	}
 

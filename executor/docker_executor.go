@@ -26,6 +26,12 @@ const (
 	dockerPluginDir = dockerWorkspace + "/.plugins"
 	dockerEnvFile   = "/tmp/.env"
 	dockerPullRetry = 3
+
+	writeShellPid = "echo $$ > ~/.shell.pid\n"
+	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
+
+	killShell = "kill -9 $(cat ~/.shell.pid)"
+	killTty   = "kill -9 $(cat ~/.tty.pid)"
 )
 
 type (
@@ -37,6 +43,7 @@ type (
 		containerConfig *container.Config
 		hostConfig      *container.HostConfig
 		containerId     string
+		ttyExecId       string
 		workDir         string
 		envFile         string
 	}
@@ -78,16 +85,85 @@ func (d *DockerExecutor) Start() (out error) {
 	d.startContainer()
 	d.copyPlugins()
 
-	eid := d.runCmdInContainer()
-	exitCode := d.waitForExit(eid)
+	eid := d.runShell()
+	util.LogDebug("Exec %s is running", eid)
+
+	exitCode := d.waitForExit(eid, func(pid int) {
+		d.toStartStatus(pid)
+	})
 	d.exportEnv()
 
-	if d.CmdResult.IsFinishStatus() {
+	// wait for tty if it's running
+	if d.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		<-d.ttyCtx.Done()
+	}
+
+	if d.result.IsFinishStatus() {
 		return nil
 	}
 
 	d.toFinishStatus(exitCode)
 	return
+}
+
+func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+
+		d.ttyExecId = ""
+		d.ttyId = ""
+	}()
+
+	if d.IsInteracting() {
+		return fmt.Errorf("interaction is ongoning")
+	}
+
+	if d.containerId == "" {
+		return fmt.Errorf("container not started")
+	}
+
+	config := types.ExecConfig{
+		Tty:          true,
+		AttachStdin:  true,
+		AttachStderr: true,
+		AttachStdout: true,
+		Cmd:          []string{linuxBash},
+	}
+
+	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
+	util.PanicIfErr(err)
+
+	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, config)
+	util.PanicIfErr(err)
+
+	d.ttyExecId = exec.ID
+	d.ttyId = ttyId
+	d.ttyCtx, d.ttyCancel = context.WithCancel(d.context)
+
+	defer func() {
+		d.ttyCancel()
+		d.ttyCtx = nil
+		d.ttyCancel = nil
+	}()
+
+	onStarted(ttyId)
+
+	// write pid for tty bash
+	_, _ = attach.Conn.Write([]byte(writeTtyPid))
+
+	go d.writeTtyIn(attach.Conn)
+	go d.writeTtyOut(attach.Reader)
+
+	d.waitForExit(exec.ID, nil)
+	return
+}
+
+func (d *DockerExecutor) StopTty() {
+	err := d.runSingleScript(killTty)
+	util.LogIfError(err)
 }
 
 //--------------------------------------------
@@ -119,7 +195,7 @@ func (d *DockerExecutor) initConfig() {
 	docker := d.inCmd.Docker
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.FlowId()))
+	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
@@ -166,8 +242,14 @@ func (d *DockerExecutor) initConfig() {
 }
 
 func (d *DockerExecutor) handleErrors(err error) error {
+	kill := func() {
+		_ = d.runSingleScript(killShell)
+		_ = d.runSingleScript(killTty)
+	}
+
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
+		kill()
 		d.toTimeOutStatus()
 		d.context = context.Background() // reset context for further docker operation
 		return nil
@@ -175,6 +257,7 @@ func (d *DockerExecutor) handleErrors(err error) error {
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
+		kill()
 		d.toKilledStatus()
 		d.context = context.Background() // reset context for further docker operation
 		return nil
@@ -217,7 +300,7 @@ func (d *DockerExecutor) startContainer() {
 
 	cid := resp.ID
 	d.containerId = cid
-	d.CmdResult.ContainerId = cid
+	d.result.ContainerId = cid
 	util.LogDebug("Container created %s", cid)
 
 	err = d.cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
@@ -251,7 +334,7 @@ func (d *DockerExecutor) tryToResume() bool {
 	// resume
 	if err == nil {
 		d.containerId = containerIdToReuse
-		d.CmdResult.ContainerId = containerIdToReuse
+		d.result.ContainerId = containerIdToReuse
 		util.LogInfo("Container %s resumed", inspect.ID)
 		return true
 	}
@@ -281,7 +364,7 @@ func (d *DockerExecutor) copyPlugins() {
 	}
 }
 
-func (d *DockerExecutor) runCmdInContainer() string {
+func (d *DockerExecutor) runShell() string {
 	config := types.ExecConfig{
 		Tty:          false,
 		AttachStdin:  true,
@@ -310,10 +393,28 @@ func (d *DockerExecutor) runCmdInContainer() string {
 		in <- "env > " + dockerEnvFile
 	}
 
+	_, _ = attach.Conn.Write([]byte(writeShellPid))
+
 	d.writeLog(attach.Reader, true)
 	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
 
 	return exec.ID
+}
+
+// run single bash script with new context
+func (d *DockerExecutor) runSingleScript(script string) error {
+	ctx := context.Background()
+
+	exec, err := d.cli.ContainerExecCreate(ctx, d.containerId, types.ExecConfig{
+		Cmd: []string{"/bin/bash", "-c", script},
+	})
+
+	if err != nil {
+		return err
+	}
+
+	util.LogDebug("Script: %s will run", script)
+	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 }
 
 func (d *DockerExecutor) exportEnv() {
@@ -323,7 +424,7 @@ func (d *DockerExecutor) exportEnv() {
 	}
 
 	defer reader.Close()
-	d.CmdResult.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
+	d.result.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
 }
 
 func (d *DockerExecutor) cleanupContainer() {
@@ -332,7 +433,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsDeleteContainer {
 		err := d.cli.ContainerRemove(d.context, d.containerId, types.ContainerRemoveOptions{Force: true})
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.CmdId())
+			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.inCmd.ID)
 		}
 		return
 	}
@@ -340,15 +441,17 @@ func (d *DockerExecutor) cleanupContainer() {
 	if option.IsStopContainer {
 		err := d.cli.ContainerStop(d.context, d.containerId, nil)
 		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.CmdId())
+			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.inCmd.ID)
 		}
 	}
 }
 
-func (d *DockerExecutor) waitForExit(eid string) int {
+func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
 	util.PanicIfErr(err)
-	d.toStartStatus(inspect.Pid)
+	if onStarted != nil {
+		onStarted(inspect.Pid)
+	}
 
 	for {
 		inspect, err = d.cli.ContainerExecInspect(d.context, eid)
@@ -358,7 +461,7 @@ func (d *DockerExecutor) waitForExit(eid string) int {
 			break
 		}
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 	}
 
 	return inspect.ExitCode
