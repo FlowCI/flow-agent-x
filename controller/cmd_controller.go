@@ -1,13 +1,10 @@
 package controller
 
 import (
-	"encoding/json"
 	"net/http"
 
-	"github/flowci/flow-agent-x/service"
-	"github/flowci/flow-agent-x/domain"
-
 	"github.com/gin-gonic/gin"
+	"github/flowci/flow-agent-x/service"
 )
 
 type CmdController struct {
@@ -42,16 +39,10 @@ func (c *CmdController) PostExecuteCmdImpl(context *gin.Context) {
 		return
 	}
 
-	var cmd domain.CmdIn
-	err = json.Unmarshal(bytes, &cmd)
+	err = c.cmdService.Execute(bytes)
 	if c.responseIfError(context, err) {
 		return
 	}
 
-	err = c.cmdService.Execute(&cmd)
-	if c.responseIfError(context, err) {
-		return
-	}
-
-	c.responseOk(context, cmd)
+	c.responseOk(context, nil)
 }

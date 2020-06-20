@@ -29,7 +29,6 @@ type (
 	QueueConfig struct {
 		Conn       *amqp.Connection
 		Channel    *amqp.Channel
-		LogChannel *amqp.Channel
 		JobQueue   *amqp.Queue
 	}
 
@@ -108,7 +107,6 @@ func (m *Manager) FetchProfile() *domain.Resource {
 func (m *Manager) Close() {
 	if m.HasQueue() {
 		_ = m.Queue.Channel.Close()
-		_ = m.Queue.LogChannel.Close()
 		_ = m.Queue.Conn.Close()
 	}
 
@@ -184,19 +182,13 @@ func (m *Manager) initRabbitMQ() {
 	conn, err := amqp.Dial(connStr)
 	util.PanicIfErr(err)
 
-	// create channel for job queue and send back the result
 	ch, err := conn.Channel()
-	util.PanicIfErr(err)
-
-	// create channel for push log to server
-	logCh, err := conn.Channel()
 	util.PanicIfErr(err)
 
 	// init queue config
 	qc := new(QueueConfig)
 	qc.Conn = conn
 	qc.Channel = ch
-	qc.LogChannel = logCh
 
 	// init queue to receive job
 	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
@@ -223,6 +215,7 @@ func (m *Manager) initZookeeper() {
 	m.Zk = client
 
 	// register agent on zk
+	_, _ = client.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
 	agentPath := getZkPath(m.Settings)
 	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
