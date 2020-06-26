@@ -32,6 +32,8 @@ func (b *BashExecutor) Init() (out error) {
 	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
 	out = os.MkdirAll(b.workDir, os.ModePerm)
+
+	b.vars.Resolve()
 	return
 }
 

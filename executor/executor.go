@@ -85,10 +85,7 @@ func NewExecutor(options Options) Executor {
 	}
 
 	cmd := options.Cmd
-
 	vars := domain.ConnectVars(options.Vars, cmd.Inputs)
-	vars.Resolve()
-
 	base := BaseExecutor{
 		agentId:     options.AgentId,
 		workspace:   options.Workspace,

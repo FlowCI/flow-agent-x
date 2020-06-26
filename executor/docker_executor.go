@@ -210,6 +210,8 @@ func (d *DockerExecutor) initConfig() {
 		entrypoint[i] = util.ParseStringWithSource(item, d.vars)
 	}
 
+	d.vars.Resolve()
+
 	d.containerConfig = &container.Config{
 		Image:        image,
 		Env:          d.vars.ToStringArray(),
