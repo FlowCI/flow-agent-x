@@ -85,7 +85,6 @@ func NewExecutor(options Options) Executor {
 	}
 
 	cmd := options.Cmd
-	vars := domain.ConnectVars(options.Vars, cmd.Inputs)
 	base := BaseExecutor{
 		agentId:     options.AgentId,
 		workspace:   options.Workspace,
@@ -93,7 +92,7 @@ func NewExecutor(options Options) Executor {
 		bashChannel: make(chan string),
 		logChannel:  make(chan []byte, defaultChannelBufferSize),
 		inCmd:       cmd,
-		vars:        vars,
+		vars:        domain.ConnectVars(options.Vars, cmd.Inputs),
 		result:      domain.NewShellOutput(cmd),
 		ttyIn:       make(chan string, defaultChannelBufferSize),
 		ttyOut:      make(chan string, defaultChannelBufferSize),
