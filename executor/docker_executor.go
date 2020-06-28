@@ -37,7 +37,6 @@ const (
 type (
 	DockerExecutor struct {
 		BaseExecutor
-		volumes         []*domain.DockerVolume
 		agentVolume     types.Volume
 		cli             *client.Client
 		containerConfig *container.Config
@@ -381,16 +380,6 @@ func (d *DockerExecutor) runShell() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	initScriptInVolume := func(in chan string) {
-		for _, v := range d.volumes {
-			if util.IsEmptyString(v.Script) {
-				continue
-			}
-
-			in <- "source " + v.ScriptPath()
-		}
-	}
-
 	writeEnv := func(in chan string) {
 		in <- "env > " + dockerEnvFile
 	}
@@ -398,7 +387,7 @@ func (d *DockerExecutor) runShell() string {
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true)
-	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
+	d.writeCmd(attach.Conn, writeEnv)
 
 	return exec.ID
 }

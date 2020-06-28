@@ -98,7 +98,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	b.writeLog(stdout, true)
 	b.writeLog(stderr, true)
-	b.writeCmd(stdin, nil, writeEnv)
+	b.writeCmd(stdin, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout

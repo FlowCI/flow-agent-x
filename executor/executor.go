@@ -53,6 +53,7 @@ type BaseExecutor struct {
 	agentId     string // should be agent token
 	workspace   string
 	pluginDir   string
+	volumes     []*domain.DockerVolume
 	context     context.Context
 	cancelFunc  context.CancelFunc
 	inCmd       *domain.ShellIn
@@ -89,6 +90,7 @@ func NewExecutor(options Options) Executor {
 		agentId:     options.AgentId,
 		workspace:   options.Workspace,
 		pluginDir:   options.PluginDir,
+		volumes:     options.Volumes,
 		bashChannel: make(chan string),
 		logChannel:  make(chan []byte, defaultChannelBufferSize),
 		inCmd:       cmd,
@@ -105,7 +107,6 @@ func NewExecutor(options Options) Executor {
 	if cmd.HasDockerOption() {
 		return &DockerExecutor{
 			BaseExecutor: base,
-			volumes:      options.Volumes,
 		}
 	}
 
@@ -153,7 +154,7 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, after func(chan string)) {
 	consumer := func() {
 		for {
 			select {
@@ -174,10 +175,15 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 
 	b.bashChannel <- "set -e"
 
-	if before != nil {
-		before(b.bashChannel)
+	// source volume script
+	for _, v := range b.volumes {
+		if util.IsEmptyString(v.Script) {
+			continue
+		}
+		b.bashChannel <- fmt.Sprintf("source %s || true", v.ScriptPath())
 	}
 
+	// write shell script from cmd
 	for _, script := range b.inCmd.Scripts {
 		b.bashChannel <- script
 	}
