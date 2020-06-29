@@ -207,6 +207,10 @@ func (m *Manager) initZookeeper() {
 
 	// make connection of zk
 	zk := util.NewZkClient()
+	zk.Callbacks.OnDisconnected = func() {
+		m.Cancel()
+	}
+
 	err := zk.Connect(zkConfig.Host)
 	if err != nil {
 		panic(err)
