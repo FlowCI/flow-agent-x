@@ -39,10 +39,14 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 		}()
 
 		config := config.GetInstance()
-		for log := range executor.LogChannel() {
+		for b64Log := range executor.Stdout() {
+
 			// write to file
-			logFileWriter.Write(log)
-			util.LogDebug("[ShellLog]: %s", string(log))
+			log, err := base64.StdEncoding.DecodeString(b64Log)
+			if err == nil {
+				logFileWriter.Write(log)
+				util.LogDebug("[ShellLog]: %s", string(log))
+			}
 
 			if config.HasQueue() {
 				channel := config.Queue.Channel
@@ -51,7 +55,7 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 
 				logContent := &domain.CmdStdLog{
 					ID:      executor.CmdIn().ID,
-					Content: base64.StdEncoding.EncodeToString(log),
+					Content: b64Log,
 				}
 
 				marshal, _ := json.Marshal(logContent)
@@ -77,7 +81,7 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 
 func pushLog(c *amqp.Channel, exchange, id string, body []byte) {
 	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
-		Body:        body,
+		Body: body,
 		Headers: map[string]interface{}{
 			"id": id,
 		},

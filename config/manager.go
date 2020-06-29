@@ -206,18 +206,22 @@ func (m *Manager) initZookeeper() {
 	zkConfig := m.Settings.Zookeeper
 
 	// make connection of zk
-	client := new(util.ZkClient)
-	err := client.Connect(zkConfig.Host)
+	zk := util.NewZkClient()
+	zk.Callbacks.OnDisconnected = func() {
+		m.Cancel()
+	}
+
+	err := zk.Connect(zkConfig.Host)
 	if err != nil {
 		panic(err)
 	}
 
-	m.Zk = client
+	m.Zk = zk
 
 	// register agent on zk
-	_, _ = client.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
+	_, _ = zk.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
 	agentPath := getZkPath(m.Settings)
-	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
+	_, nodeErr := zk.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
 	if nodeErr != nil {
 		panic(nodeErr)
