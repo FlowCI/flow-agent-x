@@ -51,15 +51,24 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 			if config.HasQueue() {
 				channel := config.Queue.Channel
 				exchange := config.Settings.Queue.ShellLogEx
+
 				jobId := executor.CmdIn().JobId
+				stepId := executor.CmdIn().ID
 
 				logContent := &domain.CmdStdLog{
-					ID:      executor.CmdIn().ID,
+					ID:      stepId,
 					Content: b64Log,
 				}
 
 				marshal, _ := json.Marshal(logContent)
-				pushLog(channel, exchange, jobId, marshal)
+
+				_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+					Body: marshal,
+					Headers: map[string]interface{}{
+						"id":     jobId,
+						"stepId": stepId,
+					},
+				})
 			}
 		}
 	}
@@ -67,25 +76,24 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 	consumeTtyLog := func() {
 		config := config.GetInstance()
 		for b64Log := range executor.TtyOut() {
-			if config.HasQueue() {
-				channel := config.Queue.Channel
-				exchange := config.Settings.Queue.TtyLogEx
-				pushLog(channel, exchange, executor.TtyId(), []byte(b64Log))
+			if !config.HasQueue() {
+				continue
 			}
+
+			channel := config.Queue.Channel
+			exchange := config.Settings.Queue.TtyLogEx
+
+			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
+				Body: []byte(b64Log),
+				Headers: map[string]interface{}{
+					"id": executor.TtyId(),
+				},
+			})
 		}
 	}
 
 	go consumeShellLog()
 	go consumeTtyLog()
-}
-
-func pushLog(c *amqp.Channel, exchange, id string, body []byte) {
-	_ = c.Publish(exchange, "", false, false, amqp.Publishing{
-		Body: body,
-		Headers: map[string]interface{}{
-			"id": id,
-		},
-	})
 }
 
 func uploadLog(logFile string) (err error) {
