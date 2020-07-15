@@ -2,15 +2,9 @@ package service
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"github/flowci/flow-agent-x/executor"
-	"io"
-	"io/ioutil"
-	"mime/multipart"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -27,18 +21,18 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 		logPath := filepath.Join(logDir, executor.CmdIn().ID+".log")
 		f, _ := os.Create(logPath)
 		logFileWriter := bufio.NewWriter(f)
+		appConfig := config.GetInstance()
 
 		defer func() {
 			// upload log after flush!!
 			_ = logFileWriter.Flush()
 			_ = f.Close()
-			err := uploadLog(logPath)
-			util.LogIfError(err)
 
-			util.LogDebug("[Exit]: tLogConsumer")
+			err := appConfig.Client.UploadLog(logPath)
+			util.LogIfError(err)
+			util.LogDebug("[Exit]: LogConsumer")
 		}()
 
-		config := config.GetInstance()
 		for b64Log := range executor.Stdout() {
 
 			// write to file
@@ -48,9 +42,9 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 				util.LogDebug("[ShellLog]: %s", string(log))
 			}
 
-			if config.HasQueue() {
-				channel := config.Queue.Channel
-				exchange := config.Settings.Queue.ShellLogEx
+			if appConfig.HasQueue() {
+				channel := appConfig.Queue.Channel
+				exchange := appConfig.Settings.Queue.ShellLogEx
 
 				jobId := executor.CmdIn().JobId
 				stepId := executor.CmdIn().ID
@@ -74,14 +68,14 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 	}
 
 	consumeTtyLog := func() {
-		config := config.GetInstance()
+		appConfig := config.GetInstance()
 		for b64Log := range executor.TtyOut() {
-			if !config.HasQueue() {
+			if !appConfig.HasQueue() {
 				continue
 			}
 
-			channel := config.Queue.Channel
-			exchange := config.Settings.Queue.TtyLogEx
+			channel := appConfig.Queue.Channel
+			exchange := appConfig.Settings.Queue.TtyLogEx
 
 			_ = channel.Publish(exchange, "", false, false, amqp.Publishing{
 				Body: []byte(b64Log),
@@ -94,55 +88,4 @@ func startLogConsumer(executor executor.Executor, logDir string) {
 
 	go consumeShellLog()
 	go consumeTtyLog()
-}
-
-func uploadLog(logFile string) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
-
-	config := config.GetInstance()
-
-	// read file
-	file, err := os.Open(logFile)
-	util.PanicIfErr(err)
-
-	defer file.Close()
-
-	// construct multi part
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile("file", filepath.Base(logFile))
-	util.PanicIfErr(err)
-
-	_, err = io.Copy(part, file)
-	util.PanicIfErr(err)
-
-	// flush file to writer
-	writer.Close()
-
-	// send request
-	url := config.Server + "/agents/logs/upload"
-	request, _ := http.NewRequest("POST", url, body)
-	request.Header.Set(util.HttpHeaderAgentToken, config.Token)
-	request.Header.Set(util.HttpHeaderContentType, writer.FormDataContentType())
-
-	response, err := http.DefaultClient.Do(request)
-	util.PanicIfErr(err)
-
-	// get response data
-	raw, _ := ioutil.ReadAll(response.Body)
-	var message domain.Response
-	err = json.Unmarshal(raw, &message)
-	util.PanicIfErr(err)
-
-	if message.IsOk() {
-		util.LogDebug("[Uploaded]: %s", logFile)
-		return nil
-	}
-
-	return fmt.Errorf(message.Message)
 }

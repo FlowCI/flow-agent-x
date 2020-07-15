@@ -82,7 +82,7 @@ func (c *Client) UploadLog(filePath string) (err error) {
 	_ = writer.Close()
 
 	// send request
-	raw, err := c.send("POST", "upload", writer.FormDataContentType(), body)
+	raw, err := c.send("POST", "logs/upload", writer.FormDataContentType(), body)
 	util.PanicIfErr(err)
 
 	// get response data
