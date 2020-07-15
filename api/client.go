@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/streadway/amqp"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github/flowci/flow-agent-x/domain"
@@ -20,6 +22,36 @@ type Client struct {
 	token  string
 	server string
 	client *http.Client
+
+	qLock    sync.Mutex
+	qConn    *amqp.Connection
+	qChannel *amqp.Channel
+	qAgent   *amqp.Queue
+}
+
+func (c *Client) HasQueueSetup() bool {
+	c.qLock.Lock()
+	defer c.qLock.Unlock()
+	return c.qConn != nil && c.qChannel != nil && c.qAgent != nil
+}
+
+func (c *Client) SetQueue(connStr, qName string) {
+	c.qLock.Lock()
+	defer c.qLock.Unlock()
+
+	conn, err := amqp.Dial(connStr)
+	util.PanicIfErr(err)
+
+	ch, err := conn.Channel()
+	util.PanicIfErr(err)
+
+	// init queue to receive job
+	queue, err := ch.QueueDeclare(qName, false, false, false, false, nil)
+	util.PanicIfErr(err)
+
+	c.qConn = conn
+	c.qChannel = ch
+	c.qAgent = &queue
 }
 
 func (c *Client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
@@ -96,6 +128,10 @@ func (c *Client) UploadLog(filePath string) (err error) {
 	}
 
 	return fmt.Errorf(message.Message)
+}
+
+func (c *Client) SendCmdOut(out *domain.CmdOut) error {
+	return nil
 }
 
 // method: GET/POST, path: {server}/agents/api/:path
