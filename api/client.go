@@ -18,30 +18,48 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
-type Client struct {
-	token  string
-	server string
-	client *http.Client
+type (
+	Client interface {
+		HasQueueSetup() bool
+		SetQueue(*domain.RabbitMQConfig, string) error
 
-	qLock    sync.Mutex
-	qConn    *amqp.Connection
-	qChannel *amqp.Channel
-	qAgent   *amqp.Queue
+		GetSettings(*domain.AgentInit) (*domain.Settings, error)
+		UploadLog(filePath string) error
+		ReportProfile(*domain.Resource) error
 
-	qCallback  string
-	exShellLog string
-	exTtyLog   string
+		GetCmdIn() (<-chan amqp.Delivery, error)
+		SendCmdOut(out domain.CmdOut) error
+		SendShellLog(jobId, stepId, b64Log string)
+		SendTtyLog(ttyId, b64Log string)
 
-	qAgentConsumer <-chan amqp.Delivery
-}
+		Close()
+	}
 
-func (c *Client) HasQueueSetup() bool {
+	client struct {
+		token  string
+		server string
+		client *http.Client
+
+		qLock    sync.Mutex
+		qConn    *amqp.Connection
+		qChannel *amqp.Channel
+		qAgent   *amqp.Queue
+
+		qCallback  string
+		exShellLog string
+		exTtyLog   string
+
+		qAgentConsumer <-chan amqp.Delivery
+	}
+)
+
+func (c *client) HasQueueSetup() bool {
 	c.qLock.Lock()
 	defer c.qLock.Unlock()
 	return c.qConn != nil && c.qChannel != nil && c.qAgent != nil
 }
 
-func (c *Client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out error) {
+func (c *client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -72,7 +90,7 @@ func (c *Client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out err
 	return
 }
 
-func (c *Client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
+func (c *client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
 	defer func() {
 		if err := recover(); err != nil {
 			return
@@ -96,7 +114,7 @@ func (c *Client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err 
 	return nil, fmt.Errorf(msg.Message)
 }
 
-func (c *Client) ReportProfile(r *domain.Resource) (err error) {
+func (c *client) ReportProfile(r *domain.Resource) (err error) {
 	body, err := json.Marshal(r)
 	if err != nil {
 		return
@@ -106,7 +124,7 @@ func (c *Client) ReportProfile(r *domain.Resource) (err error) {
 	return
 }
 
-func (c *Client) UploadLog(filePath string) (err error) {
+func (c *client) UploadLog(filePath string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = r.(error)
@@ -148,7 +166,7 @@ func (c *Client) UploadLog(filePath string) (err error) {
 	return fmt.Errorf(message.Message)
 }
 
-func (c *Client) GetCmdIn() (<-chan amqp.Delivery, error) {
+func (c *client) GetCmdIn() (<-chan amqp.Delivery, error) {
 	if c.qAgentConsumer != nil {
 		return c.qAgentConsumer, nil
 	}
@@ -163,7 +181,7 @@ func (c *Client) GetCmdIn() (<-chan amqp.Delivery, error) {
 	return c.qAgentConsumer, nil
 }
 
-func (c *Client) SendCmdOut(out domain.CmdOut) error {
+func (c *client) SendCmdOut(out domain.CmdOut) error {
 	err := c.qChannel.Publish("", c.qCallback, false, false, amqp.Publishing{
 		ContentType: util.HttpMimeJson,
 		Body:        out.ToBytes(),
@@ -177,7 +195,7 @@ func (c *Client) SendCmdOut(out domain.CmdOut) error {
 	return nil
 }
 
-func (c *Client) SendShellLog(jobId, stepId, b64Log string) {
+func (c *client) SendShellLog(jobId, stepId, b64Log string) {
 	raw, err := json.Marshal(&domain.CmdStdLog{
 		ID:      stepId,
 		Content: b64Log,
@@ -197,7 +215,7 @@ func (c *Client) SendShellLog(jobId, stepId, b64Log string) {
 	})
 }
 
-func (c *Client) SendTtyLog(ttyId, b64Log string) {
+func (c *client) SendTtyLog(ttyId, b64Log string) {
 	_ = c.qChannel.Publish(c.exTtyLog, "", false, false, amqp.Publishing{
 		Body: []byte(b64Log),
 		Headers: map[string]interface{}{
@@ -206,7 +224,7 @@ func (c *Client) SendTtyLog(ttyId, b64Log string) {
 	})
 }
 
-func (c *Client) Close() {
+func (c *client) Close() {
 	if c.HasQueueSetup() {
 		_ = c.qChannel.Close()
 		_ = c.qConn.Close()
@@ -214,7 +232,7 @@ func (c *Client) Close() {
 }
 
 // method: GET/POST, path: {server}/agents/api/:path
-func (c *Client) send(method, path, contentType string, body io.Reader) (out []byte, err error) {
+func (c *client) send(method, path, contentType string, body io.Reader) (out []byte, err error) {
 	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
 	req, _ := http.NewRequest(method, url, body)
 
@@ -236,13 +254,13 @@ func (c *Client) send(method, path, contentType string, body io.Reader) (out []b
 	return
 }
 
-func NewClient(token, server string) *Client {
+func NewClient(token, server string) Client {
 	transport := &http.Transport{
 		MaxIdleConns:    5,
 		IdleConnTimeout: 30 * time.Second,
 	}
 
-	return &Client{
+	return &client{
 		token:  token,
 		server: server,
 		client: &http.Client{

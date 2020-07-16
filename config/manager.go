@@ -35,7 +35,7 @@ type (
 		LoggingDir string
 		PluginDir  string
 
-		Client *api.Client
+		Client api.Client
 
 		VolumesStr string
 		Volumes    []*domain.DockerVolume
