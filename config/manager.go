@@ -8,7 +8,6 @@ import (
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
-	"github.com/streadway/amqp"
 	"github/flowci/flow-agent-x/api"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
@@ -23,16 +22,9 @@ var (
 )
 
 type (
-	QueueConfig struct {
-		Conn     *amqp.Connection
-		Channel  *amqp.Channel
-		JobQueue *amqp.Queue
-	}
-
 	// Manager to handle server connection and config
 	Manager struct {
 		Settings *domain.Settings
-		Queue    *QueueConfig
 		Zk       *util.ZkClient
 
 		Server string
@@ -79,11 +71,6 @@ func (m *Manager) Init() {
 	m.sendAgentProfile()
 }
 
-// HasQueue has rabbit mq connected
-func (m *Manager) HasQueue() bool {
-	return m.Queue != nil
-}
-
 // HasZookeeper has zookeeper connected
 func (m *Manager) HasZookeeper() bool {
 	return m.Zk != nil
@@ -105,10 +92,7 @@ func (m *Manager) FetchProfile() *domain.Resource {
 
 // Close release resources and connections
 func (m *Manager) Close() {
-	if m.HasQueue() {
-		_ = m.Queue.Channel.Close()
-		_ = m.Queue.Conn.Close()
-	}
+	m.Client.Close()
 
 	if m.HasZookeeper() {
 		m.Zk.Close()
@@ -161,25 +145,9 @@ func (m *Manager) initRabbitMQ() {
 		panic(ErrSettingsNotBeenLoaded)
 	}
 
-	// get connection
-	connStr := m.Settings.Queue.GetConnectionString()
-	conn, err := amqp.Dial(connStr)
+	agentQ := m.Settings.Agent.GetQueueName()
+	err := m.Client.SetQueue(m.Settings.Queue, agentQ)
 	util.PanicIfErr(err)
-
-	ch, err := conn.Channel()
-	util.PanicIfErr(err)
-
-	// init queue config
-	qc := new(QueueConfig)
-	qc.Conn = conn
-	qc.Channel = ch
-
-	// init queue to receive job
-	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
-	util.PanicIfErr(err)
-
-	qc.JobQueue = &jobQueue
-	m.Queue = qc
 }
 
 func (m *Manager) initZookeeper() {

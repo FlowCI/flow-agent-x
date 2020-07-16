@@ -27,6 +27,12 @@ type Client struct {
 	qConn    *amqp.Connection
 	qChannel *amqp.Channel
 	qAgent   *amqp.Queue
+
+	qCallback  string
+	exShellLog string
+	exTtyLog   string
+
+	qAgentConsumer <-chan amqp.Delivery
 }
 
 func (c *Client) HasQueueSetup() bool {
@@ -35,23 +41,35 @@ func (c *Client) HasQueueSetup() bool {
 	return c.qConn != nil && c.qChannel != nil && c.qAgent != nil
 }
 
-func (c *Client) SetQueue(connStr, qName string) {
+func (c *Client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+	}()
+
 	c.qLock.Lock()
 	defer c.qLock.Unlock()
 
-	conn, err := amqp.Dial(connStr)
+	conn, err := amqp.Dial(config.Uri)
 	util.PanicIfErr(err)
 
 	ch, err := conn.Channel()
 	util.PanicIfErr(err)
 
-	// init queue to receive job
-	queue, err := ch.QueueDeclare(qName, false, false, false, false, nil)
+	// init agent job queue to receive job
+	queue, err := ch.QueueDeclare(agentQ, false, false, false, false, nil)
 	util.PanicIfErr(err)
 
 	c.qConn = conn
 	c.qChannel = ch
 	c.qAgent = &queue
+
+	c.qCallback = config.Callback
+	c.exShellLog = config.ShellLogEx
+	c.exTtyLog = config.TtyLogEx
+
+	return
 }
 
 func (c *Client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
@@ -130,8 +148,69 @@ func (c *Client) UploadLog(filePath string) (err error) {
 	return fmt.Errorf(message.Message)
 }
 
-func (c *Client) SendCmdOut(out *domain.CmdOut) error {
+func (c *Client) GetCmdIn() (<-chan amqp.Delivery, error) {
+	if c.qAgentConsumer != nil {
+		return c.qAgentConsumer, nil
+	}
+
+	msgs, err := c.qChannel.Consume(c.qAgent.Name, "", true, false, false, false, nil)
+
+	if err != nil {
+		return nil, err
+	}
+
+	c.qAgentConsumer = msgs
+	return c.qAgentConsumer, nil
+}
+
+func (c *Client) SendCmdOut(out domain.CmdOut) error {
+	err := c.qChannel.Publish("", c.qCallback, false, false, amqp.Publishing{
+		ContentType: util.HttpMimeJson,
+		Body:        out.ToBytes(),
+	})
+
+	if err != nil {
+		return err
+	}
+
+	util.LogDebug("Result of cmd been pushed")
 	return nil
+}
+
+func (c *Client) SendShellLog(jobId, stepId, b64Log string) {
+	raw, err := json.Marshal(&domain.CmdStdLog{
+		ID:      stepId,
+		Content: b64Log,
+	})
+
+	if err != nil {
+		util.LogWarn(err.Error())
+		return
+	}
+
+	_ = c.qChannel.Publish(c.exShellLog, "", false, false, amqp.Publishing{
+		Body: raw,
+		Headers: map[string]interface{}{
+			"id":     jobId,
+			"stepId": stepId,
+		},
+	})
+}
+
+func (c *Client) SendTtyLog(ttyId, b64Log string) {
+	_ = c.qChannel.Publish(c.exTtyLog, "", false, false, amqp.Publishing{
+		Body: []byte(b64Log),
+		Headers: map[string]interface{}{
+			"id": ttyId,
+		},
+	})
+}
+
+func (c *Client) Close() {
+	if c.HasQueueSetup() {
+		_ = c.qChannel.Close()
+		_ = c.qConn.Close()
+	}
 }
 
 // method: GET/POST, path: {server}/agents/api/:path
