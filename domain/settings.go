@@ -31,11 +31,6 @@ type (
 //		RabbitMQConfig Methods
 // ===================================
 
-// GetConnectionString rabbitmq server connection string
-func (c *RabbitMQConfig) GetConnectionString() string {
-	return c.Uri
-}
-
 func (c *RabbitMQConfig) String() string {
 	return fmt.Sprintf("RABBIT:[uri=%s, callback=%s, exchanges=%s %s]", c.Uri, c.Callback, c.ShellLogEx, c.TtyLogEx)
 }

@@ -7,9 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"bufio"
+	"encoding/base64"
 	"github.com/google/uuid"
-
-	"github.com/streadway/amqp"
+	"os"
+	"path/filepath"
 
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
@@ -70,25 +72,16 @@ func (s *CmdService) Execute(bytes []byte) error {
 
 // new thread to consume rabbitmq message
 func (s *CmdService) start() {
-	config := config.GetInstance()
-	if !config.HasQueue() {
-		return
-	}
-
-	channel := config.Queue.Channel
-	queue := config.Queue.JobQueue
-	msgs, err := channel.Consume(queue.Name, "", true, false, false, false, nil)
-	if util.HasError(err) {
-		util.LogIfError(err)
-		return
-	}
+	appConfig := config.GetInstance()
+	cmdIn, err := appConfig.Client.GetCmdIn()
+	util.PanicIfErr(err)
 
 	go func() {
 		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
-			case d, ok := <-msgs:
+			case d, ok := <-cmdIn:
 				if !ok {
 					break
 				}
@@ -118,7 +111,8 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		}
 	}()
 
-	config := config.GetInstance()
+	appConfig := config.GetInstance()
+
 	s.mux.Lock()
 	defer s.mux.Unlock()
 
@@ -130,25 +124,25 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	util.PanicIfErr(err)
 
 	if in.HasPlugin() {
-		plugins := util.NewPlugins(config.PluginDir, config.Server)
+		plugins := util.NewPlugins(appConfig.PluginDir, appConfig.Server)
 		err := plugins.Load(in.Plugin)
 		util.PanicIfErr(err)
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
-		AgentId:   config.Token,
-		Parent:    config.AppCtx,
-		Workspace: config.Workspace,
-		PluginDir: config.PluginDir,
+		AgentId:   appConfig.Token,
+		Parent:    appConfig.AppCtx,
+		Workspace: appConfig.Workspace,
+		PluginDir: appConfig.PluginDir,
 		Cmd:       in,
 		Vars:      s.initEnv(),
-		Volumes:   config.Volumes,
+		Volumes:   appConfig.Volumes,
 	})
 
 	err = s.executor.Init()
 	util.PanicIfErr(err)
 
-	startLogConsumer(s.executor, config.LoggingDir)
+	s.startLogConsumer()
 
 	go func() {
 		defer s.release()
@@ -156,7 +150,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 
 		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
-		saveAndPushBack(result)
+		appConfig.Client.SendCmdOut(result)
 	}()
 
 	return nil
@@ -190,11 +184,13 @@ func (s *CmdService) execTty(bytes []byte) {
 		Action: in.Action,
 	}
 
+	appConfig := config.GetInstance()
+
 	defer func() {
 		if err := recover(); err != nil {
 			response.IsSuccess = false
 			response.Error = err.(error).Error()
-			saveAndPushBack(response)
+			appConfig.Client.SendCmdOut(response)
 		}
 	}()
 
@@ -207,27 +203,27 @@ func (s *CmdService) execTty(bytes []byte) {
 	case domain.TtyActionOpen:
 		if e.IsInteracting() {
 			response.IsSuccess = true
-			saveAndPushBack(response)
+			appConfig.Client.SendCmdOut(response)
 			return
 		}
 
 		go func() {
 			err = e.StartTty(in.ID, func(ttyId string) {
 				response.IsSuccess = true
-				saveAndPushBack(response)
+				appConfig.Client.SendCmdOut(response)
 			})
 
 			if err != nil {
 				response.IsSuccess = false
 				response.Error = err.Error()
-				saveAndPushBack(response)
+				appConfig.Client.SendCmdOut(response)
 				return
 			}
 
 			// send close action when exit
 			response.Action = domain.TtyActionClose
 			response.IsSuccess = true
-			saveAndPushBack(response)
+			appConfig.Client.SendCmdOut(response)
 		}()
 	case domain.TtyActionShell:
 		if !e.IsInteracting() {
@@ -271,12 +267,62 @@ func (s *CmdService) failureBeforeExecute(in *domain.ShellIn, err error) {
 		StartAt: time.Now(),
 	}
 
-	saveAndPushBack(result)
+	appConfig := config.GetInstance()
+	appConfig.Client.SendCmdOut(result)
+}
+
+func (s *CmdService) startLogConsumer() {
+	apiClient := config.GetInstance().Client
+	loggingDir := config.GetInstance().LoggingDir
+	executor := s.executor
+
+	consumeShellLog := func() {
+
+		// init path for shell, log and raw log
+		logPath := filepath.Join(loggingDir, executor.CmdIn().ID+".log")
+		f, _ := os.Create(logPath)
+		logFileWriter := bufio.NewWriter(f)
+
+		defer func() {
+			// upload log after flush!!
+			_ = logFileWriter.Flush()
+			_ = f.Close()
+
+			err := apiClient.UploadLog(logPath)
+			util.LogIfError(err)
+			util.LogDebug("[Exit]: LogConsumer")
+		}()
+
+		for b64Log := range executor.Stdout() {
+
+			// write to file
+			log, err := base64.StdEncoding.DecodeString(b64Log)
+			if err == nil {
+				_, _ = logFileWriter.Write(log)
+				util.LogDebug("[ShellLog]: %s", string(log))
+			}
+
+			jobId := executor.CmdIn().JobId
+			stepId := executor.CmdIn().ID
+			apiClient.SendShellLog(jobId, stepId, b64Log)
+		}
+	}
+
+	consumeTtyLog := func() {
+		apiClient := config.GetInstance().Client
+		for b64Log := range executor.TtyOut() {
+			apiClient.SendTtyLog(executor.TtyId(), b64Log)
+		}
+	}
+
+	go consumeShellLog()
+	go consumeTtyLog()
 }
 
 // ---------------------------------
 // 	Utils
 // ---------------------------------
+
 func verifyAndInitShellCmd(in *domain.ShellIn) error {
 	if !in.HasScripts() {
 		return ErrorCmdMissingScripts
@@ -293,27 +339,4 @@ func verifyAndInitShellCmd(in *domain.ShellIn) error {
 	}
 
 	return nil
-}
-
-// Save result to local db and send back the result to server
-func saveAndPushBack(out domain.CmdOut) {
-	config := config.GetInstance()
-
-	// TODO: save to local db
-
-	if !config.HasQueue() {
-		return
-	}
-
-	queue := config.Queue
-	callback := config.Settings.Queue.Callback
-
-	err := queue.Channel.Publish("", callback, false, false, amqp.Publishing{
-		ContentType: util.HttpMimeJson,
-		Body:        out.ToBytes(),
-	})
-
-	if !util.LogIfError(err) {
-		util.LogDebug("Result of cmd been pushed")
-	}
 }
