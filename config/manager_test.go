@@ -13,7 +13,7 @@ var (
 	rBody, _ = ioutil.ReadFile("../_testdata/agent_connect_response.json")
 
 	ts = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/agents/connect" {
+		if r.URL.Path == "/agents/api/connect" {
 			_, _ = w.Write(rBody)
 
 		}
