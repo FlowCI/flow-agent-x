@@ -8,17 +8,17 @@ import (
 type (
 	ShellIn struct {
 		CmdIn
-		ID           string        `json:"id"`
-		FlowId       string        `json:"flowId"`
-		JobId        string        `json:"jobId"`
-		ContainerId  string        `json:"containerId"` // container id prefer to reuse
-		AllowFailure bool          `json:"allowFailure"`
-		Plugin       string        `json:"plugin"`
-		Docker       *DockerOption `json:"docker"`
-		Scripts      []string      `json:"scripts"`
-		Timeout      int           `json:"timeout"`
-		Inputs       Variables     `json:"inputs"`
-		EnvFilters   []string      `json:"envFilters"`
+		ID           string          `json:"id"`
+		FlowId       string          `json:"flowId"`
+		JobId        string          `json:"jobId"`
+		Containers   []string        `json:"containerId"` // container id prefer to reuse
+		AllowFailure bool            `json:"allowFailure"`
+		Plugin       string          `json:"plugin"`
+		Dockers      []*DockerOption `json:"dockers"`
+		Scripts      []string        `json:"scripts"`
+		Timeout      int             `json:"timeout"`
+		Inputs       Variables       `json:"inputs"`
+		EnvFilters   []string        `json:"envFilters"`
 	}
 
 	ShellOut struct {
@@ -44,7 +44,7 @@ func (in *ShellIn) HasPlugin() bool {
 }
 
 func (in *ShellIn) HasDockerOption() bool {
-	return in.Docker != nil
+	return in.Dockers != nil && len(in.Dockers) > 0
 }
 
 func (in *ShellIn) HasScripts() bool {
