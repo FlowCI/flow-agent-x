@@ -228,8 +228,16 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, v.ToBindStr())
 	}
 
-	// insert runtime to the first element in the config array
-	d.configs[0] = runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
+
+	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
+
+	// set default entrypoint for runtime container
+	if !config.HasEntrypoint() {
+		config.Config.Entrypoint = []string{linuxBash}
+	}
+
+	// set runtime to the first element in the config array
+	d.configs[0] = config
 }
 
 func (d *DockerExecutor) handleErrors(err error) error {

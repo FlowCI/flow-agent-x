@@ -19,15 +19,6 @@ type (
 		IsDeleteContainer bool      `json:"isDeleteContainer"`
 		ContainerID       string    // try to resume if container id is existed
 	}
-
-	DockerConfig struct {
-		Config   *container.Config
-		Host     *container.HostConfig
-		IsStop   bool
-		IsDelete bool
-
-		ContainerID string // try to resume if container id is existed
-	}
 )
 
 func (d *DockerOption) ToRuntimeConfig(vars Variables, workingDir string, binds []string) *DockerConfig {

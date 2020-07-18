@@ -173,7 +173,6 @@ func createDockerTestCmd() *domain.ShellIn {
 		Dockers: []*domain.DockerOption{
 			{
 				Image:             "ubuntu:18.04",
-				Entrypoint:        []string{"/bin/bash"},
 				IsDeleteContainer: true,
 				IsStopContainer:   true,
 				IsRuntime:         true,
