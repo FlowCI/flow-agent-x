@@ -51,21 +51,22 @@ func TestShouldReuseContainer(t *testing.T) {
 
 	// run cmd in container
 	cmd := createDockerTestCmd()
-	cmd.Docker.IsStopContainer = true
-	cmd.Docker.IsDeleteContainer = false
+
+	cmd.Dockers[0].IsStopContainer = true
+	cmd.Dockers[0].IsDeleteContainer = false
 
 	result := shouldExecCmd(assert, cmd)
-	assert.NotEmpty(result.ContainerId)
+	assert.Equal(1, len(result.Containers))
 
 	// run cmd in container from first step
 	cmd = createDockerTestCmd()
-	cmd.ContainerId = result.ContainerId
-	cmd.Docker.IsStopContainer = true
-	cmd.Docker.IsDeleteContainer = true
+	cmd.Dockers[0].ContainerID = result.Containers[0]
+	cmd.Dockers[0].IsStopContainer = true
+	cmd.Dockers[0].IsDeleteContainer = true
 
 	resultFromReuse := shouldExecCmd(assert, cmd)
-	assert.NotEmpty(resultFromReuse.ContainerId)
-	assert.Equal(result.ContainerId, resultFromReuse.ContainerId)
+	assert.Equal(1, len(resultFromReuse.Containers))
+	assert.Equal(result.Containers[0], resultFromReuse.Containers[0])
 }
 
 func TestShouldStartDockerInteract(t *testing.T) {
@@ -78,8 +79,11 @@ func TestShouldStartDockerInteract(t *testing.T) {
 			"echo hello",
 			"sleep 9999",
 		},
-		Docker: &domain.DockerOption{
-			Image: "ubuntu:18.04",
+		Dockers: []*domain.DockerOption{
+			{
+				Image:     "ubuntu:18.04",
+				IsRuntime: true,
+			},
 		},
 		Timeout: 9999,
 	})
@@ -117,7 +121,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 	}()
 
 	for {
-		if dockerExecutor.containerId == "" {
+		if dockerExecutor.runtime().ContainerID == "" {
 			time.Sleep(1 * time.Second)
 			continue
 		}
@@ -144,11 +148,14 @@ func createDockerTestCmd() *domain.ShellIn {
 		},
 		FlowId: "flowid", // same as dir flowid in _testdata
 		ID:     "1-1-1",
-		Docker: &domain.DockerOption{
-			Image:             "ubuntu:18.04",
-			Entrypoint:        []string{"/bin/bash"},
-			IsDeleteContainer: true,
-			IsStopContainer:   true,
+		Dockers: []*domain.DockerOption{
+			{
+				Image:             "ubuntu:18.04",
+				Entrypoint:        []string{"/bin/bash"},
+				IsDeleteContainer: true,
+				IsStopContainer:   true,
+				IsRuntime:         true,
+			},
 		},
 		Scripts: []string{
 			"echo bbb",

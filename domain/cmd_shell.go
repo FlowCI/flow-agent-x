@@ -11,7 +11,6 @@ type (
 		ID           string          `json:"id"`
 		FlowId       string          `json:"flowId"`
 		JobId        string          `json:"jobId"`
-		Containers   []string        `json:"containerId"` // container id prefer to reuse
 		AllowFailure bool            `json:"allowFailure"`
 		Plugin       string          `json:"plugin"`
 		Dockers      []*DockerOption `json:"dockers"`
@@ -22,16 +21,16 @@ type (
 	}
 
 	ShellOut struct {
-		ID          string    `json:"id"`
-		ProcessId   int       `json:"processId"`
-		ContainerId string    `json:"containerId"` // container id prefer to reuse
-		Status      CmdStatus `json:"status"`
-		Code        int       `json:"code"`
-		Output      Variables `json:"output"`
-		StartAt     time.Time `json:"startAt"`
-		FinishAt    time.Time `json:"finishAt"`
-		Error       string    `json:"error"`
-		LogSize     int64     `json:"logSize"`
+		ID         string    `json:"id"`
+		ProcessId  int       `json:"processId"`
+		Containers []string  `json:"containers"` // container ids applied for shell
+		Status     CmdStatus `json:"status"`
+		Code       int       `json:"code"`
+		Output     Variables `json:"output"`
+		StartAt    time.Time `json:"startAt"`
+		FinishAt   time.Time `json:"finishAt"`
+		Error      string    `json:"error"`
+		LogSize    int64     `json:"logSize"`
 	}
 )
 

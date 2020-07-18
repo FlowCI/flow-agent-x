@@ -286,64 +286,61 @@ func (d *DockerExecutor) pullImage() {
 }
 
 func (d *DockerExecutor) startContainer() {
-	if d.tryToResume() {
-		return
-	}
+	ids := make([]string, len(d.configs))
 
-	// create containers
+	// create and start containers
 	for _, c := range d.configs {
+		if d.resume(c.ContainerID) {
+			continue
+		}
+
 		resp, err := d.cli.ContainerCreate(d.context, c.Config, c.Host, nil, "")
 		util.PanicIfErr(err)
-		c.ContainerID = resp.ID
-	}
 
-	// start containers
-	for _, c := range d.configs {
-		err := d.cli.ContainerStart(d.context, c.ContainerID, types.ContainerStartOptions{})
+		err = d.cli.ContainerStart(d.context, resp.ID, types.ContainerStartOptions{})
 		util.PanicIfErr(err)
-		util.LogDebug("Container started %s", c.ContainerID)
+		util.LogDebug("Container started %s", resp.ID)
+
+		c.ContainerID = resp.ID
+		ids = append(ids, c.ContainerID)
 	}
 
-	d.result.ContainerId = d.runtime().ContainerID
+	d.result.Containers = ids
 }
 
-func (d *DockerExecutor) tryToResume() bool {
-	containerIdToReuse := d.inCmd.ContainerId
-
-	if util.IsEmptyString(containerIdToReuse) {
+func (d *DockerExecutor) resume(cid string) bool {
+	if util.IsEmptyString(cid) {
 		return false
 	}
 
-	inspect, err := d.cli.ContainerInspect(d.context, containerIdToReuse)
+	inspect, err := d.cli.ContainerInspect(d.context, cid)
 	if client.IsErrContainerNotFound(err) {
-		util.LogWarn("Container %s not found, will create a new one", containerIdToReuse)
+		util.LogWarn("Container %s not found, will create a new one", cid)
 		return false
 	}
 
 	util.PanicIfErr(err)
 
 	if inspect.State.Status != "exited" {
-		util.LogWarn("Container %s status not exited, will create a new one", containerIdToReuse)
+		util.LogWarn("Container %s status not exited, will create a new one", cid)
 		return false
 	}
 
 	timeout := 5 * time.Second
-	err = d.cli.ContainerRestart(d.context, containerIdToReuse, &timeout)
+	err = d.cli.ContainerRestart(d.context, cid, &timeout)
 
 	// resume
 	if err == nil {
-		d.containerId = containerIdToReuse
-		d.result.ContainerId = containerIdToReuse
 		util.LogInfo("Container %s resumed", inspect.ID)
 		return true
 	}
 
 	// delete container that cannot resume
-	_ = d.cli.ContainerRemove(d.context, containerIdToReuse, types.ContainerRemoveOptions{
+	_ = d.cli.ContainerRemove(d.context, cid, types.ContainerRemoveOptions{
 		Force: true,
 	})
 
-	util.LogWarn("Failed to resume container %s, deleted", containerIdToReuse)
+	util.LogWarn("Failed to resume container %s, deleted", cid)
 	return false
 }
 

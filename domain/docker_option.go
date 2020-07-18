@@ -17,6 +17,7 @@ type (
 		IsRuntime         bool      `json:"isRuntime"`
 		IsStopContainer   bool      `json:"isStopContainer"`
 		IsDeleteContainer bool      `json:"isDeleteContainer"`
+		ContainerID       string    // try to resume if container id is existed
 	}
 
 	DockerConfig struct {
@@ -25,7 +26,7 @@ type (
 		IsStop   bool
 		IsDelete bool
 
-		ContainerID string
+		ContainerID string // try to resume if container id is existed
 	}
 )
 
@@ -65,8 +66,9 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 			NetworkMode:  container.NetworkMode(d.NetworkMode),
 			PortBindings: portMap,
 		},
-		IsStop:   d.IsStopContainer,
-		IsDelete: d.IsDeleteContainer,
+		IsStop:      d.IsStopContainer,
+		IsDelete:    d.IsDeleteContainer,
+		ContainerID: d.ContainerID,
 	}
 
 	if util.HasString(workingDir) {
