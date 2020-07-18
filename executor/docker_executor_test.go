@@ -141,6 +141,28 @@ func TestShouldStartDockerInteract(t *testing.T) {
 	assert.False(executor.IsInteracting())
 }
 
+func TestShouldRunWithTwoContainers(t *testing.T) {
+	assert := assert.New(t)
+
+	cmd := createDockerTestCmd()
+	cmd.Dockers = append(cmd.Dockers, &domain.DockerOption{
+		Image: "mysql:5.6",
+		Environment: map[string]string{
+			"MYSQL_ROOT_PASSWORD": "test",
+		},
+		IsDeleteContainer: true,
+	})
+
+	executor := newExecutor(cmd)
+	assert.NoError(executor.Init())
+
+	err := executor.Start()
+	assert.NoError(err)
+
+	r := executor.GetResult()
+	assert.Equal(2, len(r.Containers))
+}
+
 func createDockerTestCmd() *domain.ShellIn {
 	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{

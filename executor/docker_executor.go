@@ -45,7 +45,11 @@ type (
 )
 
 func (d *DockerExecutor) runtime() *domain.DockerConfig {
-	return d.configs[0]
+	if len(d.configs) > 0 {
+		return d.configs[0]
+	}
+
+	return nil
 }
 
 func (d *DockerExecutor) Init() (out error) {
@@ -195,12 +199,12 @@ func (d *DockerExecutor) initConfig() {
 
 	// find run time docker option
 	var runtimeOption *domain.DockerOption
-	for _, item := range d.inCmd.Dockers {
+	for i, item := range d.inCmd.Dockers {
 		if item.IsRuntime {
 			runtimeOption = item
 			continue
 		}
-		d.configs = append(d.configs, item.ToConfig())
+		d.configs[i] = item.ToConfig()
 	}
 
 	if runtimeOption == nil {
@@ -225,11 +229,7 @@ func (d *DockerExecutor) initConfig() {
 	}
 
 	// insert runtime to the first element in the config array
-	runtimeConfig := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
-	if len(d.configs) > 1 {
-		copy(d.configs[0:], d.configs[1:])
-	}
-	d.configs[0] = runtimeConfig
+	d.configs[0] = runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
 }
 
 func (d *DockerExecutor) handleErrors(err error) error {
@@ -289,7 +289,7 @@ func (d *DockerExecutor) startContainer() {
 	ids := make([]string, len(d.configs))
 
 	// create and start containers
-	for _, c := range d.configs {
+	for i, c := range d.configs {
 		if d.resume(c.ContainerID) {
 			continue
 		}
@@ -299,10 +299,10 @@ func (d *DockerExecutor) startContainer() {
 
 		err = d.cli.ContainerStart(d.context, resp.ID, types.ContainerStartOptions{})
 		util.PanicIfErr(err)
-		util.LogDebug("Container started %s", resp.ID)
+		util.LogInfo("Container started %s %s", c.Config.Image, resp.ID)
 
 		c.ContainerID = resp.ID
-		ids = append(ids, c.ContainerID)
+		ids[i] = c.ContainerID
 	}
 
 	d.result.Containers = ids
@@ -418,15 +418,15 @@ func (d *DockerExecutor) cleanupContainer() {
 		if c.IsDelete {
 			err := d.cli.ContainerRemove(d.context, c.ContainerID, types.ContainerRemoveOptions{Force: true})
 			if !util.LogIfError(err) {
-				util.LogInfo("Container %s for cmd %s has been deleted", c.ContainerID, d.inCmd.ID)
+				util.LogInfo("Container %s %s for cmd %s has been deleted", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
-			return
+			continue
 		}
 
 		if c.IsStop {
 			err := d.cli.ContainerStop(d.context, c.ContainerID, nil)
 			if !util.LogIfError(err) {
-				util.LogInfo("Container %s for cmd %s has been stopped", c.ContainerID, d.inCmd.ID)
+				util.LogInfo("Container %s %s for cmd %s has been stopped", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
 		}
 	}
