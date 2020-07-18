@@ -150,6 +150,12 @@ func TestShouldRunWithTwoContainers(t *testing.T) {
 		Environment: map[string]string{
 			"MYSQL_ROOT_PASSWORD": "test",
 		},
+		Ports: []string{"3306:3306"},
+		IsDeleteContainer: true,
+	})
+	cmd.Dockers = append(cmd.Dockers, &domain.DockerOption{
+		Image: "mysql:5.6",
+		Command: []string{"mysql", "-h127.0.0.1", "-uroot", "-ptest"},
 		IsDeleteContainer: true,
 	})
 
@@ -160,7 +166,7 @@ func TestShouldRunWithTwoContainers(t *testing.T) {
 	assert.NoError(err)
 
 	r := executor.GetResult()
-	assert.Equal(2, len(r.Containers))
+	assert.Equal(3, len(r.Containers))
 }
 
 func createDockerTestCmd() *domain.ShellIn {

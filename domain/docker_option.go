@@ -10,6 +10,7 @@ type (
 	DockerOption struct {
 		Image             string    `json:"image"`
 		Entrypoint        []string  `json:"entrypoint"` // host:container
+		Command           []string  `json:"command"`
 		Ports             []string  `json:"ports"`
 		NetworkMode       string    `json:"networkMode"`
 		Environment       Variables `json:"environment"`
@@ -44,6 +45,7 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 			Image:        util.ParseStringWithSource(d.Image, vars),
 			Env:          vars.ToStringArray(),
 			Entrypoint:   d.Entrypoint,
+			Cmd:          d.Command,
 			ExposedPorts: portSet,
 			User:         d.User,
 			Tty:          false,
