@@ -261,10 +261,11 @@ func (s *CmdService) execClose() error {
 
 func (s *CmdService) failureBeforeExecute(in *domain.ShellIn, err error) {
 	result := &domain.ShellOut{
-		ID:      in.ID,
-		Status:  domain.CmdStatusException,
-		Error:   err.Error(),
-		StartAt: time.Now(),
+		ID:       in.ID,
+		Status:   domain.CmdStatusException,
+		Error:    err.Error(),
+		StartAt:  time.Now(),
+		FinishAt: time.Now(),
 	}
 
 	appConfig := config.GetInstance()
