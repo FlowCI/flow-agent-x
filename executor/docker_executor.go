@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
@@ -22,6 +23,7 @@ import (
 const (
 	dockerWorkspace = "/ws"
 	dockerPluginDir = dockerWorkspace + "/.plugins"
+	dockerBin = "/ws/bin"
 	dockerEnvFile   = "/tmp/.env"
 	dockerPullRetry = 3
 	dockerSock      = "/var/run/docker.sock"
@@ -391,13 +393,23 @@ func (d *DockerExecutor) runShell() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	setupContainerIpBefore := func(in chan string) {
+	setupContainerIpAndBin := func(in chan string) {
 		for i, c := range d.configs {
 			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
 			address := inspect.NetworkSettings.IPAddress
 
 			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
 			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
+		}
+
+		in <- fmt.Sprintf("mkdir -p %s", dockerBin)
+		in <- fmt.Sprintf("export PATH=%s:$PATH", dockerBin)
+
+		for _, f := range binFiles {
+			path := dockerBin + "/" + f.name
+			b64 := base64.StdEncoding.EncodeToString(f.content)
+			in <- fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path)
+			in <- fmt.Sprintf("chmod %s %s", f.permissionStr, path)
 		}
 	}
 
@@ -408,7 +420,7 @@ func (d *DockerExecutor) runShell() string {
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true)
-	d.writeCmd(attach.Conn, setupContainerIpBefore, writeEnvAfter)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter)
 
 	return exec.ID
 }
