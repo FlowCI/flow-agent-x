@@ -124,7 +124,9 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 		return fmt.Errorf("interaction is ongoning")
 	}
 
-	if d.runtime().ContainerID == "" {
+	runtime := d.runtime()
+
+	if runtime.ContainerID == "" {
 		return fmt.Errorf("container not started")
 	}
 
@@ -133,10 +135,10 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
-		Cmd:          []string{linuxBash},
+		Cmd:          runtime.Config.Entrypoint,
 	}
 
-	exec, err := d.cli.ContainerExecCreate(d.context, d.runtime().ContainerID, config)
+	exec, err := d.cli.ContainerExecCreate(d.context, runtime.ContainerID, config)
 	util.PanicIfErr(err)
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, config)
@@ -368,15 +370,17 @@ func (d *DockerExecutor) copyPlugins() {
 }
 
 func (d *DockerExecutor) runShell() string {
+	runtime := d.runtime()
+
 	config := types.ExecConfig{
 		Tty:          false,
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
-		Cmd:          []string{linuxBash},
+		Cmd:          runtime.Config.Entrypoint,
 	}
 
-	exec, err := d.cli.ContainerExecCreate(d.context, d.runtime().ContainerID, config)
+	exec, err := d.cli.ContainerExecCreate(d.context, runtime.ContainerID, config)
 	util.PanicIfErr(err)
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
