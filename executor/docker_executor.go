@@ -24,6 +24,7 @@ const (
 	dockerPluginDir = dockerWorkspace + "/.plugins"
 	dockerEnvFile   = "/tmp/.env"
 	dockerPullRetry = 3
+	dockerSock      = "/var/run/docker.sock"
 
 	writeShellPid = "echo $$ > ~/.shell.pid\n"
 	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
@@ -228,6 +229,10 @@ func (d *DockerExecutor) initConfig() {
 			continue
 		}
 		binds = append(binds, v.ToBindStr())
+	}
+
+	if util.IsFileExists(dockerSock) {
+		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 
 	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
