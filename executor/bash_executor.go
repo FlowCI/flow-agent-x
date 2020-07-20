@@ -18,6 +18,7 @@ type (
 		command *exec.Cmd
 		tty     *exec.Cmd
 		workDir string
+		binDir  string
 		envFile string
 	}
 )
@@ -30,10 +31,10 @@ func (b *BashExecutor) Init() (err error) {
 	}
 
 	// setup bin under workspace
-	binDir := filepath.Join(b.workspace, "bin")
-	err = os.MkdirAll(binDir, os.ModePerm)
+	b.binDir = filepath.Join(b.workspace, "bin")
+	err = os.MkdirAll(b.binDir, os.ModePerm)
 	for _, f := range binFiles {
-		path := filepath.Join(binDir, f.name)
+		path := filepath.Join(b.binDir, f.name)
 		if !util.IsFileExists(path) {
 			_ = ioutil.WriteFile(path, f.content, f.permission)
 		}
@@ -98,6 +99,10 @@ func (b *BashExecutor) Start() (out error) {
 		return b.toErrorStatus(err)
 	}
 
+	setupBin := func(in chan string) {
+		in <- fmt.Sprintf("export PATH=%s:$PATH", b.binDir)
+	}
+
 	writeEnv := func(in chan string) {
 		tmpFile, err := ioutil.TempFile("", "agent_env_")
 
@@ -109,7 +114,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	b.writeLog(stdout, true)
 	b.writeLog(stderr, true)
-	b.writeCmd(stdin, nil, writeEnv)
+	b.writeCmd(stdin, setupBin, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
