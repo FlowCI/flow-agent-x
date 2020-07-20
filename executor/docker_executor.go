@@ -418,7 +418,7 @@ func (d *DockerExecutor) runSingleScript(script string) error {
 	ctx := context.Background()
 
 	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
-		Cmd: []string{"/bin/bash", "-c", script},
+		Cmd: []string{linuxBash, "-c", script},
 	})
 
 	if err != nil {

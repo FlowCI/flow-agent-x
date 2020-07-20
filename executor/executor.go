@@ -21,8 +21,6 @@ const (
 	defaultReaderBufferSize   = 8 * 1024 // 8k
 )
 
-type TypeOfExecutor int
-
 type Executor interface {
 	Init() error
 

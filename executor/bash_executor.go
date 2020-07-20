@@ -22,16 +22,27 @@ type (
 	}
 )
 
-func (b *BashExecutor) Init() (out error) {
+func (b *BashExecutor) Init() (err error) {
 	if util.IsEmptyString(b.workspace) {
-		b.workDir, out = ioutil.TempDir("", "agent_")
+		b.workDir, err = ioutil.TempDir("", "agent_")
 		b.vars[domain.VarAgentJobDir] = b.workDir
 		return
 	}
 
+	// setup bin under workspace
+	binDir := filepath.Join(b.workspace, "bin")
+	err = os.MkdirAll(binDir, os.ModePerm)
+	for _, f := range binFiles {
+		path := filepath.Join(binDir, f.name)
+		if !util.IsFileExists(path) {
+			_ = ioutil.WriteFile(path, f.content, f.permission)
+		}
+	}
+
+	// setup job dir under workspace
 	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
-	out = os.MkdirAll(b.workDir, os.ModePerm)
+	err = os.MkdirAll(b.workDir, os.ModePerm)
 
 	b.vars.Resolve()
 	return
