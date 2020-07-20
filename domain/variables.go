@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	VarServerUrl      = "FLOWCI_SERVER_URL"
+	VarServerUrl = "FLOWCI_SERVER_URL"
 
 	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
 	VarAgentPort      = "FLOWCI_AGENT_PORT"
@@ -14,7 +14,11 @@ const (
 	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
 	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
-	VarAgentVolumes    = "FLOWCI_AGENT_VOLUMES"
+	VarAgentVolumes   = "FLOWCI_AGENT_VOLUMES"
+
+	VarAgentIpPattern           = "FLOWCI_AGENT_IP_%s"        // ip address of agent host
+	VarExportContainerIdPattern = "export CONTAINER_ID_%d=%s" // container id , d=index of dockers
+	VarExportContainerIpPattern = "export CONTAINER_IP_%d=%s" // container ip , d=index of dockers
 )
 
 // Variables applied for environment variable as key, value
@@ -32,7 +36,7 @@ func NilOrEmpty(v Variables) bool {
 }
 
 func ConnectVars(a Variables, b Variables) Variables {
-	vars := make(Variables, a.Size() + b.Size())
+	vars := make(Variables, a.Size()+b.Size())
 	for k, val := range a {
 		vars[k] = val
 	}

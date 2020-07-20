@@ -228,7 +228,6 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, v.ToBindStr())
 	}
 
-
 	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
 
 	// set default entrypoint for runtime container
@@ -383,14 +382,24 @@ func (d *DockerExecutor) runShell() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	writeEnv := func(in chan string) {
+	setupContainerIpBefore := func(in chan string) {
+		for i, c := range d.configs {
+			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
+			address := inspect.NetworkSettings.IPAddress
+
+			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
+			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
+		}
+	}
+
+	writeEnvAfter := func(in chan string) {
 		in <- "env > " + dockerEnvFile
 	}
 
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true)
-	d.writeCmd(attach.Conn, writeEnv)
+	d.writeCmd(attach.Conn, setupContainerIpBefore, writeEnvAfter)
 
 	return exec.ID
 }

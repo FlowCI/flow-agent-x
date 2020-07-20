@@ -154,7 +154,7 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, after func(chan string)) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)) {
 	consumer := func() {
 		for {
 			select {
@@ -180,6 +180,10 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, after func(chan string)) {
 			continue
 		}
 		b.stdin <- fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath())
+	}
+
+	if before != nil {
+		before(b.stdin)
 	}
 
 	// write shell script from cmd
