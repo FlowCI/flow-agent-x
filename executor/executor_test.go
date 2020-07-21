@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"encoding/base64"
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/domain"
@@ -11,13 +12,15 @@ import (
 	"time"
 )
 
-func printLog(channel <-chan []byte) {
+func printLog(stdout <-chan string) {
 	for {
-		item, ok := <-channel
+		item, ok := <-stdout
 		if !ok {
 			break
 		}
-		util.LogDebug("[LOG]: %s", item)
+
+		bytes, _ := base64.StdEncoding.DecodeString(item)
+		util.LogDebug("[LOG]: %s", string(bytes))
 	}
 }
 func getTestDataDir() string {
@@ -52,7 +55,7 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.Shell
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
 
-	go printLog(executor.LogChannel())
+	go printLog(executor.Stdout())
 
 	err := executor.Start()
 	assert.NoError(err)
@@ -77,7 +80,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
 
-	go printLog(executor.LogChannel())
+	go printLog(executor.Stdout())
 
 	err := executor.Start()
 	assert.NoError(err)
@@ -99,7 +102,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
 
-	go printLog(executor.LogChannel())
+	go printLog(executor.Stdout())
 
 	err := executor.Start()
 	assert.NoError(err)
@@ -121,7 +124,7 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
 
-	go printLog(executor.LogChannel())
+	go printLog(executor.Stdout())
 
 	err := executor.Start()
 	assert.NoError(err)
@@ -142,7 +145,7 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	executor := newExecutor(cmd)
 	assert.NoError(executor.Init())
 
-	go printLog(executor.LogChannel())
+	go printLog(executor.Stdout())
 
 	time.AfterFunc(5*time.Second, func() {
 		executor.Kill()

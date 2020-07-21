@@ -1,20 +1,16 @@
 package config
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
-	"github.com/streadway/amqp"
+	"github/flowci/flow-agent-x/api"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io/ioutil"
-	"net/http"
 	"os"
 	"sync"
 	"time"
@@ -26,16 +22,9 @@ var (
 )
 
 type (
-	QueueConfig struct {
-		Conn       *amqp.Connection
-		Channel    *amqp.Channel
-		JobQueue   *amqp.Queue
-	}
-
 	// Manager to handle server connection and config
 	Manager struct {
 		Settings *domain.Settings
-		Queue    *QueueConfig
 		Zk       *util.ZkClient
 
 		Server string
@@ -45,6 +34,8 @@ type (
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
+
+		Client api.Client
 
 		VolumesStr string
 		Volumes    []*domain.DockerVolume
@@ -71,17 +62,13 @@ func (m *Manager) Init() {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.AppCtx = ctx
 	m.Cancel = cancel
+	m.Client = api.NewClient(m.Token, m.Server)
 
 	m.initVolumes()
 	m.loadSettings()
 	m.initRabbitMQ()
 	m.initZookeeper()
 	m.sendAgentProfile()
-}
-
-// HasQueue has rabbit mq connected
-func (m *Manager) HasQueue() bool {
-	return m.Queue != nil
 }
 
 // HasZookeeper has zookeeper connected
@@ -105,10 +92,7 @@ func (m *Manager) FetchProfile() *domain.Resource {
 
 // Close release resources and connections
 func (m *Manager) Close() {
-	if m.HasQueue() {
-		_ = m.Queue.Channel.Close()
-		_ = m.Queue.Conn.Close()
-	}
+	m.Client.Close()
 
 	if m.HasZookeeper() {
 		m.Zk.Close()
@@ -143,32 +127,16 @@ func (m *Manager) initVolumes() {
 }
 
 func (m *Manager) loadSettings() {
-	uri := m.Server + "/agents/connect"
-	body, _ := json.Marshal(domain.AgentInit{
+	initData := &domain.AgentInit{
 		Port:     m.Port,
 		Os:       util.OS(),
 		Resource: m.FetchProfile(),
-	})
-
-	request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
-	request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
-	request.Header.Set(util.HttpHeaderAgentToken, m.Token)
-
-	resp, errFromReq := http.DefaultClient.Do(request)
-	util.PanicIfErr(errFromReq)
-
-	defer resp.Body.Close()
-	raw, _ := ioutil.ReadAll(resp.Body)
-
-	var message domain.SettingsResponse
-	errFromJSON := json.Unmarshal(raw, &message)
-	util.PanicIfErr(errFromJSON)
-
-	if !message.IsOk() {
-		panic(fmt.Errorf(message.Message))
 	}
 
-	m.Settings = message.Data
+	settings, err := m.Client.GetSettings(initData)
+	util.PanicIfErr(err)
+
+	m.Settings = settings
 	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
 }
 
@@ -177,25 +145,9 @@ func (m *Manager) initRabbitMQ() {
 		panic(ErrSettingsNotBeenLoaded)
 	}
 
-	// get connection
-	connStr := m.Settings.Queue.GetConnectionString()
-	conn, err := amqp.Dial(connStr)
+	agentQ := m.Settings.Agent.GetQueueName()
+	err := m.Client.SetQueue(m.Settings.Queue, agentQ)
 	util.PanicIfErr(err)
-
-	ch, err := conn.Channel()
-	util.PanicIfErr(err)
-
-	// init queue config
-	qc := new(QueueConfig)
-	qc.Conn = conn
-	qc.Channel = ch
-
-	// init queue to receive job
-	jobQueue, err := ch.QueueDeclare(m.Settings.Agent.GetQueueName(), false, false, false, false, nil)
-	util.PanicIfErr(err)
-
-	qc.JobQueue = &jobQueue
-	m.Queue = qc
 }
 
 func (m *Manager) initZookeeper() {
@@ -206,18 +158,22 @@ func (m *Manager) initZookeeper() {
 	zkConfig := m.Settings.Zookeeper
 
 	// make connection of zk
-	client := new(util.ZkClient)
-	err := client.Connect(zkConfig.Host)
+	zk := util.NewZkClient()
+	zk.Callbacks.OnDisconnected = func() {
+		m.Cancel()
+	}
+
+	err := zk.Connect(zkConfig.Host)
 	if err != nil {
 		panic(err)
 	}
 
-	m.Zk = client
+	m.Zk = zk
 
 	// register agent on zk
-	_, _ = client.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
+	_, _ = zk.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
 	agentPath := getZkPath(m.Settings)
-	_, nodeErr := client.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
+	_, nodeErr := zk.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
 	if nodeErr != nil {
 		panic(nodeErr)
@@ -227,30 +183,15 @@ func (m *Manager) initZookeeper() {
 }
 
 func (m *Manager) sendAgentProfile() {
-	uri := m.Server + "/agents/resource"
-	ctx, cancel := context.WithCancel(m.AppCtx)
-
 	go func() {
-		defer cancel()
-
 		for {
 			select {
-			case <-ctx.Done(): // if cancel() execute
+			case <-m.AppCtx.Done():
 				return
 			default:
 				time.Sleep(1 * time.Minute)
+				_ = m.Client.ReportProfile(m.FetchProfile())
 			}
-
-			body, err := json.Marshal(m.FetchProfile())
-			if err != nil {
-				continue
-			}
-
-			request, _ := http.NewRequest("POST", uri, bytes.NewBuffer(body))
-			request.Header.Set(util.HttpHeaderContentType, util.HttpMimeJson)
-			request.Header.Set(util.HttpHeaderAgentToken, m.Token)
-
-			_, _ = http.DefaultClient.Do(request)
 		}
 	}()
 }

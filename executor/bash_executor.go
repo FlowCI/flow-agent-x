@@ -18,20 +18,34 @@ type (
 		command *exec.Cmd
 		tty     *exec.Cmd
 		workDir string
+		binDir  string
 		envFile string
 	}
 )
 
-func (b *BashExecutor) Init() (out error) {
+func (b *BashExecutor) Init() (err error) {
 	if util.IsEmptyString(b.workspace) {
-		b.workDir, out = ioutil.TempDir("", "agent_")
+		b.workDir, err = ioutil.TempDir("", "agent_")
 		b.vars[domain.VarAgentJobDir] = b.workDir
 		return
 	}
 
+	// setup bin under workspace
+	b.binDir = filepath.Join(b.workspace, "bin")
+	err = os.MkdirAll(b.binDir, os.ModePerm)
+	for _, f := range binFiles {
+		path := filepath.Join(b.binDir, f.name)
+		if !util.IsFileExists(path) {
+			_ = ioutil.WriteFile(path, f.content, f.permission)
+		}
+	}
+
+	// setup job dir under workspace
 	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
 	b.vars[domain.VarAgentJobDir] = b.workDir
-	out = os.MkdirAll(b.workDir, os.ModePerm)
+	err = os.MkdirAll(b.workDir, os.ModePerm)
+
+	b.vars.Resolve()
 	return
 }
 
@@ -85,6 +99,10 @@ func (b *BashExecutor) Start() (out error) {
 		return b.toErrorStatus(err)
 	}
 
+	setupBin := func(in chan string) {
+		in <- fmt.Sprintf("export PATH=%s:$PATH", b.binDir)
+	}
+
 	writeEnv := func(in chan string) {
 		tmpFile, err := ioutil.TempFile("", "agent_env_")
 
@@ -96,7 +114,7 @@ func (b *BashExecutor) Start() (out error) {
 
 	b.writeLog(stdout, true)
 	b.writeLog(stderr, true)
-	b.writeCmd(stdin, nil, writeEnv)
+	b.writeCmd(stdin, setupBin, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout

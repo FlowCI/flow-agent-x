@@ -41,16 +41,6 @@ const (
 )
 
 type (
-	DockerOption struct {
-		Image             string   `json:"image"`
-		Entrypoint        []string `json:"entrypoint"` // host:container
-		Ports             []string `json:"ports"`
-		NetworkMode       string   `json:"networkMode"`
-		User              string   `json:"user"`
-		IsStopContainer   bool     `json:"isStopContainer"`
-		IsDeleteContainer bool     `json:"isDeleteContainer"`
-	}
-
 	CmdIn struct {
 		Type CmdType `json:"type"`
 	}

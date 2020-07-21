@@ -5,13 +5,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
-	"github.com/docker/go-connections/nat"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
@@ -24,8 +23,10 @@ import (
 const (
 	dockerWorkspace = "/ws"
 	dockerPluginDir = dockerWorkspace + "/.plugins"
+	dockerBin = "/ws/bin"
 	dockerEnvFile   = "/tmp/.env"
 	dockerPullRetry = 3
+	dockerSock      = "/var/run/docker.sock"
 
 	writeShellPid = "echo $$ > ~/.shell.pid\n"
 	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
@@ -37,17 +38,22 @@ const (
 type (
 	DockerExecutor struct {
 		BaseExecutor
-		volumes         []*domain.DockerVolume
-		agentVolume     types.Volume
-		cli             *client.Client
-		containerConfig *container.Config
-		hostConfig      *container.HostConfig
-		containerId     string
-		ttyExecId       string
-		workDir         string
-		envFile         string
+		agentVolume types.Volume
+		cli         *client.Client
+		configs     []*domain.DockerConfig
+		ttyExecId   string
+		workDir     string
+		envFile     string
 	}
 )
+
+func (d *DockerExecutor) runtime() *domain.DockerConfig {
+	if len(d.configs) > 0 {
+		return d.configs[0]
+	}
+
+	return nil
+}
 
 func (d *DockerExecutor) Init() (out error) {
 	defer func() {
@@ -121,7 +127,9 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 		return fmt.Errorf("interaction is ongoning")
 	}
 
-	if d.containerId == "" {
+	runtime := d.runtime()
+
+	if runtime.ContainerID == "" {
 		return fmt.Errorf("container not started")
 	}
 
@@ -130,10 +138,10 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
-		Cmd:          []string{linuxBash},
+		Cmd:          runtime.Config.Entrypoint,
 	}
 
-	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
+	exec, err := d.cli.ContainerExecCreate(d.context, runtime.ContainerID, config)
 	util.PanicIfErr(err)
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, config)
@@ -192,7 +200,21 @@ func (d *DockerExecutor) initAgentVolume() {
 }
 
 func (d *DockerExecutor) initConfig() {
-	docker := d.inCmd.Docker
+	d.configs = make([]*domain.DockerConfig, len(d.inCmd.Dockers))
+
+	// find run time docker option
+	var runtimeOption *domain.DockerOption
+	for i, item := range d.inCmd.Dockers {
+		if item.IsRuntime {
+			runtimeOption = item
+			continue
+		}
+		d.configs[i] = item.ToConfig()
+	}
+
+	if runtimeOption == nil {
+		panic(fmt.Errorf("no runtime docker option available"))
+	}
 
 	// set job work dir in the container = /ws/{flow id}
 	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
@@ -200,45 +222,31 @@ func (d *DockerExecutor) initConfig() {
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 
-	portSet, portMap, err := nat.ParsePortSpecs(docker.Ports)
-	util.PanicIfErr(err)
-
-	image := util.ParseStringWithSource(docker.Image, d.vars)
-
-	entrypoint := make([]string, len(docker.Entrypoint))
-	for i, item := range docker.Entrypoint {
-		entrypoint[i] = util.ParseStringWithSource(item, d.vars)
-	}
-
-	d.containerConfig = &container.Config{
-		Image:        image,
-		Env:          d.vars.ToStringArray(),
-		Entrypoint:   entrypoint,
-		ExposedPorts: portSet,
-		User:         docker.User,
-		Tty:          false,
-		AttachStdin:  true,
-		AttachStderr: true,
-		AttachStdout: true,
-		OpenStdin:    true,
-		StdinOnce:    true,
-		WorkingDir:   d.workDir,
-	}
-
-	d.hostConfig = &container.HostConfig{
-		NetworkMode:  container.NetworkMode(docker.NetworkMode),
-		PortBindings: portMap,
-		Binds:        []string{d.agentVolume.Name + ":" + dockerWorkspace},
-	}
-
+	// setup run time config
+	binds := []string{d.agentVolume.Name + ":" + dockerWorkspace}
 	for _, v := range d.volumes {
 		ok, _ := d.getVolume(v.Name)
 		if !ok {
 			util.LogWarn("Volume %s not found", v.Name)
 			continue
 		}
-		d.hostConfig.Binds = append(d.hostConfig.Binds, v.ToBindStr())
+		binds = append(binds, v.ToBindStr())
 	}
+
+	if util.IsFileExists(dockerSock) {
+		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
+	}
+
+	d.vars.Resolve()
+	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
+
+	// set default entrypoint for runtime container
+	if !config.HasEntrypoint() {
+		config.Config.Entrypoint = []string{linuxBash}
+	}
+
+	// set runtime to the first element in the config array
+	d.configs[0] = config
 }
 
 func (d *DockerExecutor) handleErrors(err error) error {
@@ -268,83 +276,88 @@ func (d *DockerExecutor) handleErrors(err error) error {
 }
 
 func (d *DockerExecutor) pullImage() {
-	image := d.containerConfig.Image
-
-	fullRef := "docker.io/library/" + image
-	if strings.Contains(image, "/") {
-		fullRef = "docker.io/" + image
-	}
-
-	var err error
-	for i := 0; i < dockerPullRetry; i++ {
-		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
-		if err != nil {
-			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s, retrying", image))
-			continue
+	pull := func(image string) {
+		fullRef := "docker.io/library/" + image
+		if strings.Contains(image, "/") {
+			fullRef = "docker.io/" + image
 		}
 
-		d.writeLog(reader, false)
-		break
+		var err error
+		for i := 0; i < dockerPullRetry; i++ {
+			reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+			if err != nil {
+				d.writeSingleLog(fmt.Sprintf("Unable to pull image %s, retrying", image))
+				continue
+			}
+
+			d.writeLog(reader, false)
+			break
+		}
+
+		util.PanicIfErr(err)
 	}
 
-	util.PanicIfErr(err)
+	for _, c := range d.configs {
+		pull(c.Config.Image)
+	}
 }
 
 func (d *DockerExecutor) startContainer() {
-	if d.tryToResume() {
-		return
+	ids := make([]string, len(d.configs))
+
+	// create and start containers
+	for i, c := range d.configs {
+		if d.resume(c.ContainerID) {
+			continue
+		}
+
+		resp, err := d.cli.ContainerCreate(d.context, c.Config, c.Host, nil, "")
+		util.PanicIfErr(err)
+
+		err = d.cli.ContainerStart(d.context, resp.ID, types.ContainerStartOptions{})
+		util.PanicIfErr(err)
+		util.LogInfo("Container started %s %s", c.Config.Image, resp.ID)
+
+		c.ContainerID = resp.ID
+		ids[i] = c.ContainerID
 	}
 
-	resp, err := d.cli.ContainerCreate(d.context, d.containerConfig, d.hostConfig, nil, "")
-	util.PanicIfErr(err)
-
-	cid := resp.ID
-	d.containerId = cid
-	d.result.ContainerId = cid
-	util.LogDebug("Container created %s", cid)
-
-	err = d.cli.ContainerStart(d.context, cid, types.ContainerStartOptions{})
-	util.PanicIfErr(err)
-	util.LogDebug("Container started %s", cid)
+	d.result.Containers = ids
 }
 
-func (d *DockerExecutor) tryToResume() bool {
-	containerIdToReuse := d.inCmd.ContainerId
-
-	if util.IsEmptyString(containerIdToReuse) {
+func (d *DockerExecutor) resume(cid string) bool {
+	if util.IsEmptyString(cid) {
 		return false
 	}
 
-	inspect, err := d.cli.ContainerInspect(d.context, containerIdToReuse)
+	inspect, err := d.cli.ContainerInspect(d.context, cid)
 	if client.IsErrContainerNotFound(err) {
-		util.LogWarn("Container %s not found, will create a new one", containerIdToReuse)
+		util.LogWarn("Container %s not found, will create a new one", cid)
 		return false
 	}
 
 	util.PanicIfErr(err)
 
 	if inspect.State.Status != "exited" {
-		util.LogWarn("Container %s status not exited, will create a new one", containerIdToReuse)
+		util.LogWarn("Container %s status not exited, will create a new one", cid)
 		return false
 	}
 
 	timeout := 5 * time.Second
-	err = d.cli.ContainerRestart(d.context, containerIdToReuse, &timeout)
+	err = d.cli.ContainerRestart(d.context, cid, &timeout)
 
 	// resume
 	if err == nil {
-		d.containerId = containerIdToReuse
-		d.result.ContainerId = containerIdToReuse
 		util.LogInfo("Container %s resumed", inspect.ID)
 		return true
 	}
 
 	// delete container that cannot resume
-	_ = d.cli.ContainerRemove(d.context, containerIdToReuse, types.ContainerRemoveOptions{
+	_ = d.cli.ContainerRemove(d.context, cid, types.ContainerRemoveOptions{
 		Force: true,
 	})
 
-	util.LogWarn("Failed to resume container %s, deleted", containerIdToReuse)
+	util.LogWarn("Failed to resume container %s, deleted", cid)
 	return false
 }
 
@@ -358,45 +371,57 @@ func (d *DockerExecutor) copyPlugins() {
 		reader, err := tarArchiveFromPath(d.pluginDir)
 		util.PanicIfErr(err)
 
-		err = d.cli.CopyToContainer(d.context, d.containerId, dockerWorkspace, reader, config)
+		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, dockerWorkspace, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Plugin dir been created in container")
 	}
 }
 
 func (d *DockerExecutor) runShell() string {
+	runtime := d.runtime()
+
 	config := types.ExecConfig{
 		Tty:          false,
 		AttachStdin:  true,
 		AttachStderr: true,
 		AttachStdout: true,
-		Cmd:          []string{linuxBash},
+		Cmd:          runtime.Config.Entrypoint,
 	}
 
-	exec, err := d.cli.ContainerExecCreate(d.context, d.containerId, config)
+	exec, err := d.cli.ContainerExecCreate(d.context, runtime.ContainerID, config)
 	util.PanicIfErr(err)
 
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	initScriptInVolume := func(in chan string) {
-		for _, v := range d.volumes {
-			if util.IsEmptyString(v.Script) {
-				continue
-			}
+	setupContainerIpAndBin := func(in chan string) {
+		for i, c := range d.configs {
+			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
+			address := inspect.NetworkSettings.IPAddress
 
-			in <- "source " + v.ScriptPath()
+			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
+			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
+		}
+
+		in <- fmt.Sprintf("mkdir -p %s", dockerBin)
+		in <- fmt.Sprintf("export PATH=%s:$PATH", dockerBin)
+
+		for _, f := range binFiles {
+			path := dockerBin + "/" + f.name
+			b64 := base64.StdEncoding.EncodeToString(f.content)
+			in <- fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path)
+			in <- fmt.Sprintf("chmod %s %s", f.permissionStr, path)
 		}
 	}
 
-	writeEnv := func(in chan string) {
+	writeEnvAfter := func(in chan string) {
 		in <- "env > " + dockerEnvFile
 	}
 
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true)
-	d.writeCmd(attach.Conn, initScriptInVolume, writeEnv)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter)
 
 	return exec.ID
 }
@@ -405,8 +430,8 @@ func (d *DockerExecutor) runShell() string {
 func (d *DockerExecutor) runSingleScript(script string) error {
 	ctx := context.Background()
 
-	exec, err := d.cli.ContainerExecCreate(ctx, d.containerId, types.ExecConfig{
-		Cmd: []string{"/bin/bash", "-c", script},
+	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
+		Cmd: []string{linuxBash, "-c", script},
 	})
 
 	if err != nil {
@@ -418,7 +443,7 @@ func (d *DockerExecutor) runSingleScript(script string) error {
 }
 
 func (d *DockerExecutor) exportEnv() {
-	reader, _, err := d.cli.CopyFromContainer(d.context, d.containerId, dockerEnvFile)
+	reader, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, dockerEnvFile)
 	if err != nil {
 		return
 	}
@@ -428,20 +453,20 @@ func (d *DockerExecutor) exportEnv() {
 }
 
 func (d *DockerExecutor) cleanupContainer() {
-	option := d.inCmd.Docker
-
-	if option.IsDeleteContainer {
-		err := d.cli.ContainerRemove(d.context, d.containerId, types.ContainerRemoveOptions{Force: true})
-		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been deleted", d.containerId, d.inCmd.ID)
+	for _, c := range d.configs {
+		if c.IsDelete {
+			err := d.cli.ContainerRemove(d.context, c.ContainerID, types.ContainerRemoveOptions{Force: true})
+			if !util.LogIfError(err) {
+				util.LogInfo("Container %s %s for cmd %s has been deleted", c.Config.Image, c.ContainerID, d.inCmd.ID)
+			}
+			continue
 		}
-		return
-	}
 
-	if option.IsStopContainer {
-		err := d.cli.ContainerStop(d.context, d.containerId, nil)
-		if !util.LogIfError(err) {
-			util.LogInfo("Container %s for cmd %s has been stopped", d.containerId, d.inCmd.ID)
+		if c.IsStop {
+			err := d.cli.ContainerStop(d.context, c.ContainerID, nil)
+			if !util.LogIfError(err) {
+				util.LogInfo("Container %s %s for cmd %s has been stopped", c.Config.Image, c.ContainerID, d.inCmd.ID)
+			}
 		}
 	}
 }

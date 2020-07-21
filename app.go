@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github/flowci/flow-agent-x/config"
 	"github/flowci/flow-agent-x/controller"
@@ -19,7 +20,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const version = "0.20.26"
+const version = "0.20.30"
 
 func init() {
 	util.LogInit()
@@ -121,9 +122,10 @@ func execCmd(script string) {
 		Timeout: 1800,
 	}
 
-	printer := func(channel <-chan []byte) {
-		for item := range channel {
-			util.LogInfo("[LOG]: %s", string(item))
+	printer := func(channel <-chan string) {
+		for b64 := range channel {
+			bytes, _ := base64.StdEncoding.DecodeString(b64)
+			util.LogInfo("[LOG]: %s", string(bytes))
 		}
 	}
 
@@ -131,8 +133,8 @@ func execCmd(script string) {
 		Parent: context.Background(),
 		Cmd:    cmd,
 	})
-	go printer(bashExecutor.LogChannel())
 
+	go printer(bashExecutor.Stdout())
 	_ = bashExecutor.Start()
 }
 

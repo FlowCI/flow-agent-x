@@ -21,28 +21,26 @@ const (
 	defaultReaderBufferSize   = 8 * 1024 // 8k
 )
 
-type TypeOfExecutor int
-
 type Executor interface {
 	Init() error
 
 	CmdIn() *domain.ShellIn
 
-	TtyId() string
-
-	LogChannel() <-chan []byte
-
-	TtyIn() chan<- string
-
-	TtyOut() <-chan string
-
-	Start() error
-
 	StartTty(ttyId string, onStarted func(ttyId string)) error
 
 	StopTty()
 
+	TtyId() string
+
+	TtyIn() chan<- string
+
+	TtyOut() <-chan string // b64 out
+
 	IsInteracting() bool
+
+	Start() error
+
+	Stdout() <-chan string // b64 log
 
 	Kill()
 
@@ -50,17 +48,18 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
-	agentId     string // should be agent token
-	workspace   string
-	pluginDir   string
-	context     context.Context
-	cancelFunc  context.CancelFunc
-	inCmd       *domain.ShellIn
-	result      *domain.ShellOut
-	vars        domain.Variables // vars from input and in cmd
-	bashChannel chan string      // bash script comes from
-	logChannel  chan []byte      // output log
-	stdOutWg    sync.WaitGroup   // init on subclasses
+	agentId    string // should be agent token
+	workspace  string
+	pluginDir  string
+	volumes    []*domain.DockerVolume
+	context    context.Context
+	cancelFunc context.CancelFunc
+	inCmd      *domain.ShellIn
+	result     *domain.ShellOut
+	vars       domain.Variables // vars from input and in cmd
+	stdin      chan string      // bash script comes from
+	stdout     chan string      // output log
+	stdOutWg   sync.WaitGroup   // init on subclasses
 
 	ttyId     string
 	ttyIn     chan string // b64 script
@@ -85,21 +84,18 @@ func NewExecutor(options Options) Executor {
 	}
 
 	cmd := options.Cmd
-
-	vars := domain.ConnectVars(options.Vars, cmd.Inputs)
-	vars.Resolve()
-
 	base := BaseExecutor{
-		agentId:     options.AgentId,
-		workspace:   options.Workspace,
-		pluginDir:   options.PluginDir,
-		bashChannel: make(chan string),
-		logChannel:  make(chan []byte, defaultChannelBufferSize),
-		inCmd:       cmd,
-		vars:        vars,
-		result:      domain.NewShellOutput(cmd),
-		ttyIn:       make(chan string, defaultChannelBufferSize),
-		ttyOut:      make(chan string, defaultChannelBufferSize),
+		agentId:   options.AgentId,
+		workspace: options.Workspace,
+		pluginDir: options.PluginDir,
+		volumes:   options.Volumes,
+		stdin:     make(chan string),
+		stdout:    make(chan string, defaultChannelBufferSize),
+		inCmd:     cmd,
+		vars:      domain.ConnectVars(options.Vars, cmd.Inputs),
+		result:    domain.NewShellOutput(cmd),
+		ttyIn:     make(chan string, defaultChannelBufferSize),
+		ttyOut:    make(chan string, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -109,7 +105,6 @@ func NewExecutor(options Options) Executor {
 	if cmd.HasDockerOption() {
 		return &DockerExecutor{
 			BaseExecutor: base,
-			volumes:      options.Volumes,
 		}
 	}
 
@@ -128,8 +123,8 @@ func (b *BaseExecutor) TtyId() string {
 }
 
 // LogChannel for output log from stdout, stdin
-func (b *BaseExecutor) LogChannel() <-chan []byte {
-	return b.logChannel
+func (b *BaseExecutor) Stdout() <-chan string {
+	return b.stdout
 }
 
 func (b *BaseExecutor) TtyIn() chan<- string {
@@ -163,7 +158,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 			select {
 			case <-b.context.Done():
 				return
-			case script, ok := <-b.bashChannel:
+			case script, ok := <-b.stdin:
 				if !ok {
 					return
 				}
@@ -176,30 +171,39 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	// start
 	go consumer()
 
-	b.bashChannel <- "set -e"
-
-	if before != nil {
-		before(b.bashChannel)
+	// source volume script
+	b.stdin <- "set +e" // ignore source file failure
+	for _, v := range b.volumes {
+		if util.IsEmptyString(v.Script) {
+			continue
+		}
+		b.stdin <- fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath())
 	}
 
+	if before != nil {
+		before(b.stdin)
+	}
+
+	// write shell script from cmd
+	b.stdin <- "set -e"
 	for _, script := range b.inCmd.Scripts {
-		b.bashChannel <- script
+		b.stdin <- script
 	}
 
 	if after != nil {
-		after(b.bashChannel)
+		after(b.stdin)
 	}
 
-	b.bashChannel <- "exit"
+	b.stdin <- "exit"
 }
 
 func (b *BaseExecutor) closeChannels() {
-	if len(b.LogChannel()) > 0 {
+	if len(b.stdout) > 0 {
 		util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
 	}
 
-	close(b.bashChannel)
-	close(b.logChannel)
+	close(b.stdin)
+	close(b.stdout)
 
 	close(b.ttyIn)
 	close(b.ttyOut)
@@ -230,7 +234,7 @@ func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
 					return
 				}
 
-				b.logChannel <- removeDockerHeader(buf[0:n])
+				b.stdout <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 				atomic.AddInt64(&b.result.LogSize, int64(n))
 			}
 		}
@@ -238,7 +242,7 @@ func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
-	b.logChannel <- []byte(msg)
+	b.stdout <- base64.StdEncoding.EncodeToString([]byte(msg))
 }
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
