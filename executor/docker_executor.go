@@ -237,6 +237,7 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 
+	d.vars.Resolve()
 	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
 
 	// set default entrypoint for runtime container
