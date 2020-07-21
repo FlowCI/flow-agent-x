@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"strconv"
 	"sync"
 	"time"
@@ -168,6 +169,33 @@ func (s *CmdService) initEnv() domain.Variables {
 	vars[domain.VarAgentPluginDir] = config.PluginDir
 	vars[domain.VarAgentLogDir] = config.LoggingDir
 
+	// write env for interface ip on of agent host
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return vars
+	}
+
+	for _, iface := range interfaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+
+			key := fmt.Sprintf(domain.VarAgentIpPattern, iface.Name)
+			vars[key] = ip.String()
+			break
+		}
+	}
+
 	return vars
 }
 
@@ -261,10 +289,11 @@ func (s *CmdService) execClose() error {
 
 func (s *CmdService) failureBeforeExecute(in *domain.ShellIn, err error) {
 	result := &domain.ShellOut{
-		ID:      in.ID,
-		Status:  domain.CmdStatusException,
-		Error:   err.Error(),
-		StartAt: time.Now(),
+		ID:       in.ID,
+		Status:   domain.CmdStatusException,
+		Error:    err.Error(),
+		StartAt:  time.Now(),
+		FinishAt: time.Now(),
 	}
 
 	appConfig := config.GetInstance()

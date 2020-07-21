@@ -8,30 +8,29 @@ import (
 type (
 	ShellIn struct {
 		CmdIn
-		ID           string        `json:"id"`
-		FlowId       string        `json:"flowId"`
-		JobId        string        `json:"jobId"`
-		ContainerId  string        `json:"containerId"` // container id prefer to reuse
-		AllowFailure bool          `json:"allowFailure"`
-		Plugin       string        `json:"plugin"`
-		Docker       *DockerOption `json:"docker"`
-		Scripts      []string      `json:"scripts"`
-		Timeout      int           `json:"timeout"`
-		Inputs       Variables     `json:"inputs"`
-		EnvFilters   []string      `json:"envFilters"`
+		ID           string          `json:"id"`
+		FlowId       string          `json:"flowId"`
+		JobId        string          `json:"jobId"`
+		AllowFailure bool            `json:"allowFailure"`
+		Plugin       string          `json:"plugin"`
+		Dockers      []*DockerOption `json:"dockers"`
+		Scripts      []string        `json:"scripts"`
+		Timeout      int             `json:"timeout"`
+		Inputs       Variables       `json:"inputs"`
+		EnvFilters   []string        `json:"envFilters"`
 	}
 
 	ShellOut struct {
-		ID          string    `json:"id"`
-		ProcessId   int       `json:"processId"`
-		ContainerId string    `json:"containerId"` // container id prefer to reuse
-		Status      CmdStatus `json:"status"`
-		Code        int       `json:"code"`
-		Output      Variables `json:"output"`
-		StartAt     time.Time `json:"startAt"`
-		FinishAt    time.Time `json:"finishAt"`
-		Error       string    `json:"error"`
-		LogSize     int64     `json:"logSize"`
+		ID         string    `json:"id"`
+		ProcessId  int       `json:"processId"`
+		Containers []string  `json:"containers"` // container ids applied for shell
+		Status     CmdStatus `json:"status"`
+		Code       int       `json:"code"`
+		Output     Variables `json:"output"`
+		StartAt    time.Time `json:"startAt"`
+		FinishAt   time.Time `json:"finishAt"`
+		Error      string    `json:"error"`
+		LogSize    int64     `json:"logSize"`
 	}
 )
 
@@ -44,7 +43,7 @@ func (in *ShellIn) HasPlugin() bool {
 }
 
 func (in *ShellIn) HasDockerOption() bool {
-	return in.Docker != nil
+	return in.Dockers != nil && len(in.Dockers) > 0
 }
 
 func (in *ShellIn) HasScripts() bool {
