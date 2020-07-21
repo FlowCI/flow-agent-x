@@ -40,7 +40,7 @@ func NewVolumesFromString(val string) []*DockerVolume {
 		pair := strings.Split(val, "=")
 
 		if len(pair) != 2 {
-			panic(fmt.Errorf("invalid volume string, must be key=value pair"))
+			panic(fmt.Errorf("'%s' is invalid volume string, must be key=value pair", val))
 		}
 
 		return pair[1]
@@ -53,7 +53,7 @@ func NewVolumesFromString(val string) []*DockerVolume {
 
 		fields := strings.Split(token, ",")
 		if len(fields) != 3 {
-			panic(fmt.Errorf("invalid volume string, fields must contain name, dest, script"))
+			panic(fmt.Errorf("'%s' is invalid volume string, fields must contain name, dest, script", token))
 		}
 
 		name := fields[0]
