@@ -216,7 +216,12 @@ func (d *DockerExecutor) initConfig() {
 	}
 
 	if runtimeOption == nil {
-		panic(fmt.Errorf("no runtime docker option available"))
+		if len(d.inCmd.Dockers) > 1 {
+			panic(fmt.Errorf("no runtime docker option available"))
+		}
+
+		// set runtime image if only one docker option
+		runtimeOption = d.inCmd.Dockers[0]
 	}
 
 	// set job work dir in the container = /ws/{flow id}

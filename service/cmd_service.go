@@ -109,6 +109,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		if err := recover(); err != nil {
 			out = err.(error)
 			s.failureBeforeExecute(in, out)
+			s.release() // release current executor if error
 		}
 	}()
 
