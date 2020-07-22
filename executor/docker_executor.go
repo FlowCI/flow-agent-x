@@ -62,8 +62,11 @@ func (d *DockerExecutor) Init() (out error) {
 		}
 	}()
 
+	d.result.StartAt = time.Now()
+
 	d.cli, out = client.NewEnvClient()
 	util.PanicIfErr(out)
+	util.LogInfo("Docker client version: %s", d.cli.ClientVersion())
 
 	d.initAgentVolume()
 	d.initConfig()
@@ -286,11 +289,11 @@ func (d *DockerExecutor) pullImage() {
 		for i := 0; i < dockerPullRetry; i++ {
 			reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 			if err != nil {
-				d.writeSingleLog(fmt.Sprintf("Unable to pull image %s, retrying", image))
+				d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying\n", image, err.Error()))
 				continue
 			}
 
-			d.writeLog(reader, false)
+			d.writeLog(reader, false, false)
 			break
 		}
 
@@ -420,7 +423,7 @@ func (d *DockerExecutor) runShell() string {
 
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
-	d.writeLog(attach.Reader, true)
+	d.writeLog(attach.Reader, true, true)
 	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter)
 
 	return exec.ID

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 type (
@@ -24,6 +25,8 @@ type (
 )
 
 func (b *BashExecutor) Init() (err error) {
+	b.result.StartAt = time.Now()
+
 	if util.IsEmptyString(b.workspace) {
 		b.workDir, err = ioutil.TempDir("", "agent_")
 		b.vars[domain.VarAgentJobDir] = b.workDir
@@ -112,8 +115,8 @@ func (b *BashExecutor) Start() (out error) {
 		}
 	}
 
-	b.writeLog(stdout, true)
-	b.writeLog(stderr, true)
+	b.writeLog(stdout, true, true)
+	b.writeLog(stderr, true, true)
 	b.writeCmd(stdin, setupBin, writeEnv)
 	b.toStartStatus(command.Process.Pid)
 

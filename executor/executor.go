@@ -209,8 +209,8 @@ func (b *BaseExecutor) closeChannels() {
 	close(b.ttyOut)
 }
 
-func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
-	go func() {
+func (b *BaseExecutor) writeLog(src io.Reader, inThread, doneOnWaitGroup bool) {
+	write := func() {
 		defer func() {
 			if err := recover(); err != nil {
 				util.LogWarn(err.(error).Error())
@@ -238,7 +238,14 @@ func (b *BaseExecutor) writeLog(src io.Reader, doneOnWaitGroup bool) {
 				atomic.AddInt64(&b.result.LogSize, int64(n))
 			}
 		}
-	}()
+	}
+
+	if inThread {
+		go write()
+		return
+	}
+
+	write()
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
@@ -285,7 +292,6 @@ func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 func (b *BaseExecutor) toStartStatus(pid int) {
 	b.result.Status = domain.CmdStatusRunning
 	b.result.ProcessId = pid
-	b.result.StartAt = time.Now()
 }
 
 func (b *BaseExecutor) toErrorStatus(err error) error {
