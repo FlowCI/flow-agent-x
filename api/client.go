@@ -46,8 +46,8 @@ type (
 		qAgent   *amqp.Queue
 
 		qCallback  string
-		exShellLog string
-		exTtyLog   string
+		qShellLog string
+		qTtyLog   string
 
 		qAgentConsumer <-chan amqp.Delivery
 	}
@@ -84,8 +84,8 @@ func (c *client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out err
 	c.qAgent = &queue
 
 	c.qCallback = config.Callback
-	c.exShellLog = config.ShellLogEx
-	c.exTtyLog = config.TtyLogEx
+	c.qShellLog = config.ShellLog
+	c.qTtyLog = config.TtyLog
 
 	return
 }
@@ -206,7 +206,7 @@ func (c *client) SendShellLog(jobId, stepId, b64Log string) {
 		return
 	}
 
-	_ = c.qChannel.Publish(c.exShellLog, "", false, false, amqp.Publishing{
+	_ = c.qChannel.Publish("", c.qShellLog, false, false, amqp.Publishing{
 		Body: raw,
 		Headers: map[string]interface{}{
 			"id":     jobId,
@@ -216,7 +216,7 @@ func (c *client) SendShellLog(jobId, stepId, b64Log string) {
 }
 
 func (c *client) SendTtyLog(ttyId, b64Log string) {
-	_ = c.qChannel.Publish(c.exTtyLog, "", false, false, amqp.Publishing{
+	_ = c.qChannel.Publish("", c.qTtyLog, false, false, amqp.Publishing{
 		Body: []byte(b64Log),
 		Headers: map[string]interface{}{
 			"id": ttyId,

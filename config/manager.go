@@ -180,7 +180,12 @@ func (m *Manager) initZookeeper() {
 	m.Zk = zk
 
 	// register agent on zk
-	_, _ = zk.Create(m.Settings.Zookeeper.Root, util.ZkNodeTypePersistent, "")
+	exist, err := zk.Exist(m.Settings.Zookeeper.Root)
+	util.PanicIfErr(err)
+	if !exist {
+		panic(fmt.Errorf("zookeeper not initialized on server"))
+	}
+
 	agentPath := getZkPath(m.Settings)
 	_, nodeErr := zk.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
 
