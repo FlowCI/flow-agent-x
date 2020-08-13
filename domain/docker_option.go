@@ -9,10 +9,11 @@ import (
 type (
 	DockerOption struct {
 		Image             string    `json:"image"`
+		Name              string    `json:"name"`
 		Entrypoint        []string  `json:"entrypoint"` // host:container
 		Command           []string  `json:"command"`
 		Ports             []string  `json:"ports"`
-		NetworkMode       string    `json:"networkMode"`
+		Network           string    `json:"network"`
 		Environment       Variables `json:"environment"`
 		User              string    `json:"user"`
 		IsRuntime         bool      `json:"isRuntime"`
@@ -30,6 +31,12 @@ func (d *DockerOption) ToConfig() *DockerConfig {
 	return d.toConfig(nil, "", nil, false)
 }
 
+func (d *DockerOption) SetDefaultNetwork(network string) {
+	if d.Network == "bridge" || d.Network == "" {
+		d.Network = network
+	}
+}
+
 func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []string, enableInput bool) (config *DockerConfig) {
 	portSet, portMap, err := nat.ParsePortSpecs(d.Ports)
 	util.PanicIfErr(err)
@@ -41,6 +48,7 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 	}
 
 	config = &DockerConfig{
+		Name: d.Name,
 		Config: &container.Config{
 			Image:        util.ParseStringWithSource(d.Image, vars),
 			Env:          vars.ToStringArray(),
@@ -56,7 +64,7 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 			StdinOnce:    enableInput,
 		},
 		Host: &container.HostConfig{
-			NetworkMode:  container.NetworkMode(d.NetworkMode),
+			NetworkMode:  container.NetworkMode(d.Network),
 			PortBindings: portMap,
 		},
 		IsStop:      d.IsStopContainer,

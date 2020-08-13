@@ -21,12 +21,14 @@ import (
 )
 
 const (
-	dockerWorkspace = "/ws"
-	dockerPluginDir = dockerWorkspace + "/.plugins"
-	dockerBin = "/ws/bin"
-	dockerEnvFile   = "/tmp/.env"
-	dockerPullRetry = 3
-	dockerSock      = "/var/run/docker.sock"
+	dockerWorkspace     = "/ws"
+	dockerPluginDir     = dockerWorkspace + "/.plugins"
+	dockerBin           = "/ws/bin"
+	dockerEnvFile       = "/tmp/.env"
+	dockerPullRetry     = 3
+	dockerSock          = "/var/run/docker.sock"
+	dockerNetwork       = "flow-ci-agent-default"
+	dockerNetworkDriver = "bridge"
 
 	writeShellPid = "echo $$ > ~/.shell.pid\n"
 	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
@@ -68,6 +70,7 @@ func (d *DockerExecutor) Init() (out error) {
 	util.PanicIfErr(out)
 	util.LogInfo("Docker client version: %s", d.cli.ClientVersion())
 
+	d.initNetwork()
 	d.initAgentVolume()
 	d.initConfig()
 
@@ -181,6 +184,26 @@ func (d *DockerExecutor) StopTty() {
 // private methods
 //--------------------------------------------
 
+// setup default network for agent
+func (d *DockerExecutor) initNetwork() {
+	args := filters.NewArgs()
+	args.Add("name", dockerNetwork)
+
+	list, err := d.cli.NetworkList(d.context, types.NetworkListOptions{
+		Filters: args,
+	})
+	util.PanicIfErr(err)
+
+	if len(list) == 0 {
+		network, err := d.cli.NetworkCreate(d.context, dockerNetwork, types.NetworkCreate{
+			CheckDuplicate: true,
+			Driver:         dockerNetworkDriver,
+		})
+		util.PanicIfErr(err)
+		util.LogInfo("network %s=%s has been created", dockerNetwork, network.ID)
+	}
+}
+
 // agent volume that bind to /ws inside docker
 func (d *DockerExecutor) initAgentVolume() {
 	name := "agent-" + d.agentId
@@ -208,6 +231,8 @@ func (d *DockerExecutor) initConfig() {
 	// find run time docker option
 	var runtimeOption *domain.DockerOption
 	for i, item := range d.inCmd.Dockers {
+		item.SetDefaultNetwork(dockerNetwork)
+
 		if item.IsRuntime {
 			runtimeOption = item
 			continue
@@ -319,7 +344,7 @@ func (d *DockerExecutor) startContainer() {
 			continue
 		}
 
-		resp, err := d.cli.ContainerCreate(d.context, c.Config, c.Host, nil, "")
+		resp, err := d.cli.ContainerCreate(d.context, c.Config, c.Host, nil, c.Name)
 		util.PanicIfErr(err)
 
 		err = d.cli.ContainerStart(d.context, resp.ID, types.ContainerStartOptions{})
@@ -406,6 +431,13 @@ func (d *DockerExecutor) runShell() string {
 		for i, c := range d.configs {
 			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
 			address := inspect.NetworkSettings.IPAddress
+
+			if address == "" && len(inspect.NetworkSettings.Networks) > 0 {
+				for _, v := range inspect.NetworkSettings.Networks {
+					address += v.IPAddress + ","
+				}
+				address = address[:len(address) - 1]
+			}
 
 			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
 			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
