@@ -30,6 +30,7 @@ type (
 		Server string
 		Token  string
 		Port   int
+		IsK8s  bool
 
 		Workspace  string
 		LoggingDir string
@@ -118,6 +119,11 @@ func (m *Manager) initVolumes() {
 	}
 
 	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
+
+	if m.IsK8s {
+		// TODO: check k8s volume later
+		return
+	}
 
 	cli, err := client.NewEnvClient()
 	util.PanicIfErr(err)

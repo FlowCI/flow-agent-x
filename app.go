@@ -55,6 +55,12 @@ func main() {
 			EnvVar: domain.VarAgentPort,
 		},
 
+		cli.BoolFlag{
+			Name:   "k8s",
+			Usage:  "Indicate is run from k8s",
+			EnvVar: domain.VarK8s,
+		},
+
 		cli.StringFlag{
 			Name:   "workspace, w",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
@@ -95,6 +101,7 @@ func start(c *cli.Context) error {
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
+	config.IsK8s = c.Bool("k8s")
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
