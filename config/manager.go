@@ -3,8 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -119,26 +117,6 @@ func (m *Manager) initVolumes() {
 	}
 
 	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
-
-	if m.IsK8s {
-		// TODO: check k8s volume later
-		return
-	}
-
-	cli, err := client.NewEnvClient()
-	util.PanicIfErr(err)
-
-	for _, vol := range m.Volumes {
-		filter := filters.NewArgs()
-		filter.Add("name", vol.Name)
-
-		list, err := cli.VolumeList(m.AppCtx, filter)
-		util.PanicIfErr(err)
-
-		if len(list.Volumes) == 0 {
-			panic(fmt.Errorf("docker volume '%s' not found", vol.Name))
-		}
-	}
 }
 
 func (m *Manager) loadSettings() {

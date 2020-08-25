@@ -10,7 +10,6 @@ import (
 
 	"bufio"
 	"encoding/base64"
-	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 
