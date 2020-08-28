@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
@@ -17,8 +18,11 @@ import (
 )
 
 const (
-	k8sLabel          = "flow-ci-app"
+	k8sLabelApp       = "flow-ci-app"
+	k8sLabelName      = "flow-ci-app-name"
 	k8sLabelValueStep = "step"
+
+	k8sDefaultStartPodTimeout = 30 * time.Second
 )
 
 type (
@@ -57,53 +61,16 @@ func (k *K8sExecutor) Start() (out error) {
 		}
 	}()
 
-	dockers := k.inCmd.Dockers
-	containers := make([]v1.Container, len(dockers))
-	var runtimeContainer v1.Container
+	pod := k.createPodConfig()
 
-	// setup containers
-	for i, option := range dockers {
-		containers[i] = v1.Container{
-			Name:  option.Name,
-			Image: option.Image,
-			Env:   k.toEnvVar(option.Environment),
-			Ports: k.toPort(option.Ports),
-			Command: option.Command,
-		}
-
-		// setup runtime container
-		if option.IsRuntime {
-			runtimeContainer = containers[i]
-			runtimeContainer.WorkingDir = k.workDir
-			runtimeContainer.Stdin = true
-			runtimeContainer.TTY = true
-
-			vars := domain.ConnectVars(option.Environment, k.vars).Resolve()
-			runtimeContainer.Env = k.toEnvVar(vars)
-
-			// set default command for runtime container
-			if option.Command == nil {
-				runtimeContainer.Command = []string{linuxBash}
-			}
-		}
-	}
-
-	pod := &v1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: runtimeContainer.Name, // pod name as runtime container name
-			Labels: map[string]string{
-				k8sLabel: k8sLabelValueStep,
-			},
-		},
-		Spec: v1.PodSpec{
-			Containers: containers,
-		},
-	}
-
+	// start pod
 	pod, err := k.client.CoreV1().Pods(k.namespace).Create(k.context, pod, metav1.CreateOptions{})
 	util.PanicIfErr(err)
-
 	k.pod = pod
+
+	k.waitForRunning(k8sDefaultStartPodTimeout)
+	k.copyPlugins()
+
 	return
 }
 
@@ -155,6 +122,100 @@ func (k *K8sExecutor) getNamespace() string {
 	return "default"
 }
 
+func (k *K8sExecutor) createPodConfig() *v1.Pod {
+	dockers := k.inCmd.Dockers
+	containers := make([]v1.Container, len(dockers))
+	var runtimeContainer *v1.Container
+
+	// setup containers
+	for i, option := range dockers {
+		containers[i] = v1.Container{
+			Name:            option.Name,
+			Image:           option.Image,
+			Env:             k.toEnvVar(option.Environment),
+			Ports:           k.toPort(option.Ports),
+			Command:         option.Command,
+			ImagePullPolicy: "Always",
+		}
+
+		if option.IsRuntime {
+			runtimeContainer = &containers[i]
+		}
+	}
+
+	if runtimeContainer == nil {
+		if len(dockers) > 1 {
+			panic(fmt.Errorf("no runtime docker option available"))
+		}
+		runtimeContainer = &containers[0]
+	}
+
+	// setup runtime container
+	runtimeContainer.WorkingDir = k.workDir
+	runtimeContainer.Stdin = false
+	runtimeContainer.TTY = false
+	runtimeContainer.Env = append(runtimeContainer.Env, k.toEnvVar(k.vars.Resolve())...)
+	if runtimeContainer.Command == nil {
+		runtimeContainer.Command = []string{linuxBash}
+	}
+
+	// create pod config
+	return &v1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: runtimeContainer.Name, // pod name as runtime container name
+			Labels: map[string]string{
+				k8sLabelApp:  k8sLabelValueStep,
+				k8sLabelName: runtimeContainer.Name,
+			},
+		},
+		Spec: v1.PodSpec{
+			Containers:    containers,
+			RestartPolicy: "Never",
+		},
+	}
+}
+
+func (k *K8sExecutor) waitForRunning(timeout time.Duration) {
+	podName := k.pod.Name
+
+	watch, err := k.client.CoreV1().Pods(k.namespace).Watch(k.context, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("%s=%s", k8sLabelName, podName),
+	})
+	util.PanicIfErr(err)
+
+	startTime := time.Now()
+	for {
+		select {
+		case event := <-watch.ResultChan():
+			pod := event.Object.(*v1.Pod)
+			util.LogInfo("Pod %s: status = %s", podName, pod.Status.Phase)
+
+			if pod.Status.Phase == v1.PodPending {
+				if time.Now().Sub(startTime) > timeout {
+					panic(fmt.Errorf("start pod %s timeout on pending", podName))
+				}
+				break
+			}
+
+			if pod.Status.Phase == v1.PodRunning {
+				util.LogInfo("Pod %s is running", pod.Name)
+				return
+			}
+
+			if pod.Status.Phase == v1.PodFailed {
+				panic(fmt.Errorf("start pod %s failed", podName))
+			}
+
+		case <-time.After(timeout):
+			panic(fmt.Errorf("start pod %s timeout", podName))
+		}
+	}
+}
+
+func (k *K8sExecutor) copyPlugins() {
+
+}
+
 func (k *K8sExecutor) handleErrors(err error) error {
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
@@ -189,6 +250,7 @@ func (k *K8sExecutor) toEnvVar(vars domain.Variables) []v1.EnvVar {
 			Name:  k,
 			Value: v,
 		}
+		i++
 	}
 
 	return k8sVars
