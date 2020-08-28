@@ -37,6 +37,14 @@ func NilOrEmpty(v Variables) bool {
 }
 
 func ConnectVars(a Variables, b Variables) Variables {
+	if a == nil {
+		a = Variables{}
+	}
+
+	if b == nil {
+		b = Variables{}
+	}
+
 	vars := make(Variables, a.Size()+b.Size())
 	for k, val := range a {
 		vars[k] = val
@@ -45,6 +53,7 @@ func ConnectVars(a Variables, b Variables) Variables {
 	for k, val := range b {
 		vars[k] = val
 	}
+
 	return vars
 }
 
@@ -61,7 +70,7 @@ func (v Variables) Size() int {
 }
 
 // Resolve to gain actual value from env variables
-func (v Variables) Resolve() {
+func (v Variables) Resolve() Variables {
 	// resolve from system env vars
 	for key, val := range v {
 		val = util.ParseString(val)
@@ -73,6 +82,8 @@ func (v Variables) Resolve() {
 		val = util.ParseStringWithSource(val, v)
 		v[key] = val
 	}
+
+	return v
 }
 
 // ToStringArray convert variables map to key=value string array

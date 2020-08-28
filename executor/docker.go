@@ -21,14 +21,14 @@ import (
 )
 
 const (
-	dockerWorkspace     = "/ws"
-	dockerPluginDir     = dockerWorkspace + "/.plugins"
-	dockerBin           = "/ws/bin"
-	dockerEnvFile       = "/tmp/.env"
-	dockerPullRetry     = 3
-	dockerSock          = "/var/run/docker.sock"
-	dockerNetwork       = "flow-ci-agent-default"
-	dockerNetworkDriver = "bridge"
+	dockerWorkspace              = "/ws"
+	dockerPluginDir              = dockerWorkspace + "/.plugins"
+	dockerBin                    = "/ws/bin"
+	dockerEnvFile                = "/tmp/.env"
+	dockerPullRetry              = 3
+	dockerSock                   = "/var/run/docker.sock"
+	dockerNetwork                = "flow-ci-agent-default"
+	dockerNetworkDriver          = "bridge"
 
 	writeShellPid = "echo $$ > ~/.shell.pid\n"
 	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
@@ -436,7 +436,7 @@ func (d *DockerExecutor) runShell() string {
 				for _, v := range inspect.NetworkSettings.Networks {
 					address += v.IPAddress + ","
 				}
-				address = address[:len(address) - 1]
+				address = address[:len(address)-1]
 			}
 
 			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)

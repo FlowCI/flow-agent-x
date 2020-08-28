@@ -69,6 +69,7 @@ type BaseExecutor struct {
 }
 
 type Options struct {
+	InK8s     bool
 	AgentId   string
 	Parent    context.Context
 	Workspace string
@@ -103,6 +104,12 @@ func NewExecutor(options Options) Executor {
 	base.cancelFunc = cancel
 
 	if cmd.HasDockerOption() {
+		if options.InK8s {
+			return &K8sExecutor{
+				BaseExecutor: base,
+			}
+		}
+
 		return &DockerExecutor{
 			BaseExecutor: base,
 		}
