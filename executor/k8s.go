@@ -9,7 +9,9 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/remotecommand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -35,7 +37,8 @@ type (
 		workDir   string
 		envFile   string
 
-		pod *v1.Pod
+		pod     *v1.Pod
+		runtime *v1.Container
 	}
 )
 
@@ -66,6 +69,14 @@ func (k *K8sExecutor) Start() (out error) {
 	// start pod
 	pod, err := k.client.CoreV1().Pods(k.namespace).Create(k.context, pod, metav1.CreateOptions{})
 	util.PanicIfErr(err)
+
+	// setup pod and runtime container
+	for _, c := range pod.Spec.Containers {
+		if c.Name == pod.Name {
+			k.runtime = &c
+			break
+		}
+	}
 	k.pod = pod
 
 	k.waitForRunning(k8sDefaultStartPodTimeout)
@@ -122,6 +133,7 @@ func (k *K8sExecutor) getNamespace() string {
 	return "default"
 }
 
+// create pod config, pod name = runtime container name
 func (k *K8sExecutor) createPodConfig() *v1.Pod {
 	dockers := k.inCmd.Dockers
 	containers := make([]v1.Container, len(dockers))
@@ -152,8 +164,8 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 
 	// setup runtime container
 	runtimeContainer.WorkingDir = k.workDir
-	runtimeContainer.Stdin = false
-	runtimeContainer.TTY = false
+	runtimeContainer.Stdin = true
+	runtimeContainer.TTY = true
 	runtimeContainer.Env = append(runtimeContainer.Env, k.toEnvVar(k.vars.Resolve())...)
 	if runtimeContainer.Command == nil {
 		runtimeContainer.Command = []string{linuxBash}
@@ -213,7 +225,40 @@ func (k *K8sExecutor) waitForRunning(timeout time.Duration) {
 }
 
 func (k *K8sExecutor) copyPlugins() {
+	if util.IsEmptyString(k.pluginDir) {
+		return
+	}
 
+	options := &v1.PodExecOptions{
+		Container: k.runtime.Name,
+		Command:   []string{"tar", "-xf", "-", "-C", dockerWorkspace},
+		Stdin:     true,
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}
+
+	req := k.client.CoreV1().RESTClient().
+		Post().
+		Resource("pods").
+		Name(k.pod.Name).
+		Namespace(k.namespace).
+		SubResource("exec").
+		VersionedParams(options, scheme.ParameterCodec)
+
+	exec, err := remotecommand.NewSPDYExecutor(k.K8sConfig, "POST", req.URL())
+	util.PanicIfErr(err)
+
+	reader, err := tarArchiveFromPath(k.pluginDir)
+	util.PanicIfErr(err)
+
+	err = exec.Stream(remotecommand.StreamOptions{
+		Stdin:  reader,
+		Stdout: os.Stdout,
+		Stderr: os.Stderr,
+		Tty:    false,
+	})
+	util.PanicIfErr(err)
 }
 
 func (k *K8sExecutor) handleErrors(err error) error {
