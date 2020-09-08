@@ -36,6 +36,14 @@ func TestShouldExecInK8s(t *testing.T) {
 	// start pod
 	err = executor.Start()
 	assert.NoError(err)
+
+	assert.Equal(0, executor.GetResult().Code)
+	assert.True(executor.GetResult().ProcessId > 0)
+
+	// verify output
+	output := executor.GetResult().Output
+	assert.Equal("flowci", output["FLOW_VVV"])
+	assert.Equal("flow...", output["FLOW_AAA"])
 }
 
 func createK8sTestCmd() *domain.ShellIn {
@@ -64,7 +72,6 @@ func createK8sTestCmd() *domain.ShellIn {
 			"echo bbb",
 			"sleep 5",
 			">&2 echo $INPUT_VAR",
-			"1111",
 			"export FLOW_VVV=flowci",
 			"export FLOW_AAA=flow...",
 		},

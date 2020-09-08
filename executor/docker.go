@@ -26,11 +26,12 @@ const (
 	dockerNetwork                = "flow-ci-agent-default"
 	dockerNetworkDriver          = "bridge"
 
-	writeShellPid = "echo $$ > ~/.shell.pid\n"
-	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
+	dockerShellPidPath = "/tmp/.shell.pid"
+	writeShellPid = "echo $$ > /tmp/.shell.pid\n"
+	writeTtyPid   = "echo $$ > /tmp/.tty.pid\n"
 
-	killShell = "kill -9 $(cat ~/.shell.pid)"
-	killTty   = "kill -9 $(cat ~/.tty.pid)"
+	killShell = "kill -9 $(cat /tmp/.shell.pid)"
+	killTty   = "kill -9 $(cat /tmp/.tty.pid)"
 )
 
 type (

@@ -86,6 +86,9 @@ func (k *K8sExecutor) Start() (out error) {
 	k.copyPlugins()
 	k.runShell()
 
+	k.setProcessId()
+	k.exportEnv()
+	k.toFinishStatus(0)
 	return
 }
 
@@ -246,6 +249,11 @@ func (k *K8sExecutor) runShell() {
 	input := bytes.NewBuffer(make([]byte, 2048))
 	reader, writer := io.Pipe()
 
+	defer func() {
+		_ = reader.Close()
+		_ = writer.Close()
+	}()
+
 	_, _ = input.Write([]byte(writeShellPid))
 
 	writeEnvAfter := func(in chan string) {
@@ -257,8 +265,28 @@ func (k *K8sExecutor) runShell() {
 
 	k.toStartStatus(0)
 	k.execInRuntimeContainer([]string{linuxBash}, input, writer, writer)
+}
 
-	util.LogInfo("------------")
+func (k *K8sExecutor) setProcessId() {
+	input := bytes.NewBufferString(fmt.Sprintf("cat %s", dockerShellPidPath))
+	buffer := bytes.NewBuffer(make([]byte, 10))
+
+	k.execInRuntimeContainer([]string{linuxBash}, input, buffer, nil)
+
+	data, err := ioutil.ReadAll(buffer)
+	if err == nil {
+		num, _ := strconv.Atoi(string(trimByte(data)))
+		k.result.ProcessId = num
+	}
+}
+
+// read env file from container and set output
+func (k *K8sExecutor) exportEnv() {
+	input := bytes.NewBufferString(fmt.Sprintf("cat %s", dockerEnvFile))
+	buffer := bytes.NewBuffer(make([]byte, 4096))
+
+	k.execInRuntimeContainer([]string{linuxBash}, input, buffer, nil)
+	k.result.Output = readEnvFromReader(buffer, k.inCmd.EnvFilters)
 }
 
 // exec command in the runtime container
