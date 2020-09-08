@@ -27,7 +27,7 @@ const (
 	k8sLabelName      = "flow-ci-app-name"
 	k8sLabelValueStep = "step"
 
-	k8sDefaultStartPodTimeout = 30 * time.Second
+	k8sDefaultStartPodTimeout = 120 * time.Second
 )
 
 type (
@@ -178,6 +178,44 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 		runtimeContainer.Command = []string{linuxBash}
 	}
 
+	var podVolumes []v1.Volume
+
+	// setup container from volume
+	for _, v := range k.volumes {
+		if !v.HasImage() {
+			continue
+		}
+
+		volumeName := fmt.Sprintf("%s-share", v.Name)
+
+		// setup runtime container volume
+		runtimeContainer.VolumeMounts = append(runtimeContainer.VolumeMounts, v1.VolumeMount{
+			Name:      volumeName,
+			MountPath: v.Dest,
+		})
+
+		// setup pod volume
+		podVolumes = append(podVolumes, v1.Volume{
+			Name: volumeName,
+			VolumeSource: v1.VolumeSource{
+				EmptyDir: &v1.EmptyDirVolumeSource{},
+			},
+		})
+
+		containers = append(containers, v1.Container{
+			Name:    v.Name,
+			Image:   v.Image,
+			Command: []string{v.InitScriptInImage()},
+			VolumeMounts: []v1.VolumeMount{
+				{
+					Name:      volumeName,
+					MountPath: v.DefaultTargetInImage(),
+				},
+			},
+			ImagePullPolicy: "Always",
+		})
+	}
+
 	// create pod config
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -189,6 +227,7 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 		},
 		Spec: v1.PodSpec{
 			Containers:    containers,
+			Volumes:       podVolumes,
 			RestartPolicy: "Never",
 		},
 	}

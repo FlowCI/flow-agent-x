@@ -66,6 +66,6 @@ func getEnvKeyAndVal(line string) (ok bool, key, val string) {
 
 func trimByte(in []byte) (out []byte) {
 	out = bytes.TrimLeft(in, "\x00")
-	out = bytes.TrimRight(in, util.UnixLineBreakStr)
+	out = bytes.TrimRight(out, util.UnixLineBreakStr)
 	return
 }

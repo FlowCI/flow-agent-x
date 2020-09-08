@@ -44,6 +44,8 @@ func newExecutor(cmd *domain.ShellIn, k8s bool) Executor {
 				Name:   "pyenv",
 				Script: "init.sh",
 				Dest:   "/ws/.pyenv",
+				Image:  "flowci/pyenv:1.3",
+				Init:   "init-pyenv-volume.sh",
 			},
 		},
 	}

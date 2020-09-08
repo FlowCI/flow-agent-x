@@ -72,6 +72,7 @@ func createK8sTestCmd() *domain.ShellIn {
 			"echo bbb",
 			"sleep 5",
 			">&2 echo $INPUT_VAR",
+			"python3 -V",
 			"export FLOW_VVV=flowci",
 			"export FLOW_AAA=flow...",
 		},

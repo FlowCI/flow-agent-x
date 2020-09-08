@@ -9,11 +9,25 @@ import (
 type (
 	// DockerVolume volume will mount to step docker
 	DockerVolume struct {
-		Name   string
-		Dest   string
-		Script string
+		Name   string // volume name
+		Dest   string // dest path
+		Script string // script file name to execute
+		Image  string // image contain volume
+		Init   string // init script /ws/{init} in image that will copy required data to /target
 	}
 )
+
+func (v *DockerVolume) HasImage() bool {
+	return v.Image != ""
+}
+
+func (v *DockerVolume) InitScriptInImage() string {
+	return fmt.Sprintf("/ws/%s", v.Init)
+}
+
+func (v *DockerVolume) DefaultTargetInImage() string {
+	return "/target"
+}
 
 func (v *DockerVolume) ScriptPath() string {
 	return fmt.Sprintf("%s/%s", v.Dest, v.Script)
