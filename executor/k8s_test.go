@@ -21,11 +21,13 @@ func TestShouldExecInK8s(t *testing.T) {
 	executor := newExecutor(cmd, true)
 	assert.NotNil(executor)
 
+	go printLog(executor.Stdout())
+
 	// setup kubeconfig from .kube/config
 	homeKubeConfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
 	config, err := clientcmd.BuildConfigFromFlags("", homeKubeConfig)
 	assert.NoError(err)
-	(executor.(*K8sExecutor)).K8sConfig = config
+	(executor.(*K8sExecutor)).config = config
 
 	// init executor
 	err = executor.Init()
@@ -62,6 +64,7 @@ func createK8sTestCmd() *domain.ShellIn {
 			"echo bbb",
 			"sleep 5",
 			">&2 echo $INPUT_VAR",
+			"1111",
 			"export FLOW_VVV=flowci",
 			"export FLOW_AAA=flow...",
 		},

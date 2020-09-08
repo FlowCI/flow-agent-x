@@ -1,9 +1,6 @@
 package executor
 
 import (
-	"archive/tar"
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -13,7 +10,6 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -560,53 +556,4 @@ func hasPyenv() (bool, string) {
 	root = util.ParseString(root)
 	_, err := os.Stat(root)
 	return !os.IsNotExist(err), root
-}
-
-// tar dir, ex: abc/.. output is archived content .. in dir
-func tarArchiveFromPath(path string) (io.Reader, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	dir := filepath.Dir(path)
-
-	ok := filepath.Walk(path, func(file string, fi os.FileInfo, err error) (out error) {
-		defer func() {
-			if err := recover(); err != nil {
-				out = err.(error)
-			}
-		}()
-		util.PanicIfErr(err)
-
-		header, err := tar.FileInfoHeader(fi, fi.Name())
-		util.PanicIfErr(err)
-
-		header.Name = strings.TrimPrefix(strings.Replace(file, dir, "", -1), string(filepath.Separator))
-		err = tw.WriteHeader(header)
-		util.PanicIfErr(err)
-
-		f, err := os.Open(file)
-		util.PanicIfErr(err)
-
-		if fi.IsDir() {
-			return
-		}
-
-		_, err = io.Copy(tw, f)
-		util.PanicIfErr(err)
-
-		err = f.Close()
-		util.PanicIfErr(err)
-
-		return
-	})
-
-	if ok != nil {
-		return nil, ok
-	}
-
-	ok = tw.Close()
-	if ok != nil {
-		return nil, ok
-	}
-
-	return bufio.NewReader(&buf), nil
 }

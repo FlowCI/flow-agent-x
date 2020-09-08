@@ -1,10 +1,12 @@
 package executor
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io"
 	"io/ioutil"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/util/exec"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -31,7 +34,7 @@ type (
 	K8sExecutor struct {
 		BaseExecutor
 
-		K8sConfig *rest.Config
+		config    *rest.Config
 		client    *kubernetes.Clientset
 		namespace string
 		workDir   string
@@ -81,6 +84,7 @@ func (k *K8sExecutor) Start() (out error) {
 
 	k.waitForRunning(k8sDefaultStartPodTimeout)
 	k.copyPlugins()
+	k.runShell()
 
 	return
 }
@@ -97,13 +101,13 @@ func (k *K8sExecutor) StopTty() {
 //--------------------------------------------
 
 func (k *K8sExecutor) initK8s() {
-	if k.K8sConfig == nil {
+	if k.config == nil {
 		config, err := rest.InClusterConfig()
 		util.PanicIfErr(err)
-		k.K8sConfig = config
+		k.config = config
 	}
 
-	client, err := kubernetes.NewForConfig(k.K8sConfig)
+	client, err := kubernetes.NewForConfig(k.config)
 	util.PanicIfErr(err)
 
 	k.client = client
@@ -229,12 +233,43 @@ func (k *K8sExecutor) copyPlugins() {
 		return
 	}
 
+	reader, err := tarArchiveFromPath(k.pluginDir)
+	util.PanicIfErr(err)
+
+	cmd := []string{"tar", "-xf", "-", "-C", dockerWorkspace}
+	k.execInRuntimeContainer(cmd, reader, os.Stdout, os.Stderr)
+}
+
+func (k *K8sExecutor) runShell() {
+	k.stdOutWg.Add(1)
+
+	input := bytes.NewBuffer(make([]byte, 2048))
+	reader, writer := io.Pipe()
+
+	_, _ = input.Write([]byte(writeShellPid))
+
+	writeEnvAfter := func(in chan string) {
+		in <- "env > " + dockerEnvFile
+	}
+
+	k.writeLog(reader, true, true)
+	k.writeCmd(input, nil, writeEnvAfter)
+
+	k.toStartStatus(0)
+	k.execInRuntimeContainer([]string{linuxBash}, input, writer, writer)
+
+	util.LogInfo("------------")
+}
+
+// exec command in the runtime container
+// should get error if executed with non-zero exit code
+func (k *K8sExecutor) execInRuntimeContainer(cmd []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 	options := &v1.PodExecOptions{
 		Container: k.runtime.Name,
-		Command:   []string{"tar", "-xf", "-", "-C", dockerWorkspace},
-		Stdin:     true,
-		Stdout:    true,
-		Stderr:    true,
+		Command:   cmd,
+		Stdin:     stdin != nil,
+		Stdout:    stdout != nil,
+		Stderr:    stderr != nil,
 		TTY:       false,
 	}
 
@@ -246,22 +281,25 @@ func (k *K8sExecutor) copyPlugins() {
 		SubResource("exec").
 		VersionedParams(options, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(k.K8sConfig, "POST", req.URL())
+	k8sExec, err := remotecommand.NewSPDYExecutor(k.config, "POST", req.URL())
 	util.PanicIfErr(err)
 
-	reader, err := tarArchiveFromPath(k.pluginDir)
-	util.PanicIfErr(err)
-
-	err = exec.Stream(remotecommand.StreamOptions{
-		Stdin:  reader,
-		Stdout: os.Stdout,
-		Stderr: os.Stderr,
+	err = k8sExec.Stream(remotecommand.StreamOptions{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
 		Tty:    false,
 	})
 	util.PanicIfErr(err)
 }
 
 func (k *K8sExecutor) handleErrors(err error) error {
+	// err from exec when got non-zero exit code
+	if exitError, ok := err.(exec.CodeExitError); ok {
+		k.toFinishStatus(exitError.Code)
+		return nil
+	}
+
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		//kill()
