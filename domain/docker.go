@@ -66,18 +66,22 @@ func NewVolumesFromString(val string) []*DockerVolume {
 		}
 
 		fields := strings.Split(token, ",")
-		if len(fields) != 3 {
+		if len(fields) != 5 {
 			panic(fmt.Errorf("'%s' is invalid volume string, fields must contain name, dest, script", token))
 		}
 
 		name := fields[0]
 		dest := fields[1]
 		script := fields[2]
+		image := fields[3]
+		initScript := fields[4]
 
 		volumes = append(volumes, &DockerVolume{
 			Name:   getValue(name),
 			Dest:   getValue(dest),
 			Script: getValue(script),
+			Image:  getValue(image),
+			Init:   getValue(initScript),
 		})
 	}
 

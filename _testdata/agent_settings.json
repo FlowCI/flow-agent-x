@@ -14,8 +14,8 @@
   "queue": {
     "uri": "amqp://guest:guest@127.0.0.1:5672",
     "callback": "callback-q",
-    "shellLogEx": "shelllog-exchange",
-    "ttyLogEx": "ttylog-exchange"
+    "shellLog": "shelllog",
+    "ttyLog": "ttylog"
   },
   "zookeeper": {
     "host": "127.0.0.1:2181",
