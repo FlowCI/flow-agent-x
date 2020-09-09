@@ -3,6 +3,7 @@ package executor
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
@@ -293,14 +294,31 @@ func (k *K8sExecutor) runShell() {
 		_ = writer.Close()
 	}()
 
-	_, _ = input.Write([]byte(writeShellPid))
+	setupContainerIpAndBin := func(in chan string) {
+		for i, _ := range k.pod.Spec.Containers {
+			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, "localhost")
+			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, "127.0.0.1")
+		}
+
+		in <- fmt.Sprintf("mkdir -p %s", dockerBin)
+		in <- fmt.Sprintf("export PATH=%s:$PATH", dockerBin)
+
+		for _, f := range binFiles {
+			path := dockerBin + "/" + f.name
+			b64 := base64.StdEncoding.EncodeToString(f.content)
+			in <- fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path)
+			in <- fmt.Sprintf("chmod %s %s", f.permissionStr, path)
+		}
+	}
 
 	writeEnvAfter := func(in chan string) {
 		in <- "env > " + dockerEnvFile
 	}
 
+	_, _ = input.Write([]byte(writeShellPid))
+
 	k.writeLog(reader, true, true)
-	k.writeCmd(input, nil, writeEnvAfter)
+	k.writeCmd(input, setupContainerIpAndBin, writeEnvAfter)
 
 	k.toStartStatus(0)
 	k.execInRuntimeContainer([]string{linuxBash}, input, writer, writer)
