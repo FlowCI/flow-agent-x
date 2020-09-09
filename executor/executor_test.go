@@ -34,11 +34,12 @@ func newExecutor(cmd *domain.ShellIn, k8s bool) Executor {
 	app := config.GetInstance()
 
 	options := Options{
-		InK8s:     k8s,
-		Parent:    ctx,
-		Workspace: app.Workspace,
-		PluginDir: app.PluginDir,
-		Cmd:       cmd,
+		K8sEnabled: k8s,
+		K8sCluster: false,
+		Parent:     ctx,
+		Workspace:  app.Workspace,
+		PluginDir:  app.PluginDir,
+		Cmd:        cmd,
 		Volumes: []*domain.DockerVolume{
 			{
 				Name:   "pyenv",

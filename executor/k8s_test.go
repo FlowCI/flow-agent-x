@@ -4,9 +4,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
-	"path/filepath"
 	"testing"
 )
 
@@ -23,14 +20,8 @@ func TestShouldExecInK8s(t *testing.T) {
 
 	go printLog(executor.Stdout())
 
-	// setup kubeconfig from .kube/config
-	homeKubeConfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
-	config, err := clientcmd.BuildConfigFromFlags("", homeKubeConfig)
-	assert.NoError(err)
-	(executor.(*K8sExecutor)).config = config
-
 	// init executor
-	err = executor.Init()
+	err := executor.Init()
 	assert.NoError(err)
 
 	// start pod
@@ -56,7 +47,7 @@ func createK8sTestCmd() *domain.ShellIn {
 		Dockers: []*domain.DockerOption{
 			{
 				Image:      "ubuntu:18.04",
-				Name: 		"helloworld-step-1-xa1bce",
+				Name: 		"helloworld-run-from-docker-r9o7pxm",
 				IsRuntime:  true,
 				Environment: map[string]string{
 					"VAR_HELLO": "WORLD",

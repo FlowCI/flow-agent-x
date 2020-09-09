@@ -28,7 +28,9 @@ type (
 		Server string
 		Token  string
 		Port   int
-		IsK8s  bool
+
+		K8sEnabled bool
+		K8sCluster bool
 
 		Workspace  string
 		LoggingDir string

@@ -10,6 +10,7 @@ import (
 
 	"bufio"
 	"encoding/base64"
+	"github.com/google/uuid"
 	"os"
 	"path/filepath"
 
@@ -131,13 +132,15 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
-		AgentId:   appConfig.Token,
-		Parent:    appConfig.AppCtx,
-		Workspace: appConfig.Workspace,
-		PluginDir: appConfig.PluginDir,
-		Cmd:       in,
-		Vars:      s.initEnv(),
-		Volumes:   appConfig.Volumes,
+		AgentId:    appConfig.Token,
+		Parent:     appConfig.AppCtx,
+		Workspace:  appConfig.Workspace,
+		PluginDir:  appConfig.PluginDir,
+		K8sEnabled: appConfig.K8sEnabled,
+		K8sCluster: appConfig.K8sCluster,
+		Cmd:        in,
+		Vars:       s.initEnv(),
+		Volumes:    appConfig.Volumes,
 	})
 
 	err = s.executor.Init()

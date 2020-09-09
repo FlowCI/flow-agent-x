@@ -14,8 +14,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/util/exec"
+	"k8s.io/client-go/util/homedir"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -34,7 +36,7 @@ const (
 type (
 	K8sExecutor struct {
 		BaseExecutor
-
+		inCluster bool
 		config    *rest.Config
 		client    *kubernetes.Clientset
 		namespace string
@@ -105,8 +107,14 @@ func (k *K8sExecutor) StopTty() {
 //--------------------------------------------
 
 func (k *K8sExecutor) initK8s() {
-	if k.config == nil {
+	if k.inCluster {
 		config, err := rest.InClusterConfig()
+		util.PanicIfErr(err)
+		k.config = config
+	} else {
+		// load config from ~/.kube/config
+		homeKubeConfig := filepath.Join(homedir.HomeDir(), ".kube", "config")
+		config, err := clientcmd.BuildConfigFromFlags("", homeKubeConfig)
 		util.PanicIfErr(err)
 		k.config = config
 	}
