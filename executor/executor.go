@@ -259,7 +259,7 @@ func (b *BaseExecutor) writeLog(src io.Reader, inThread, doneOnWaitGroup bool) {
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
-	b.stdout <- base64.StdEncoding.EncodeToString([]byte(msg))
+	b.stdout <- base64.StdEncoding.EncodeToString([]byte(msg + "\n"))
 }
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {

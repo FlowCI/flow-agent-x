@@ -68,6 +68,9 @@ func (k *K8sExecutor) Start() (out error) {
 		if err := recover(); err != nil {
 			out = k.handleErrors(err.(error))
 		}
+
+		k.cleanupPod()
+		k.closeChannels()
 	}()
 
 	pod := k.createPodConfig()
@@ -255,7 +258,7 @@ func (k *K8sExecutor) waitForRunning(timeout time.Duration) {
 		select {
 		case event := <-watch.ResultChan():
 			pod := event.Object.(*v1.Pod)
-			util.LogInfo("Pod %s: status = %s", podName, pod.Status.Phase)
+			k.writeSingleLog(fmt.Sprintf("Pod %s: status = %s", podName, pod.Status.Phase))
 
 			if pod.Status.Phase == v1.PodPending {
 				if time.Now().Sub(startTime) > timeout {
@@ -265,7 +268,7 @@ func (k *K8sExecutor) waitForRunning(timeout time.Duration) {
 			}
 
 			if pod.Status.Phase == v1.PodRunning {
-				util.LogInfo("Pod %s is running", pod.Name)
+				k.writeSingleLog(fmt.Sprintf("Pod %s is running", pod.Name))
 				return
 			}
 
@@ -352,6 +355,18 @@ func (k *K8sExecutor) exportEnv() {
 
 	k.execInRuntimeContainer([]string{linuxBash}, input, buffer, nil)
 	k.result.Output = readEnvFromReader(buffer, k.inCmd.EnvFilters)
+}
+
+func (k *K8sExecutor) cleanupPod() {
+	if k.client == nil || k.pod == nil {
+		return
+	}
+
+	err := k.client.CoreV1().Pods(k.namespace).Delete(k.context, k.pod.Name, metav1.DeleteOptions{})
+
+	if err != nil {
+		util.LogWarn(err.Error())
+	}
 }
 
 // exec command in the runtime container
