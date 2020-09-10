@@ -4,8 +4,10 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
+	"container/list"
 	"github/flowci/flow-agent-x/util"
 	"io"
+	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +37,33 @@ func removeDockerHeader (in []byte) []byte {
 	}
 
 	return in
+}
+
+func toContainerArray(v1List *list.List) []v1.Container {
+	array := make([]v1.Container, v1List.Len())
+	i := 0
+	for e := v1List.Front(); e != nil; e = e.Next() {
+		c := e.Value.(*v1.Container)
+		array[i] = *c
+		i++
+	}
+	return array
+}
+
+func k8sDinDContainer() *v1.Container {
+	return &v1.Container{
+		Name:  "dind-daemon",
+		Image: "docker:dind",
+		SecurityContext: &v1.SecurityContext{
+			Privileged: util.PointerBoolean(true),
+		},
+		Env: []v1.EnvVar{
+			{
+				Name: "DOCKER_TLS_CERTDIR", // disable tls
+				Value: "",
+			},
+		},
+	}
 }
 
 // tar dir, ex: abc/.. output is archived content .. in dir

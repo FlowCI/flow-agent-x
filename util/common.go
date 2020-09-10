@@ -47,6 +47,11 @@ func IsWindows() bool {
 	return runtime.GOOS == OSWin
 }
 
+func PointerBoolean(val bool) *bool {
+	p := val
+	return &p
+}
+
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
 	return parseVariablesFrom(src, os.Getenv)

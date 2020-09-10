@@ -2,6 +2,7 @@ package executor
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"encoding/base64"
 	"fmt"
@@ -26,10 +27,9 @@ import (
 )
 
 const (
-	k8sLabelApp       = "flow-ci-app"
-	k8sLabelName      = "flow-ci-app-name"
-	k8sLabelValueStep = "step"
-
+	k8sLabelApp               = "flow-ci-app"
+	k8sLabelName              = "flow-ci-app-name"
+	k8sLabelValueStep         = "step"
 	k8sDefaultStartPodTimeout = 120 * time.Second
 )
 
@@ -155,12 +155,14 @@ func (k *K8sExecutor) getNamespace() string {
 // create pod config, pod name = runtime container name
 func (k *K8sExecutor) createPodConfig() *v1.Pod {
 	dockers := k.inCmd.Dockers
-	containers := make([]v1.Container, len(dockers))
+	containers := list.New()
+
+	var podVolumes []v1.Volume
 	var runtimeContainer *v1.Container
 
 	// setup containers
-	for i, option := range dockers {
-		containers[i] = v1.Container{
+	for _, option := range dockers {
+		c := &v1.Container{
 			Name:            option.Name,
 			Image:           option.Image,
 			Env:             k.toEnvVar(option.Environment),
@@ -170,15 +172,17 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 		}
 
 		if option.IsRuntime {
-			runtimeContainer = &containers[i]
+			runtimeContainer = c
 		}
+
+		containers.PushBack(c)
 	}
 
 	if runtimeContainer == nil {
 		if len(dockers) > 1 {
 			panic(fmt.Errorf("no runtime docker option available"))
 		}
-		runtimeContainer = &containers[0]
+		runtimeContainer = containers.Front().Value.(*v1.Container)
 	}
 
 	// setup runtime container
@@ -189,8 +193,6 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 	if runtimeContainer.Command == nil {
 		runtimeContainer.Command = []string{linuxBash}
 	}
-
-	var podVolumes []v1.Volume
 
 	// setup container from volume
 	for _, v := range k.volumes {
@@ -214,7 +216,7 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 			},
 		})
 
-		containers = append(containers, v1.Container{
+		containers.PushBack(&v1.Container{
 			Name:    v.Name,
 			Image:   v.Image,
 			Command: []string{v.InitScriptInImage()},
@@ -228,6 +230,13 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 		})
 	}
 
+	// setup docker dind
+	runtimeContainer.Env = append(runtimeContainer.Env, v1.EnvVar{
+		Name:  "DOCKER_HOST",
+		Value: "tcp://localhost:2375",
+	})
+	containers.PushBack(k8sDinDContainer())
+
 	// create pod config
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -238,7 +247,7 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 			},
 		},
 		Spec: v1.PodSpec{
-			Containers:    containers,
+			Containers:    toContainerArray(containers),
 			Volumes:       podVolumes,
 			RestartPolicy: "Never",
 		},

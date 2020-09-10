@@ -46,7 +46,7 @@ func createK8sTestCmd() *domain.ShellIn {
 		ID:     "1-1-1",
 		Dockers: []*domain.DockerOption{
 			{
-				Image:      "ubuntu:18.04",
+				Image:      "flowci/debian-docker",
 				Name: 		"helloworld-run-from-docker-r9o7pxm",
 				IsRuntime:  true,
 				Environment: map[string]string{
