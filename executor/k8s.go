@@ -106,7 +106,11 @@ func (k *K8sExecutor) Start() (out error) {
 
 func (k *K8sExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	if k.IsInteracting() {
-		return
+		return fmt.Errorf("interaction is ongoning")
+	}
+
+	if !k.isPodRunning() {
+		return fmt.Errorf("pod is not running")
 	}
 
 	k.ttyId = ttyId
@@ -464,6 +468,10 @@ func (k *K8sExecutor) execInRuntimeContainer(cmd []string, tty bool, stdin io.Re
 		Tty:    tty,
 	})
 	util.PanicIfErr(err)
+}
+
+func (k *K8sExecutor) isPodRunning() bool {
+	return k.pod != nil && k.pod.Status.Phase == v1.PodRunning
 }
 
 func (k *K8sExecutor) handleErrors(err error) error {
