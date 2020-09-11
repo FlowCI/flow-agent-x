@@ -371,7 +371,8 @@ func (k *K8sExecutor) cleanupPod() {
 		return
 	}
 
-	err := k.client.CoreV1().Pods(k.namespace).Delete(k.context, k.pod.Name, metav1.DeleteOptions{})
+	background := context.Background() // set new context since context cancelled error may occurred
+	err := k.client.CoreV1().Pods(k.namespace).Delete(background, k.pod.Name, metav1.DeleteOptions{})
 
 	if err != nil {
 		util.LogWarn(err.Error())
@@ -411,6 +412,11 @@ func (k *K8sExecutor) execInRuntimeContainer(cmd []string, stdin io.Reader, stdo
 }
 
 func (k *K8sExecutor) handleErrors(err error) error {
+	kill := func() {
+		k.execInRuntimeContainer([]string{killShell}, nil, nil, nil)
+		k.execInRuntimeContainer([]string{killTty}, nil, nil, nil)
+	}
+
 	// err from exec when got non-zero exit code
 	if exitError, ok := err.(exec.CodeExitError); ok {
 		k.toFinishStatus(exitError.Code)
@@ -419,7 +425,7 @@ func (k *K8sExecutor) handleErrors(err error) error {
 
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
-		//kill()
+		kill()
 		k.toTimeOutStatus()
 		k.context = context.Background() // reset context for further docker operation
 		return nil
@@ -427,7 +433,7 @@ func (k *K8sExecutor) handleErrors(err error) error {
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
-		//kill()
+		kill()
 		k.toKilledStatus()
 		k.context = context.Background() // reset context for further docker operation
 		return nil
