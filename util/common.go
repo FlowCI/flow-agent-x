@@ -52,6 +52,15 @@ func PointerBoolean(val bool) *bool {
 	return &p
 }
 
+func IndexOfFirstSpace(str string) int {
+	for i := 0; i < len(str); i++ {
+		if i == ' ' {
+			return i
+		}
+	}
+	return -1
+}
+
 // ParseString parse string which include system env variable
 func ParseString(src string) string {
 	return parseVariablesFrom(src, os.Getenv)

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	dockerHeaderSize = 8
+	dockerHeaderSize       = 8
 	dockerHeaderPrefixSize = 4 // [STREAM_TYPE, 0, 0 ,0, ....]
 )
 
@@ -23,7 +23,7 @@ var (
 	dockerStdErrHeaderPrefix = []byte{2, 0, 0, 0}
 )
 
-func removeDockerHeader (in []byte) []byte {
+func removeDockerHeader(in []byte) []byte {
 	if len(in) < dockerHeaderSize {
 		return in
 	}
@@ -59,11 +59,31 @@ func k8sDinDContainer() *v1.Container {
 		},
 		Env: []v1.EnvVar{
 			{
-				Name: "DOCKER_TLS_CERTDIR", // disable tls
+				Name:  "DOCKER_TLS_CERTDIR", // disable tls
 				Value: "",
 			},
 		},
 	}
+}
+
+func k8sSetDockerNetwork(script string) string {
+	index := strings.Index(script, "docker run")
+	if index == -1 {
+		return script
+	}
+
+	if !strings.Contains(script[index:], "--network=") {
+		return strings.Replace(script, "docker run", "docker run --network=host", 1)
+	}
+
+	start := strings.Index(script, "--network=")
+	end := util.IndexOfFirstSpace(script[start:]) - 1
+
+	if end < 0 {
+		return script
+	}
+
+	return strings.Replace(script, script[start:end], "--network=host", 1)
 }
 
 // tar dir, ex: abc/.. output is archived content .. in dir

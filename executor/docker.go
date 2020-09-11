@@ -452,10 +452,14 @@ func (d *DockerExecutor) runShell() string {
 		in <- "env > " + dockerEnvFile
 	}
 
+	doScript := func(script string) string {
+		return script
+	}
+
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true, true)
-	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript)
 
 	return exec.ID
 }

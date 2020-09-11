@@ -338,7 +338,7 @@ func (k *K8sExecutor) runShell() {
 	_, _ = input.Write([]byte(writeShellPid))
 
 	k.writeLog(reader, true, true)
-	k.writeCmd(input, setupContainerIpAndBin, writeEnvAfter)
+	k.writeCmd(input, setupContainerIpAndBin, writeEnvAfter, k8sSetDockerNetwork)
 
 	k.toStartStatus(0)
 	k.execInRuntimeContainer([]string{linuxBash}, input, writer, writer)

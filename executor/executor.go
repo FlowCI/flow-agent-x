@@ -162,7 +162,7 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string), doScript func(string) string) {
 	consumer := func() {
 		for {
 			select {
@@ -197,7 +197,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	// write shell script from cmd
 	b.stdin <- "set -e"
 	for _, script := range b.inCmd.Scripts {
-		b.stdin <- script
+		b.stdin <- doScript(script)
 	}
 
 	if after != nil {

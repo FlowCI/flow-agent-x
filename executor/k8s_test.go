@@ -11,6 +11,14 @@ func init() {
 	util.EnableDebugLog()
 }
 
+func TestShouldSetNetworkToHostOnDockerRun(t *testing.T) {
+	assert := assert.New(t)
+
+	assert.Equal("docker run --network=host", k8sSetDockerNetwork("docker run"))
+	assert.Equal("docker run --network=host -it --rm --privileged ubuntu:18.04 bash", k8sSetDockerNetwork("docker run -it --rm --privileged ubuntu:18.04 bash"))
+	assert.Equal("docker run -it --network=host --rm ubuntu:18.04 bash", k8sSetDockerNetwork("docker run -it --network=my-net --rm ubuntu:18.04 bash"))
+}
+
 func TestShouldExecInK8s(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createK8sTestCmd()
