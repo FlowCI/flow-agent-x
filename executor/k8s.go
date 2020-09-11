@@ -94,15 +94,57 @@ func (k *K8sExecutor) Start() (out error) {
 
 	k.setProcessId()
 	k.exportEnv()
+
+	if k.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		<-k.ttyCtx.Done()
+	}
+
 	k.toFinishStatus(0)
 	return
 }
 
 func (k *K8sExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+	if k.IsInteracting() {
+		return
+	}
+
+	k.ttyId = ttyId
+	k.ttyCtx, k.ttyCancel = context.WithCancel(k.context)
+
+	inReader, inWriter := io.Pipe()
+	outReader, outWriter := io.Pipe()
+
+	defer func() {
+		if err := recover(); err != nil {
+			_, _ = outWriter.Write([]byte(err.(error).Error()))
+		}
+
+		_ = inReader.Close()
+		_ = inWriter.Close()
+
+		_ = outReader.Close()
+		_ = outWriter.Close()
+
+		k.ttyCancel()
+		k.ttyCtx = nil
+		k.ttyCancel = nil
+	}()
+
+	onStarted(ttyId)
+
+	go func() {
+		_, _ = inWriter.Write([]byte(writeTtyPid))
+		k.writeTtyIn(inWriter)
+	}()
+	go k.writeTtyOut(outReader)
+
+	k.execInRuntimeContainer([]string{linuxBash}, true, inReader, outWriter, outWriter)
 	return
 }
 
 func (k *K8sExecutor) StopTty() {
+	k.runSingleCmd(killTty + "\n")
 }
 
 //--------------------------------------------
@@ -267,6 +309,8 @@ func (k *K8sExecutor) waitForRunning(timeout time.Duration) {
 		select {
 		case event := <-watch.ResultChan():
 			pod := event.Object.(*v1.Pod)
+			k.pod = pod // update pod instance
+
 			k.writeSingleLog(fmt.Sprintf("Pod %s: status = %s", podName, pod.Status.Phase))
 
 			if pod.Status.Phase == v1.PodPending {
@@ -300,7 +344,7 @@ func (k *K8sExecutor) copyPlugins() {
 	util.PanicIfErr(err)
 
 	cmd := []string{"tar", "-xf", "-", "-C", dockerWorkspace}
-	k.execInRuntimeContainer(cmd, reader, os.Stdout, os.Stderr)
+	k.execInRuntimeContainer(cmd, false, reader, os.Stdout, os.Stderr)
 }
 
 func (k *K8sExecutor) runShell() {
@@ -341,14 +385,14 @@ func (k *K8sExecutor) runShell() {
 	k.writeCmd(input, setupContainerIpAndBin, writeEnvAfter, k8sSetDockerNetwork)
 
 	k.toStartStatus(0)
-	k.execInRuntimeContainer([]string{linuxBash}, input, writer, writer)
+	k.execInRuntimeContainer([]string{linuxBash}, false, input, writer, writer)
 }
 
 func (k *K8sExecutor) setProcessId() {
 	input := bytes.NewBufferString(fmt.Sprintf("cat %s", dockerShellPidPath))
 	buffer := bytes.NewBuffer(make([]byte, 10))
 
-	k.execInRuntimeContainer([]string{linuxBash}, input, buffer, nil)
+	k.execInRuntimeContainer([]string{linuxBash}, false, input, buffer, nil)
 
 	data, err := ioutil.ReadAll(buffer)
 	if err == nil {
@@ -362,7 +406,7 @@ func (k *K8sExecutor) exportEnv() {
 	input := bytes.NewBufferString(fmt.Sprintf("cat %s", dockerEnvFile))
 	buffer := bytes.NewBuffer(make([]byte, 4096))
 
-	k.execInRuntimeContainer([]string{linuxBash}, input, buffer, nil)
+	k.execInRuntimeContainer([]string{linuxBash}, false, input, buffer, nil)
 	k.result.Output = readEnvFromReader(buffer, k.inCmd.EnvFilters)
 }
 
@@ -379,16 +423,27 @@ func (k *K8sExecutor) cleanupPod() {
 	}
 }
 
+func (k *K8sExecutor) runSingleCmd(cmd string) {
+	defer func() {
+		if err := recover(); err != nil {
+			util.LogWarn("Error for cmd %s: %s", cmd, err.(error).Error())
+		}
+	}()
+
+	input := bytes.NewBuffer([]byte(cmd))
+	k.execInRuntimeContainer([]string{linuxBash}, false, input, nil, nil)
+}
+
 // exec command in the runtime container
 // should get error if executed with non-zero exit code
-func (k *K8sExecutor) execInRuntimeContainer(cmd []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
+func (k *K8sExecutor) execInRuntimeContainer(cmd []string, tty bool, stdin io.Reader, stdout io.Writer, stderr io.Writer) {
 	options := &v1.PodExecOptions{
 		Container: k.runtime.Name,
 		Command:   cmd,
 		Stdin:     stdin != nil,
 		Stdout:    stdout != nil,
 		Stderr:    stderr != nil,
-		TTY:       false,
+		TTY:       tty,
 	}
 
 	req := k.client.CoreV1().RESTClient().
@@ -406,15 +461,15 @@ func (k *K8sExecutor) execInRuntimeContainer(cmd []string, stdin io.Reader, stdo
 		Stdin:  stdin,
 		Stdout: stdout,
 		Stderr: stderr,
-		Tty:    false,
+		Tty:    tty,
 	})
 	util.PanicIfErr(err)
 }
 
 func (k *K8sExecutor) handleErrors(err error) error {
 	kill := func() {
-		k.execInRuntimeContainer([]string{killShell}, nil, nil, nil)
-		k.execInRuntimeContainer([]string{killTty}, nil, nil, nil)
+		k.runSingleCmd(killShell + "\n")
+		k.runSingleCmd(killTty + "\n")
 	}
 
 	// err from exec when got non-zero exit code

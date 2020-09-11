@@ -1,10 +1,13 @@
 package executor
 
 import (
+	"encoding/base64"
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	v1 "k8s.io/api/core/v1"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -45,6 +48,64 @@ func TestShouldExecInK8s(t *testing.T) {
 	assert.Equal("flow...", output["FLOW_AAA"])
 }
 
+func TestShouldK8sWithInteraction(t *testing.T) {
+	assert := assert.New(t)
+	cmd := createK8sTestCmd()
+
+	executor := newExecutor(cmd, true)
+	assert.NotNil(executor)
+
+	go printLog(executor.Stdout())
+
+	// init executor
+	err := executor.Init()
+	assert.NoError(err)
+
+	k8sExecutor := executor.(*K8sExecutor)
+	assert.NotNil(k8sExecutor)
+
+	go func() {
+		for {
+			log, ok := <-executor.TtyOut()
+			if !ok {
+				return
+			}
+			content, _ := base64.StdEncoding.DecodeString(log)
+			util.LogDebug("------ %s", content)
+		}
+	}()
+
+	// start pod
+	go func() {
+		err = executor.Start()
+		assert.NoError(err)
+	}()
+
+	for {
+		if k8sExecutor.pod == nil || k8sExecutor.pod.Status.Phase != v1.PodRunning{
+			time.Sleep(1 * time.Second)
+			continue
+		}
+		break
+	}
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		executor.TtyIn() <- "echo helloworld > /tmp/1.log\n"
+		time.Sleep(2 * time.Second)
+		executor.TtyIn() <- "sleep 9999\n"
+		time.Sleep(2 * time.Second)
+		executor.StopTty()
+	}()
+
+	err = executor.StartTty("fakeId", func(ttyId string) {
+		util.LogDebug("Tty started")
+	})
+
+	assert.NoError(err)
+	assert.False(executor.IsInteracting())
+}
+
 func createK8sTestCmd() *domain.ShellIn {
 	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{
@@ -69,7 +130,7 @@ func createK8sTestCmd() *domain.ShellIn {
 		},
 		Scripts: []string{
 			"echo bbb",
-			"sleep 5",
+			"sleep 10",
 			">&2 echo $INPUT_VAR",
 			"python3 -V",
 			"export FLOW_VVV=flowci",

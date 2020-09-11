@@ -263,22 +263,13 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 }
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
-	for {
-		select {
-		case <-b.ttyCtx.Done():
+	for inputStr := range b.ttyIn {
+		in := []byte(inputStr)
+		_, err := writer.Write(in)
+
+		if err != nil {
+			util.LogIfError(err)
 			return
-		case inputStr, ok := <-b.ttyIn:
-			if !ok {
-				return
-			}
-
-			in := []byte(inputStr)
-			_, err := writer.Write(in)
-
-			if err != nil {
-				util.LogIfError(err)
-				return
-			}
 		}
 	}
 }
