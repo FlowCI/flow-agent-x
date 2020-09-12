@@ -56,7 +56,7 @@ func main() {
 		},
 
 		cli.BoolFlag{
-			Name:   "k8s",
+			Name:   "k8sEnabled",
 			Usage:  "Indicate is run from k8s",
 			EnvVar: domain.VarK8sEnabled,
 		},
@@ -65,6 +65,12 @@ func main() {
 			Name:   "k8sInCluster",
 			Usage:  "Indicate is k8s run in cluster",
 			EnvVar: domain.VarK8sInCluster,
+		},
+
+		cli.StringFlag{
+			Name:   "k8sNamespace",
+			Usage:  "Define k8s namespace",
+			EnvVar: domain.VarK8sNamespace,
 		},
 
 		cli.StringFlag{
@@ -107,8 +113,9 @@ func start(c *cli.Context) error {
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
-	config.K8sEnabled = c.Bool("k8s")
+	config.K8sEnabled = c.Bool("k8sEnabled")
 	config.K8sCluster = c.Bool("k8sInCluster")
+	config.K8sNamespace = c.String("k8sNamespace")
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")

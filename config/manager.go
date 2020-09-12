@@ -29,8 +29,9 @@ type (
 		Token  string
 		Port   int
 
-		K8sEnabled bool
-		K8sCluster bool
+		K8sEnabled   bool
+		K8sCluster   bool
+		K8sNamespace string
 
 		Workspace  string
 		LoggingDir string

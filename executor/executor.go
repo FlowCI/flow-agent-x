@@ -69,8 +69,9 @@ type BaseExecutor struct {
 }
 
 type Options struct {
-	K8sEnabled bool
-	K8sCluster bool
+	K8sEnabled   bool
+	K8sCluster   bool
+	K8sNamespace string
 
 	AgentId   string
 	Parent    context.Context
@@ -110,6 +111,7 @@ func NewExecutor(options Options) Executor {
 			return &K8sExecutor{
 				BaseExecutor: base,
 				inCluster:    options.K8sCluster,
+				namespace:    options.K8sNamespace,
 			}
 		}
 

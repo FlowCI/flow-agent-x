@@ -185,8 +185,8 @@ func (k *K8sExecutor) initConfig() {
 }
 
 func (k *K8sExecutor) getNamespace() string {
-	if ns := os.Getenv("POD_NAMESPACE"); ns != "" {
-		return ns
+	if k.namespace != "" {
+		return k.namespace
 	}
 
 	if data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {

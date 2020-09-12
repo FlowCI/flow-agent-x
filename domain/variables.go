@@ -12,6 +12,7 @@ const (
 	VarAgentPort      = "FLOWCI_AGENT_PORT"
 	VarK8sEnabled     = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
 	VarK8sInCluster   = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean
+	VarK8sNamespace   = "FLOWCI_AGENT_K8S_NAMESPACE"
 	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
 	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
