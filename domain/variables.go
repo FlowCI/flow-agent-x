@@ -10,14 +10,19 @@ const (
 
 	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
 	VarAgentPort      = "FLOWCI_AGENT_PORT"
-	VarK8sEnabled     = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
-	VarK8sInCluster   = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean
-	VarK8sNamespace   = "FLOWCI_AGENT_K8S_NAMESPACE"
 	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
 	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
 	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
 	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
 	VarAgentVolumes   = "FLOWCI_AGENT_VOLUMES"
+
+	VarK8sEnabled   = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
+	VarK8sInCluster = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean
+
+	VarK8sNodeName  = "K8S_NODE_NAME"
+	VarK8sPodName   = "K8S_POD_NAME"
+	VarK8sPodIp     = "K8S_POD_IP"
+	VarK8sNamespace = "K8S_NAMESPACE"
 
 	VarAgentIpPattern           = "FLOWCI_AGENT_IP_%s"        // ip address of agent host
 	VarExportContainerIdPattern = "export CONTAINER_ID_%d=%s" // container id , d=index of dockers

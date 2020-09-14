@@ -72,6 +72,7 @@ type Options struct {
 	K8sEnabled   bool
 	K8sCluster   bool
 	K8sNamespace string
+	K8sPodName   string
 
 	AgentId   string
 	Parent    context.Context
@@ -111,6 +112,7 @@ func NewExecutor(options Options) Executor {
 			return &K8sExecutor{
 				BaseExecutor: base,
 				inCluster:    options.K8sCluster,
+				agentPodName: options.K8sPodName,
 				namespace:    options.K8sNamespace,
 			}
 		}

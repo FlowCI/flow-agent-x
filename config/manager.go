@@ -31,6 +31,9 @@ type (
 
 		K8sEnabled   bool
 		K8sCluster   bool
+		K8sNodeName  string
+		K8sPodName   string
+		K8sPodIp     string
 		K8sNamespace string
 
 		Workspace  string
@@ -56,15 +59,6 @@ func GetInstance() *Manager {
 }
 
 func (m *Manager) Init() {
-	// print variables
-	util.LogInfo("--- SERVER URL : %s", m.Server)
-	util.LogInfo("--- TOKEN		 : %s", m.Token)
-	util.LogInfo("--- PORT		 : %d", m.Port)
-	util.LogInfo("--- WORKSPACE	 : %s", m.Workspace)
-	util.LogInfo("--- PLUGIN	 : %s", m.PluginDir)
-	util.LogInfo("--- LOGGING	 : %s", m.LoggingDir)
-	util.LogInfo("--- VOLUMES	 : %s", m.VolumesStr)
-
 	// init dir
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)

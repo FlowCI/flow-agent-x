@@ -36,12 +36,16 @@ const (
 type (
 	K8sExecutor struct {
 		BaseExecutor
-		inCluster bool
-		config    *rest.Config
-		client    *kubernetes.Clientset
-		namespace string
-		workDir   string
-		envFile   string
+
+		inCluster    bool
+		agentPodName string
+		namespace    string
+
+		config *rest.Config
+		client *kubernetes.Clientset
+
+		workDir string
+		envFile string
 
 		pod     *v1.Pod
 		runtime *v1.Container
@@ -284,9 +288,14 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 	containers.PushBack(k8sDinDContainer())
 
 	// create pod config
+	podName := runtimeContainer.Name
+	if util.HasString(k.agentPodName) {
+		podName = fmt.Sprintf("%s-%s", k.agentPodName, podName)
+	}
+
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: runtimeContainer.Name, // pod name as runtime container name
+			Name: podName, // pod name is {current pod name}-{runtime container name}
 			Labels: map[string]string{
 				k8sLabelApp:  k8sLabelValueStep,
 				k8sLabelName: runtimeContainer.Name,

@@ -68,9 +68,27 @@ func main() {
 		},
 
 		cli.StringFlag{
+			Name:   "k8sPodName",
+			Usage:  "Agent current pod name",
+			EnvVar: domain.VarK8sPodName,
+		},
+
+		cli.StringFlag{
 			Name:   "k8sNamespace",
-			Usage:  "Define k8s namespace",
+			Usage:  "Agent current namespace",
 			EnvVar: domain.VarK8sNamespace,
+		},
+
+		cli.StringFlag{
+			Name:   "k8sNodeName",
+			Usage:  "Agent current node name",
+			EnvVar: domain.VarK8sNodeName,
+		},
+
+		cli.StringFlag{
+			Name:   "K8sPodIp",
+			Usage:  "Agent current pod ip",
+			EnvVar: domain.VarK8sPodIp,
 		},
 
 		cli.StringFlag{
@@ -99,7 +117,7 @@ func main() {
 }
 
 func start(c *cli.Context) error {
-	util.LogInfo("Staring flow.ci agent...")
+	util.LogInfo("Staring flow.ci agent (v%s)...", version)
 	defer func() {
 		if err := recover(); err != nil {
 			util.LogIfError(err.(error))
@@ -113,13 +131,19 @@ func start(c *cli.Context) error {
 	config.Server = c.String("url")
 	config.Token = c.String("token")
 	config.Port = getPort(c.String("port"))
-	config.K8sEnabled = c.Bool("k8sEnabled")
-	config.K8sCluster = c.Bool("k8sInCluster")
-	config.K8sNamespace = c.String("k8sNamespace")
 	config.Workspace = util.ParseString(c.String("workspace"))
 	config.PluginDir = filepath.Join(config.Workspace, ".plugins")
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
 	config.VolumesStr = c.String("volumes")
+
+	config.K8sEnabled = c.Bool("k8sEnabled")
+	config.K8sCluster = c.Bool("k8sInCluster")
+	config.K8sNodeName = c.String("k8sNodeName")
+	config.K8sPodName = c.String("k8sPodName")
+	config.K8sPodIp = c.String("k8sPodIp")
+	config.K8sNamespace = c.String("k8sNamespace")
+
+	printInfo()
 
 	// exec given cmd
 	script := c.String("script")
@@ -133,6 +157,26 @@ func start(c *cli.Context) error {
 	startGin(config)
 
 	return nil
+}
+
+func printInfo() {
+	appConfig := config.GetInstance()
+
+	util.LogInfo("--- [Server URL]: %s", appConfig.Server)
+	util.LogInfo("--- [Token]: %s", appConfig.Token)
+	util.LogInfo("--- [Port]: %d", appConfig.Port)
+	util.LogInfo("--- [Workspace]: %s", appConfig.Workspace)
+	util.LogInfo("--- [Plugin Dir]: %s", appConfig.PluginDir)
+	util.LogInfo("--- [Log Dir]: %s", appConfig.LoggingDir)
+	util.LogInfo("--- [Volume Str]: %s", appConfig.VolumesStr)
+
+	if appConfig.K8sEnabled {
+		util.LogInfo("--- [K8s InCluster]: %d", appConfig.K8sCluster)
+		util.LogInfo("--- [K8s Node]: %s", appConfig.K8sNodeName)
+		util.LogInfo("--- [K8s Namespace]: %s", appConfig.K8sNamespace)
+		util.LogInfo("--- [K8s Pod]: %s", appConfig.K8sPodName)
+		util.LogInfo("--- [K8s Pod IP]: %s", appConfig.K8sPodIp)
+	}
 }
 
 func execCmd(script string) {

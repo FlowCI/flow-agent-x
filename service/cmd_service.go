@@ -139,6 +139,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		K8sEnabled:   appConfig.K8sEnabled,
 		K8sCluster:   appConfig.K8sCluster,
 		K8sNamespace: appConfig.K8sNamespace,
+		K8sPodName:   appConfig.K8sPodName,
 		Cmd:          in,
 		Vars:         s.initEnv(),
 		Volumes:      appConfig.Volumes,
