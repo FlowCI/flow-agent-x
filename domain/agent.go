@@ -30,10 +30,11 @@ type (
 
 	// AgentConnect request data to get settings from server
 	AgentInit struct {
-		Token    string    `json:"token"`
-		Port     int       `json:"port"`
-		Os       string    `json:"os"`
-		Resource *Resource `json:"resource"`
+		IsK8sCluster bool      `json:"k8sCluster"`
+		Token        string    `json:"token"`
+		Port         int       `json:"port"`
+		Os           string    `json:"os"`
+		Resource     *Resource `json:"resource"`
 	}
 
 	// Agent Class

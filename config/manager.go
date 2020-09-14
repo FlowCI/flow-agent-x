@@ -118,9 +118,10 @@ func (m *Manager) initVolumes() {
 
 func (m *Manager) loadSettings() {
 	initData := &domain.AgentInit{
-		Port:     m.Port,
-		Os:       util.OS(),
-		Resource: m.FetchProfile(),
+		IsK8sCluster: m.K8sCluster,
+		Port:         m.Port,
+		Os:           util.OS(),
+		Resource:     m.FetchProfile(),
 	}
 
 	settings, err := m.Client.GetSettings(initData)
