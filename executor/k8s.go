@@ -288,14 +288,9 @@ func (k *K8sExecutor) createPodConfig() *v1.Pod {
 	containers.PushBack(k8sDinDContainer())
 
 	// create pod config
-	podName := runtimeContainer.Name
-	if util.HasString(k.agentPodName) {
-		podName = fmt.Sprintf("%s-%s", k.agentPodName, podName)
-	}
-
 	return &v1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: podName, // pod name is {current pod name}-{runtime container name}
+			Name: runtimeContainer.Name,
 			Labels: map[string]string{
 				k8sLabelApp:  k8sLabelValueStep,
 				k8sLabelName: runtimeContainer.Name,
