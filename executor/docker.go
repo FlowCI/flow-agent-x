@@ -5,30 +5,32 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
+	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
 )
 
 const (
-	dockerWorkspace              = "/ws"
-	dockerPluginDir              = dockerWorkspace + "/.plugins"
-	dockerBin                    = "/ws/bin"
-	dockerEnvFile                = "/tmp/.env"
-	dockerPullRetry              = 3
-	dockerSock                   = "/var/run/docker.sock"
-	dockerNetwork                = "flow-ci-agent-default"
-	dockerNetworkDriver          = "bridge"
+	dockerWorkspace     = "/ws"
+	dockerPluginDir     = dockerWorkspace + "/.plugins"
+	dockerBin           = "/ws/bin"
+	dockerEnvFile       = "/tmp/.env"
+	dockerPullRetry     = 3
+	dockerSock          = "/var/run/docker.sock"
+	dockerNetwork       = "flow-ci-agent-default"
+	dockerNetworkDriver = "bridge"
 
 	dockerShellPidPath = "/tmp/.shell.pid"
-	writeShellPid = "echo $$ > /tmp/.shell.pid\n"
-	writeTtyPid   = "echo $$ > /tmp/.tty.pid\n"
+	writeShellPid      = "echo $$ > /tmp/.shell.pid\n"
+	writeTtyPid        = "echo $$ > /tmp/.tty.pid\n"
 
 	killShell = "kill -9 $(cat /tmp/.shell.pid)"
 	killTty   = "kill -9 $(cat /tmp/.tty.pid)"
@@ -67,6 +69,7 @@ func (d *DockerExecutor) Init() (out error) {
 	util.PanicIfErr(out)
 	util.LogInfo("Docker client version: %s", d.cli.ClientVersion())
 
+	d.initVolumeData()
 	d.initNetwork()
 	d.initAgentVolume()
 	d.initConfig()
@@ -178,6 +181,65 @@ func (d *DockerExecutor) StopTty() {
 // private methods
 //--------------------------------------------
 
+func (d *DockerExecutor) initVolumeData() {
+	for _, v := range d.volumes {
+		if !v.HasImage() {
+			continue
+		}
+
+		args := filters.NewArgs()
+		args.Add("name", v.Name)
+
+		r, err := d.cli.VolumeList(d.context, args)
+		util.PanicIfErr(err)
+
+		if len(r.Volumes) > 0 {
+			util.LogDebug("volume %s existed", v.Name)
+			continue
+		}
+
+		// pull image
+		err = d.pullImageWithName(v.Image)
+		util.PanicIfErr(err)
+
+		// create volume
+		createdVolume, err := d.cli.VolumeCreate(d.context, volumetypes.VolumesCreateBody{
+			Name: v.Name,
+		})
+		util.PanicIfErr(err)
+
+		// create container
+		cName := fmt.Sprintf("%s-init", createdVolume.Name)
+		c, err := d.cli.ContainerCreate(d.context,
+			&container.Config{
+				Image: v.Image,
+				Cmd:   []string{v.InitScriptInImage()},
+			},
+			&container.HostConfig{
+				Mounts: []mount.Mount{
+					{
+						Type:   mount.TypeVolume,
+						Source: createdVolume.Name,
+						Target: v.DefaultTargetInImage(),
+					},
+				},
+			},
+			nil,
+			cName,
+		)
+		util.PanicIfErr(err)
+
+		// run container
+		err = d.cli.ContainerStart(d.context, c.ID, types.ContainerStartOptions{})
+		util.PanicIfErr(err)
+
+		_, _ = d.cli.ContainerWait(d.context, c.ID)
+
+		err = d.cli.ContainerRemove(d.context, c.ID, types.ContainerRemoveOptions{})
+		util.PanicIfErr(err)
+	}
+}
+
 // setup default network for agent
 func (d *DockerExecutor) initNetwork() {
 	args := filters.NewArgs()
@@ -248,6 +310,7 @@ func (d *DockerExecutor) initConfig() {
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
+	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
 	// setup run time config
 	binds := []string{d.agentVolume.Name + ":" + dockerWorkspace}
@@ -303,30 +366,30 @@ func (d *DockerExecutor) handleErrors(err error) error {
 }
 
 func (d *DockerExecutor) pullImage() {
-	pull := func(image string) {
-		fullRef := "docker.io/library/" + image
-		if strings.Contains(image, "/") {
-			fullRef = "docker.io/" + image
-		}
-
-		var err error
-		for i := 0; i < dockerPullRetry; i++ {
-			reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
-			if err != nil {
-				d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))
-				continue
-			}
-
-			d.writeLog(reader, false, false)
-			break
-		}
-
+	for _, c := range d.configs {
+		err := d.pullImageWithName(c.Config.Image)
 		util.PanicIfErr(err)
 	}
+}
 
-	for _, c := range d.configs {
-		pull(c.Config.Image)
+func (d *DockerExecutor) pullImageWithName(image string) (err error) {
+	fullRef := "docker.io/library/" + image
+	if strings.Contains(image, "/") {
+		fullRef = "docker.io/" + image
 	}
+
+	for i := 0; i < dockerPullRetry; i++ {
+		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+		if err != nil {
+			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))
+			continue
+		}
+
+		d.writeLog(reader, false, false)
+		break
+	}
+
+	return
 }
 
 func (d *DockerExecutor) startContainer() {
@@ -546,20 +609,4 @@ func (d *DockerExecutor) getVolume(name string) (bool, *types.Volume) {
 	}
 
 	return false, nil
-}
-
-//--------------------------------------------
-// util methods
-//--------------------------------------------
-
-func hasPyenv() (bool, string) {
-	root := os.Getenv("PYENV_ROOT")
-
-	if util.IsEmptyString(root) {
-		root = "${HOME}/.pyenv"
-	}
-
-	root = util.ParseString(root)
-	_, err := os.Stat(root)
-	return !os.IsNotExist(err), root
 }

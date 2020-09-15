@@ -108,15 +108,6 @@ func NewExecutor(options Options) Executor {
 	base.cancelFunc = cancel
 
 	if cmd.HasDockerOption() {
-		if options.K8sEnabled {
-			return &K8sExecutor{
-				BaseExecutor: base,
-				inCluster:    options.K8sCluster,
-				agentPodName: options.K8sPodName,
-				namespace:    options.K8sNamespace,
-			}
-		}
-
 		return &DockerExecutor{
 			BaseExecutor: base,
 		}

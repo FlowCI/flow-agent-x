@@ -8,13 +8,14 @@ import (
 const (
 	VarServerUrl = "FLOWCI_SERVER_URL"
 
-	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
-	VarAgentPort      = "FLOWCI_AGENT_PORT"
-	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
-	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
-	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
-	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
-	VarAgentVolumes   = "FLOWCI_AGENT_VOLUMES"
+	VarAgentToken         = "FLOWCI_AGENT_TOKEN"
+	VarAgentPort          = "FLOWCI_AGENT_PORT"
+	VarAgentWorkspace     = "FLOWCI_AGENT_WORKSPACE"
+	VarAgentJobDir        = "FLOWCI_AGENT_JOB_DIR"
+	VarAgentPluginDir     = "FLOWCI_AGENT_PLUGIN_DIR"
+	VarAgentLogDir        = "FLOWCI_AGENT_LOG_DIR"
+	VarAgentVolumes       = "FLOWCI_AGENT_VOLUMES"
+	VarAgentDockerNetwork = "FLOWCI_AGENT_DOCKER_NETWORK"
 
 	VarK8sEnabled   = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
 	VarK8sInCluster = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean
