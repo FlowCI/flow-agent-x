@@ -48,6 +48,8 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
+	k8sConfig *domain.K8sConfig
+
 	agentId    string // should be agent token
 	workspace  string
 	pluginDir  string
@@ -69,10 +71,7 @@ type BaseExecutor struct {
 }
 
 type Options struct {
-	K8sEnabled   bool
-	K8sCluster   bool
-	K8sNamespace string
-	K8sPodName   string
+	K8s *domain.K8sConfig
 
 	AgentId   string
 	Parent    context.Context
@@ -90,6 +89,7 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 	base := BaseExecutor{
+		k8sConfig: options.K8s,
 		agentId:   options.AgentId,
 		workspace: options.Workspace,
 		pluginDir: options.PluginDir,

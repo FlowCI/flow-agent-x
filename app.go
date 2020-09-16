@@ -68,30 +68,6 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:   "k8sPodName",
-			Usage:  "Agent current pod name",
-			EnvVar: domain.VarK8sPodName,
-		},
-
-		cli.StringFlag{
-			Name:   "k8sNamespace",
-			Usage:  "Agent current namespace",
-			EnvVar: domain.VarK8sNamespace,
-		},
-
-		cli.StringFlag{
-			Name:   "k8sNodeName",
-			Usage:  "Agent current node name",
-			EnvVar: domain.VarK8sNodeName,
-		},
-
-		cli.StringFlag{
-			Name:   "K8sPodIp",
-			Usage:  "Agent current pod ip",
-			EnvVar: domain.VarK8sPodIp,
-		},
-
-		cli.StringFlag{
 			Name:   "workspace, w",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
 			Usage:  "Agent working directory",
@@ -138,10 +114,11 @@ func start(c *cli.Context) error {
 
 	config.K8sEnabled = c.Bool("k8sEnabled")
 	config.K8sCluster = c.Bool("k8sInCluster")
-	config.K8sNodeName = c.String("k8sNodeName")
-	config.K8sPodName = c.String("k8sPodName")
-	config.K8sPodIp = c.String("k8sPodIp")
-	config.K8sNamespace = c.String("k8sNamespace")
+
+	config.K8sNodeName = os.Getenv(domain.VarK8sNodeName)
+	config.K8sPodName = os.Getenv(domain.VarK8sPodName)
+	config.K8sPodIp = os.Getenv(domain.VarK8sPodIp)
+	config.K8sNamespace = os.Getenv(domain.VarK8sNamespace)
 
 	printInfo()
 

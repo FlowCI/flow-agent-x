@@ -132,17 +132,20 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
-		AgentId:      appConfig.Token,
-		Parent:       appConfig.AppCtx,
-		Workspace:    appConfig.Workspace,
-		PluginDir:    appConfig.PluginDir,
-		K8sEnabled:   appConfig.K8sEnabled,
-		K8sCluster:   appConfig.K8sCluster,
-		K8sNamespace: appConfig.K8sNamespace,
-		K8sPodName:   appConfig.K8sPodName,
-		Cmd:          in,
-		Vars:         s.initEnv(),
-		Volumes:      appConfig.Volumes,
+		K8s: &domain.K8sConfig{
+			Enabled:   appConfig.K8sEnabled,
+			InCluster: appConfig.K8sCluster,
+			Namespace: appConfig.K8sNamespace,
+			PodName:   appConfig.K8sPodName,
+			PodIp:     appConfig.K8sPodIp,
+		},
+		AgentId:   appConfig.Token,
+		Parent:    appConfig.AppCtx,
+		Workspace: appConfig.Workspace,
+		PluginDir: appConfig.PluginDir,
+		Cmd:       in,
+		Vars:      s.initEnv(),
+		Volumes:   appConfig.Volumes,
 	})
 
 	err = s.executor.Init()

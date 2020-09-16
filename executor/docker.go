@@ -330,6 +330,8 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 
+	// TODO: if DOCKER_HOST defined, set DOCKER_HOST env to runtime with current agent ip
+
 	d.vars.Resolve()
 	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
 
