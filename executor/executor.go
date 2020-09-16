@@ -157,6 +157,10 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
+func (b *BaseExecutor) isK8sEnabled() bool {
+	return b.k8sConfig != nil && b.k8sConfig.Enabled
+}
+
 func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string), doScript func(string) string) {
 	consumer := func() {
 		for {

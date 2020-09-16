@@ -27,6 +27,7 @@ const (
 	dockerSock          = "/var/run/docker.sock"
 	dockerNetwork       = "flow-ci-agent-default"
 	dockerNetworkDriver = "bridge"
+	dockerVarDockerHost = "DOCKER_HOST"
 
 	dockerShellPidPath = "/tmp/.shell.pid"
 	writeShellPid      = "echo $$ > /tmp/.shell.pid\n"
@@ -330,7 +331,12 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 
-	// TODO: if DOCKER_HOST defined, set DOCKER_HOST env to runtime with current agent ip
+	// set agent ip and docker host env
+	if d.isK8sEnabled() {
+		agentIpKey := fmt.Sprintf(domain.VarAgentIpPattern, "en0")
+		d.vars[agentIpKey] = d.k8sConfig.PodIp
+		d.vars[dockerVarDockerHost] = fmt.Sprintf("tcp://%s:2375", d.k8sConfig.PodIp)
+	}
 
 	d.vars.Resolve()
 	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
