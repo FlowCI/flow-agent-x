@@ -182,6 +182,37 @@ func (d *DockerExecutor) StopTty() {
 //--------------------------------------------
 
 func (d *DockerExecutor) initVolumeData() {
+	runCmd := func(v *domain.DockerVolume) {
+		c, err := d.cli.ContainerCreate(d.context,
+			&container.Config{
+				Image: v.Image,
+				Cmd:   []string{v.InitScriptInImage()},
+			},
+			&container.HostConfig{
+				Mounts: []mount.Mount{
+					{
+						Type:   mount.TypeVolume,
+						Source: v.Name,
+						Target: v.DefaultTargetInImage(),
+					},
+				},
+			},
+			nil,
+			fmt.Sprintf("%s-init", v.Name),
+		)
+		util.PanicIfErr(err)
+
+		defer func() {
+			_ = d.cli.ContainerRemove(d.context, c.ID, types.ContainerRemoveOptions{})
+		}()
+
+		// run container and wait
+		err = d.cli.ContainerStart(d.context, c.ID, types.ContainerStartOptions{})
+		util.PanicIfErr(err)
+
+		_, _ = d.cli.ContainerWait(d.context, c.ID)
+	}
+
 	for _, v := range d.volumes {
 		if !v.HasImage() {
 			continue
@@ -203,40 +234,12 @@ func (d *DockerExecutor) initVolumeData() {
 		util.PanicIfErr(err)
 
 		// create volume
-		createdVolume, err := d.cli.VolumeCreate(d.context, volumetypes.VolumesCreateBody{
+		_, err = d.cli.VolumeCreate(d.context, volumetypes.VolumesCreateBody{
 			Name: v.Name,
 		})
 		util.PanicIfErr(err)
 
-		// create container
-		cName := fmt.Sprintf("%s-init", createdVolume.Name)
-		c, err := d.cli.ContainerCreate(d.context,
-			&container.Config{
-				Image: v.Image,
-				Cmd:   []string{v.InitScriptInImage()},
-			},
-			&container.HostConfig{
-				Mounts: []mount.Mount{
-					{
-						Type:   mount.TypeVolume,
-						Source: createdVolume.Name,
-						Target: v.DefaultTargetInImage(),
-					},
-				},
-			},
-			nil,
-			cName,
-		)
-		util.PanicIfErr(err)
-
-		// run container
-		err = d.cli.ContainerStart(d.context, c.ID, types.ContainerStartOptions{})
-		util.PanicIfErr(err)
-
-		_, _ = d.cli.ContainerWait(d.context, c.ID)
-
-		err = d.cli.ContainerRemove(d.context, c.ID, types.ContainerRemoveOptions{})
-		util.PanicIfErr(err)
+		runCmd(v)
 	}
 }
 
