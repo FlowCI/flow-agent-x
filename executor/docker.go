@@ -1,20 +1,18 @@
 package executor
 
 import (
-	"archive/tar"
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/volume"
+	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -29,12 +27,14 @@ const (
 	dockerSock          = "/var/run/docker.sock"
 	dockerNetwork       = "flow-ci-agent-default"
 	dockerNetworkDriver = "bridge"
+	dockerVarDockerHost = "DOCKER_HOST"
 
-	writeShellPid = "echo $$ > ~/.shell.pid\n"
-	writeTtyPid   = "echo $$ > ~/.tty.pid\n"
+	dockerShellPidPath = "/tmp/.shell.pid"
+	writeShellPid      = "echo $$ > /tmp/.shell.pid\n"
+	writeTtyPid        = "echo $$ > /tmp/.tty.pid\n"
 
-	killShell = "kill -9 $(cat ~/.shell.pid)"
-	killTty   = "kill -9 $(cat ~/.tty.pid)"
+	killShell = "kill -9 $(cat /tmp/.shell.pid)"
+	killTty   = "kill -9 $(cat /tmp/.tty.pid)"
 )
 
 type (
@@ -70,6 +70,7 @@ func (d *DockerExecutor) Init() (out error) {
 	util.PanicIfErr(out)
 	util.LogInfo("Docker client version: %s", d.cli.ClientVersion())
 
+	d.initVolumeData()
 	d.initNetwork()
 	d.initAgentVolume()
 	d.initConfig()
@@ -83,10 +84,7 @@ func (d *DockerExecutor) Start() (out error) {
 			out = d.handleErrors(err.(error))
 		}
 
-		if d.cli != nil {
-			d.cleanupContainer()
-		}
-
+		d.cleanupContainer()
 		d.closeChannels()
 	}()
 
@@ -184,6 +182,68 @@ func (d *DockerExecutor) StopTty() {
 // private methods
 //--------------------------------------------
 
+func (d *DockerExecutor) initVolumeData() {
+	runCmd := func(v *domain.DockerVolume) {
+		c, err := d.cli.ContainerCreate(d.context,
+			&container.Config{
+				Image: v.Image,
+				Cmd:   []string{v.InitScriptInImage()},
+			},
+			&container.HostConfig{
+				Mounts: []mount.Mount{
+					{
+						Type:   mount.TypeVolume,
+						Source: v.Name,
+						Target: v.DefaultTargetInImage(),
+					},
+				},
+			},
+			nil,
+			fmt.Sprintf("%s-init", v.Name),
+		)
+		util.PanicIfErr(err)
+
+		defer func() {
+			_ = d.cli.ContainerRemove(d.context, c.ID, types.ContainerRemoveOptions{})
+		}()
+
+		// run container and wait
+		err = d.cli.ContainerStart(d.context, c.ID, types.ContainerStartOptions{})
+		util.PanicIfErr(err)
+
+		_, _ = d.cli.ContainerWait(d.context, c.ID)
+	}
+
+	for _, v := range d.volumes {
+		if !v.HasImage() {
+			continue
+		}
+
+		args := filters.NewArgs()
+		args.Add("name", v.Name)
+
+		r, err := d.cli.VolumeList(d.context, args)
+		util.PanicIfErr(err)
+
+		if len(r.Volumes) > 0 {
+			util.LogDebug("volume %s existed", v.Name)
+			continue
+		}
+
+		// pull image
+		err = d.pullImageWithName(v.Image)
+		util.PanicIfErr(err)
+
+		// create volume
+		_, err = d.cli.VolumeCreate(d.context, volumetypes.VolumesCreateBody{
+			Name: v.Name,
+		})
+		util.PanicIfErr(err)
+
+		runCmd(v)
+	}
+}
+
 // setup default network for agent
 func (d *DockerExecutor) initNetwork() {
 	args := filters.NewArgs()
@@ -254,6 +314,7 @@ func (d *DockerExecutor) initConfig() {
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
+	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
 	// setup run time config
 	binds := []string{d.agentVolume.Name + ":" + dockerWorkspace}
@@ -268,6 +329,13 @@ func (d *DockerExecutor) initConfig() {
 
 	if util.IsFileExists(dockerSock) {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
+	}
+
+	// set agent ip and docker host env
+	if d.isK8sEnabled() {
+		agentIpKey := fmt.Sprintf(domain.VarAgentIpPattern, "en0")
+		d.vars[agentIpKey] = d.k8sConfig.PodIp
+		d.vars[dockerVarDockerHost] = fmt.Sprintf("tcp://%s:2375", d.k8sConfig.PodIp)
 	}
 
 	d.vars.Resolve()
@@ -309,30 +377,30 @@ func (d *DockerExecutor) handleErrors(err error) error {
 }
 
 func (d *DockerExecutor) pullImage() {
-	pull := func(image string) {
-		fullRef := "docker.io/library/" + image
-		if strings.Contains(image, "/") {
-			fullRef = "docker.io/" + image
-		}
-
-		var err error
-		for i := 0; i < dockerPullRetry; i++ {
-			reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
-			if err != nil {
-				d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying\n", image, err.Error()))
-				continue
-			}
-
-			d.writeLog(reader, false, false)
-			break
-		}
-
+	for _, c := range d.configs {
+		err := d.pullImageWithName(c.Config.Image)
 		util.PanicIfErr(err)
 	}
+}
 
-	for _, c := range d.configs {
-		pull(c.Config.Image)
+func (d *DockerExecutor) pullImageWithName(image string) (err error) {
+	fullRef := "docker.io/library/" + image
+	if strings.Contains(image, "/") {
+		fullRef = "docker.io/" + image
 	}
+
+	for i := 0; i < dockerPullRetry; i++ {
+		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+		if err != nil {
+			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))
+			continue
+		}
+
+		d.writeLog(reader, false, false)
+		break
+	}
+
+	return
 }
 
 func (d *DockerExecutor) startContainer() {
@@ -436,7 +504,7 @@ func (d *DockerExecutor) runShell() string {
 				for _, v := range inspect.NetworkSettings.Networks {
 					address += v.IPAddress + ","
 				}
-				address = address[:len(address) - 1]
+				address = address[:len(address)-1]
 			}
 
 			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
@@ -458,10 +526,14 @@ func (d *DockerExecutor) runShell() string {
 		in <- "env > " + dockerEnvFile
 	}
 
+	doScript := func(script string) string {
+		return script
+	}
+
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true, true)
-	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript)
 
 	return exec.ID
 }
@@ -493,6 +565,10 @@ func (d *DockerExecutor) exportEnv() {
 }
 
 func (d *DockerExecutor) cleanupContainer() {
+	if d.cli == nil {
+		return
+	}
+
 	for _, c := range d.configs {
 		if c.IsDelete {
 			err := d.cli.ContainerRemove(d.context, c.ContainerID, types.ContainerRemoveOptions{Force: true})
@@ -544,69 +620,4 @@ func (d *DockerExecutor) getVolume(name string) (bool, *types.Volume) {
 	}
 
 	return false, nil
-}
-
-//--------------------------------------------
-// util methods
-//--------------------------------------------
-
-func hasPyenv() (bool, string) {
-	root := os.Getenv("PYENV_ROOT")
-
-	if util.IsEmptyString(root) {
-		root = "${HOME}/.pyenv"
-	}
-
-	root = util.ParseString(root)
-	_, err := os.Stat(root)
-	return !os.IsNotExist(err), root
-}
-
-// tar dir, ex: abc/.. output is archived content .. in dir
-func tarArchiveFromPath(path string) (io.Reader, error) {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-	dir := filepath.Dir(path)
-
-	ok := filepath.Walk(path, func(file string, fi os.FileInfo, err error) (out error) {
-		defer func() {
-			if err := recover(); err != nil {
-				out = err.(error)
-			}
-		}()
-		util.PanicIfErr(err)
-
-		header, err := tar.FileInfoHeader(fi, fi.Name())
-		util.PanicIfErr(err)
-
-		header.Name = strings.TrimPrefix(strings.Replace(file, dir, "", -1), string(filepath.Separator))
-		err = tw.WriteHeader(header)
-		util.PanicIfErr(err)
-
-		f, err := os.Open(file)
-		util.PanicIfErr(err)
-
-		if fi.IsDir() {
-			return
-		}
-
-		_, err = io.Copy(tw, f)
-		util.PanicIfErr(err)
-
-		err = f.Close()
-		util.PanicIfErr(err)
-
-		return
-	})
-
-	if ok != nil {
-		return nil, ok
-	}
-
-	ok = tw.Close()
-	if ok != nil {
-		return nil, ok
-	}
-
-	return bufio.NewReader(&buf), nil
 }

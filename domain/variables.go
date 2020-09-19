@@ -8,13 +8,22 @@ import (
 const (
 	VarServerUrl = "FLOWCI_SERVER_URL"
 
-	VarAgentToken     = "FLOWCI_AGENT_TOKEN"
-	VarAgentPort      = "FLOWCI_AGENT_PORT"
-	VarAgentWorkspace = "FLOWCI_AGENT_WORKSPACE"
-	VarAgentJobDir    = "FLOWCI_AGENT_JOB_DIR"
-	VarAgentPluginDir = "FLOWCI_AGENT_PLUGIN_DIR"
-	VarAgentLogDir    = "FLOWCI_AGENT_LOG_DIR"
-	VarAgentVolumes   = "FLOWCI_AGENT_VOLUMES"
+	VarAgentToken         = "FLOWCI_AGENT_TOKEN"
+	VarAgentPort          = "FLOWCI_AGENT_PORT"
+	VarAgentWorkspace     = "FLOWCI_AGENT_WORKSPACE"
+	VarAgentJobDir        = "FLOWCI_AGENT_JOB_DIR"
+	VarAgentPluginDir     = "FLOWCI_AGENT_PLUGIN_DIR"
+	VarAgentLogDir        = "FLOWCI_AGENT_LOG_DIR"
+	VarAgentVolumes       = "FLOWCI_AGENT_VOLUMES"
+	VarAgentDockerNetwork = "FLOWCI_AGENT_DOCKER_NETWORK"
+
+	VarK8sEnabled   = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
+	VarK8sInCluster = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean
+
+	VarK8sNodeName  = "K8S_NODE_NAME"
+	VarK8sPodName   = "K8S_POD_NAME"
+	VarK8sPodIp     = "K8S_POD_IP"
+	VarK8sNamespace = "K8S_NAMESPACE"
 
 	VarAgentIpPattern           = "FLOWCI_AGENT_IP_%s"        // ip address of agent host
 	VarExportContainerIdPattern = "export CONTAINER_ID_%d=%s" // container id , d=index of dockers
@@ -36,6 +45,14 @@ func NilOrEmpty(v Variables) bool {
 }
 
 func ConnectVars(a Variables, b Variables) Variables {
+	if a == nil {
+		a = Variables{}
+	}
+
+	if b == nil {
+		b = Variables{}
+	}
+
 	vars := make(Variables, a.Size()+b.Size())
 	for k, val := range a {
 		vars[k] = val
@@ -44,6 +61,7 @@ func ConnectVars(a Variables, b Variables) Variables {
 	for k, val := range b {
 		vars[k] = val
 	}
+
 	return vars
 }
 
@@ -60,7 +78,7 @@ func (v Variables) Size() int {
 }
 
 // Resolve to gain actual value from env variables
-func (v Variables) Resolve() {
+func (v Variables) Resolve() Variables {
 	// resolve from system env vars
 	for key, val := range v {
 		val = util.ParseString(val)
@@ -72,6 +90,8 @@ func (v Variables) Resolve() {
 		val = util.ParseStringWithSource(val, v)
 		v[key] = val
 	}
+
+	return v
 }
 
 // ToStringArray convert variables map to key=value string array

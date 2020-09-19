@@ -11,16 +11,6 @@ import (
 	"syscall"
 )
 
-const (
-	dockerHeaderSize = 8
-	dockerHeaderPrefixSize = 4 // [STREAM_TYPE, 0, 0 ,0, ....]
-)
-
-var (
-	dockerStdInHeaderPrefix  = []byte{1, 0, 0, 0}
-	dockerStdErrHeaderPrefix = []byte{2, 0, 0, 0}
-)
-
 func getExitCode(cmd *exec.Cmd) int {
 	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	return ws.ExitStatus()
@@ -74,18 +64,8 @@ func getEnvKeyAndVal(line string) (ok bool, key, val string) {
 	return
 }
 
-func removeDockerHeader (in []byte) []byte {
-	if len(in) < dockerHeaderSize {
-		return in
-	}
-
-	if bytes.Compare(in[:dockerHeaderPrefixSize], dockerStdInHeaderPrefix) == 0 {
-		return in[dockerHeaderSize:]
-	}
-
-	if bytes.Compare(in[:dockerHeaderPrefixSize], dockerStdErrHeaderPrefix) == 0 {
-		return in[dockerHeaderSize:]
-	}
-
-	return in
+func trimByte(in []byte) (out []byte) {
+	out = bytes.TrimLeft(in, "\x00")
+	out = bytes.TrimRight(out, util.UnixLineBreakStr)
+	return
 }

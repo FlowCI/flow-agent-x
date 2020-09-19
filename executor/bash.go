@@ -115,9 +115,13 @@ func (b *BashExecutor) Start() (out error) {
 		}
 	}
 
+	doScript := func(script string) string {
+		return script
+	}
+
 	b.writeLog(stdout, true, true)
 	b.writeLog(stderr, true, true)
-	b.writeCmd(stdin, setupBin, writeEnv)
+	b.writeCmd(stdin, setupBin, writeEnv, doScript)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout

@@ -86,7 +86,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 			},
 		},
 		Timeout: 9999,
-	})
+	}, false)
 
 	dockerExecutor := executor.(*DockerExecutor)
 	assert.NotNil(dockerExecutor)
@@ -159,7 +159,7 @@ func TestShouldRunWithTwoContainers(t *testing.T) {
 		IsDeleteContainer: true,
 	})
 
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	err := executor.Start()

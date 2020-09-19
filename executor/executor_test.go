@@ -29,20 +29,24 @@ func getTestDataDir() string {
 	return path.Join(base, "_testdata")
 }
 
-func newExecutor(cmd *domain.ShellIn) Executor {
+func newExecutor(cmd *domain.ShellIn, k8s bool) Executor {
 	ctx, _ := context.WithCancel(context.Background())
 	app := config.GetInstance()
 
 	options := Options{
-		Parent:    ctx,
-		Workspace: app.Workspace,
-		PluginDir: app.PluginDir,
-		Cmd:       cmd,
+		K8sEnabled: k8s,
+		K8sCluster: false,
+		Parent:     ctx,
+		Workspace:  app.Workspace,
+		PluginDir:  app.PluginDir,
+		Cmd:        cmd,
 		Volumes: []*domain.DockerVolume{
 			{
 				Name:   "pyenv",
 				Script: "init.sh",
 				Dest:   "/ws/.pyenv",
+				Image:  "flowci/pyenv:1.3",
+				Init:   "init-pyenv-volume.sh",
 			},
 		},
 	}
@@ -52,7 +56,7 @@ func newExecutor(cmd *domain.ShellIn) Executor {
 
 func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.ShellOut {
 	// when:
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	go printLog(executor.Stdout())
@@ -77,7 +81,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	go printLog(executor.Stdout())
@@ -99,7 +103,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 	cmd.Scripts = []string{"notCommand should exit with error"}
 
 	// when:
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	go printLog(executor.Stdout())
@@ -121,7 +125,7 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	go printLog(executor.Stdout())
@@ -142,7 +146,7 @@ func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
 
 	// when:
-	executor := newExecutor(cmd)
+	executor := newExecutor(cmd, false)
 	assert.NoError(executor.Init())
 
 	go printLog(executor.Stdout())

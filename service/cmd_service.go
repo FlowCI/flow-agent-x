@@ -132,6 +132,13 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
+		K8s: &domain.K8sConfig{
+			Enabled:   appConfig.K8sEnabled,
+			InCluster: appConfig.K8sCluster,
+			Namespace: appConfig.K8sNamespace,
+			PodName:   appConfig.K8sPodName,
+			PodIp:     appConfig.K8sPodIp,
+		},
 		AgentId:   appConfig.Token,
 		Parent:    appConfig.AppCtx,
 		Workspace: appConfig.Workspace,

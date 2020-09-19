@@ -26,8 +26,8 @@ func TestSettingsShouldParseFromJson(t *testing.T) {
 	assert.NotNil(settings.Queue)
 	assert.Equal("amqp://guest:guest@127.0.0.1:5672", settings.Queue.Uri)
 	assert.Equal("callback-q", settings.Queue.Callback)
-	assert.Equal("shelllog-exchange", settings.Queue.ShellLogEx)
-	assert.Equal("ttylog-exchange", settings.Queue.TtyLogEx)
+	assert.Equal("shelllog", settings.Queue.ShellLog)
+	assert.Equal("ttylog", settings.Queue.TtyLog)
 
 	// then: verify zookeeper data
 	assert.NotNil(settings.Zookeeper)

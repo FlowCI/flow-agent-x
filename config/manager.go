@@ -3,8 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -31,6 +29,13 @@ type (
 		Token  string
 		Port   int
 
+		K8sEnabled   bool
+		K8sCluster   bool
+		K8sNodeName  string
+		K8sPodName   string
+		K8sPodIp     string
+		K8sNamespace string
+
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
@@ -54,15 +59,6 @@ func GetInstance() *Manager {
 }
 
 func (m *Manager) Init() {
-	// print variables
-	util.LogInfo("--- SERVER URL : %s", m.Server)
-	util.LogInfo("--- TOKEN		 : %s", m.Token)
-	util.LogInfo("--- PORT		 : %d", m.Port)
-	util.LogInfo("--- WORKSPACE	 : %s", m.Workspace)
-	util.LogInfo("--- PLUGIN	 : %s", m.PluginDir)
-	util.LogInfo("--- LOGGING	 : %s", m.LoggingDir)
-	util.LogInfo("--- VOLUMES	 : %s", m.VolumesStr)
-
 	// init dir
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
@@ -118,28 +114,14 @@ func (m *Manager) initVolumes() {
 	}
 
 	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
-
-	cli, err := client.NewEnvClient()
-	util.PanicIfErr(err)
-
-	for _, vol := range m.Volumes {
-		filter := filters.NewArgs()
-		filter.Add("name", vol.Name)
-
-		list, err := cli.VolumeList(m.AppCtx, filter)
-		util.PanicIfErr(err)
-
-		if len(list.Volumes) == 0 {
-			panic(fmt.Errorf("docker volume '%s' not found", vol.Name))
-		}
-	}
 }
 
 func (m *Manager) loadSettings() {
 	initData := &domain.AgentInit{
-		Port:     m.Port,
-		Os:       util.OS(),
-		Resource: m.FetchProfile(),
+		IsK8sCluster: m.K8sCluster,
+		Port:         m.Port,
+		Os:           util.OS(),
+		Resource:     m.FetchProfile(),
 	}
 
 	settings, err := m.Client.GetSettings(initData)

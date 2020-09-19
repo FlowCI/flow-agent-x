@@ -22,7 +22,7 @@ ENV FLOWCI_AGENT_WORKSPACE=/ws
 RUN mkdir -p $FLOWCI_AGENT_WORKSPACE
 
 WORKDIR $FLOWCI_AGENT_WORKSPACE
-COPY ./bin/flow-agent-x-linux /usr/bin
+COPY ./flow-agent-x-linux /usr/bin
 
 ## start docker ##
 CMD flow-agent-x-linux

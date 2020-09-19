@@ -41,11 +41,7 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 	portSet, portMap, err := nat.ParsePortSpecs(d.Ports)
 	util.PanicIfErr(err)
 
-	if vars == nil {
-		vars = d.Environment
-	} else {
-		vars = ConnectVars(vars.Copy(), d.Environment)
-	}
+	vars = ConnectVars(vars, d.Environment)
 
 	config = &DockerConfig{
 		Name: d.Name,

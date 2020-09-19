@@ -48,6 +48,8 @@ type Executor interface {
 }
 
 type BaseExecutor struct {
+	k8sConfig *domain.K8sConfig
+
 	agentId    string // should be agent token
 	workspace  string
 	pluginDir  string
@@ -69,6 +71,8 @@ type BaseExecutor struct {
 }
 
 type Options struct {
+	K8s *domain.K8sConfig
+
 	AgentId   string
 	Parent    context.Context
 	Workspace string
@@ -85,6 +89,7 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 	base := BaseExecutor{
+		k8sConfig: options.K8s,
 		agentId:   options.AgentId,
 		workspace: options.Workspace,
 		pluginDir: options.PluginDir,
@@ -152,7 +157,11 @@ func (b *BaseExecutor) Kill() {
 //	private
 //====================================================================
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)) {
+func (b *BaseExecutor) isK8sEnabled() bool {
+	return b.k8sConfig != nil && b.k8sConfig.Enabled
+}
+
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string), doScript func(string) string) {
 	consumer := func() {
 		for {
 			select {
@@ -187,7 +196,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	// write shell script from cmd
 	b.stdin <- "set -e"
 	for _, script := range b.inCmd.Scripts {
-		b.stdin <- script
+		b.stdin <- doScript(script)
 	}
 
 	if after != nil {
@@ -249,26 +258,17 @@ func (b *BaseExecutor) writeLog(src io.Reader, inThread, doneOnWaitGroup bool) {
 }
 
 func (b *BaseExecutor) writeSingleLog(msg string) {
-	b.stdout <- base64.StdEncoding.EncodeToString([]byte(msg))
+	b.stdout <- base64.StdEncoding.EncodeToString([]byte(msg + "\n"))
 }
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
-	for {
-		select {
-		case <-b.ttyCtx.Done():
+	for inputStr := range b.ttyIn {
+		in := []byte(inputStr)
+		_, err := writer.Write(in)
+
+		if err != nil {
+			util.LogIfError(err)
 			return
-		case inputStr, ok := <-b.ttyIn:
-			if !ok {
-				return
-			}
-
-			in := []byte(inputStr)
-			_, err := writer.Write(in)
-
-			if err != nil {
-				util.LogIfError(err)
-				return
-			}
 		}
 	}
 }
