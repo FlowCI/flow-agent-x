@@ -71,6 +71,7 @@ func (m *Manager) Init() {
 
 	m.initVolumes()
 	m.loadSettings()
+
 	m.initRabbitMQ()
 	m.initZookeeper()
 	m.sendAgentProfile()
@@ -129,6 +130,9 @@ func (m *Manager) loadSettings() {
 
 	m.Settings = settings
 	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
+
+	err = m.Client.Connect()
+	util.PanicIfErr(err)
 }
 
 func (m *Manager) initRabbitMQ() {

@@ -2,13 +2,16 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorilla/websocket"
 	"github.com/streadway/amqp"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,12 +21,17 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
+const (
+	timeout = 30 * time.Second
+)
+
 type (
 	Client interface {
 		HasQueueSetup() bool
 		SetQueue(*domain.RabbitMQConfig, string) error
 
 		GetSettings(*domain.AgentInit) (*domain.Settings, error)
+		Connect() error
 		UploadLog(filePath string) error
 		ReportProfile(*domain.Resource) error
 
@@ -40,12 +48,15 @@ type (
 		server string
 		client *http.Client
 
+		ctx  context.Context
+		conn *websocket.Conn
+
 		qLock    sync.Mutex
 		qConn    *amqp.Connection
 		qChannel *amqp.Channel
 		qAgent   *amqp.Queue
 
-		qCallback  string
+		qCallback string
 		qShellLog string
 		qTtyLog   string
 
@@ -88,6 +99,32 @@ func (c *client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out err
 	c.qTtyLog = config.TtyLog
 
 	return
+}
+
+func (c *client) Connect() error {
+	u, err := url.Parse(c.server)
+	if err != nil {
+		return err
+	}
+
+	u.Scheme = "ws"
+	u.Path = "/ws/agent"
+
+	header := http.Header{}
+	header.Add("Token", c.token)
+
+	dialer := websocket.Dialer{
+		Proxy:            http.ProxyFromEnvironment,
+		HandshakeTimeout: timeout,
+	}
+
+	c.conn, _, err = dialer.Dial("ws://192.168.0.100:8080/ws/agent", header)
+	if err != nil {
+		return err
+	}
+
+	_ = c.conn.WriteMessage(websocket.BinaryMessage, []byte("connect___\nabcdefg"))
+	return nil
 }
 
 func (c *client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
