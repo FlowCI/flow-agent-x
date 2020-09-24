@@ -74,21 +74,20 @@ func (s *CmdService) Execute(bytes []byte) error {
 // new thread to consume rabbitmq message
 func (s *CmdService) start() {
 	appConfig := config.GetInstance()
-	cmdIn, err := appConfig.Client.GetCmdIn()
-	util.PanicIfErr(err)
+	cmdIn := appConfig.Client.GetCmdIn()
 
 	go func() {
 		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
-			case d, ok := <-cmdIn:
+			case bytes, ok := <-cmdIn:
 				if !ok {
 					break
 				}
 
-				util.LogDebug("Received a message: %s", d.Body)
-				err = s.Execute(d.Body)
+				util.LogDebug("Received a message: %s", bytes)
+				err := s.Execute(bytes)
 				if err != nil {
 					util.LogDebug(err.Error())
 				}

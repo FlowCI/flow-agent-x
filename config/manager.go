@@ -2,7 +2,6 @@ package config
 
 import (
 	"context"
-	"fmt"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -22,8 +21,9 @@ var (
 type (
 	// Manager to handle server connection and config
 	Manager struct {
-		Settings *domain.Settings
-		Zk       *util.ZkClient
+		Zk *util.ZkClient
+
+		Status domain.AgentStatus
 
 		Server string
 		Token  string
@@ -53,7 +53,9 @@ type (
 // GetInstance get singleton of config manager
 func GetInstance() *Manager {
 	once.Do(func() {
-		singleton = new(Manager)
+		singleton = &Manager{
+			Status: domain.AgentIdle,
+		}
 	})
 	return singleton
 }
@@ -70,10 +72,7 @@ func (m *Manager) Init() {
 	m.Client = api.NewClient(m.Token, m.Server)
 
 	m.initVolumes()
-	m.loadSettings()
-
-	m.initRabbitMQ()
-	m.initZookeeper()
+	m.connect()
 	m.sendAgentProfile()
 }
 
@@ -117,69 +116,17 @@ func (m *Manager) initVolumes() {
 	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
 }
 
-func (m *Manager) loadSettings() {
+func (m *Manager) connect() {
 	initData := &domain.AgentInit{
 		IsK8sCluster: m.K8sCluster,
 		Port:         m.Port,
 		Os:           util.OS(),
 		Resource:     m.FetchProfile(),
+		Status:       string(m.Status),
 	}
 
-	settings, err := m.Client.GetSettings(initData)
+	err := m.Client.Connect(initData)
 	util.PanicIfErr(err)
-
-	m.Settings = settings
-	util.LogDebug("Settings been loaded from server: \n%v", m.Settings)
-
-	err = m.Client.Connect()
-	util.PanicIfErr(err)
-}
-
-func (m *Manager) initRabbitMQ() {
-	if m.Settings == nil {
-		panic(ErrSettingsNotBeenLoaded)
-	}
-
-	agentQ := m.Settings.Agent.GetQueueName()
-	err := m.Client.SetQueue(m.Settings.Queue, agentQ)
-	util.PanicIfErr(err)
-}
-
-func (m *Manager) initZookeeper() {
-	if m.Settings == nil {
-		panic(ErrSettingsNotBeenLoaded)
-	}
-
-	zkConfig := m.Settings.Zookeeper
-
-	// make connection of zk
-	zk := util.NewZkClient()
-	zk.Callbacks.OnDisconnected = func() {
-		m.Cancel()
-	}
-
-	err := zk.Connect(zkConfig.Host)
-	if err != nil {
-		panic(err)
-	}
-
-	m.Zk = zk
-
-	// register agent on zk
-	exist, err := zk.Exist(m.Settings.Zookeeper.Root)
-	util.PanicIfErr(err)
-	if !exist {
-		panic(fmt.Errorf("zookeeper not initialized on server"))
-	}
-
-	agentPath := getZkPath(m.Settings)
-	_, nodeErr := zk.Create(agentPath, util.ZkNodeTypeEphemeral, string(domain.AgentIdle))
-
-	if nodeErr != nil {
-		panic(nodeErr)
-	}
-
-	util.LogInfo("The zk node '%s' has been registered", agentPath)
 }
 
 func (m *Manager) sendAgentProfile() {
@@ -194,8 +141,4 @@ func (m *Manager) sendAgentProfile() {
 			}
 		}
 	}()
-}
-
-func getZkPath(s *domain.Settings) string {
-	return s.Zookeeper.Root + "/" + s.Agent.ID
 }
