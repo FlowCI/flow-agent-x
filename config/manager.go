@@ -10,13 +10,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"os"
-	"sync"
 	"time"
-)
-
-var (
-	singleton *Manager
-	once      sync.Once
 )
 
 type (
@@ -51,16 +45,6 @@ type (
 	}
 )
 
-// GetInstance get singleton of config manager
-func GetInstance() *Manager {
-	once.Do(func() {
-		singleton = &Manager{
-			Status: domain.AgentIdle,
-		}
-	})
-	return singleton
-}
-
 func (m *Manager) Init() {
 	// init dir
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
@@ -80,11 +64,6 @@ func (m *Manager) Init() {
 	m.sendAgentProfile()
 }
 
-// HasZookeeper has zookeeper connected
-func (m *Manager) HasZookeeper() bool {
-	return m.Zk != nil
-}
-
 func (m *Manager) FetchProfile() *domain.Resource {
 	nCpu, _ := cpu.Counts(true)
 	vmStat, _ := mem.VirtualMemory()
@@ -102,10 +81,6 @@ func (m *Manager) FetchProfile() *domain.Resource {
 // Close release resources and connections
 func (m *Manager) Close() {
 	m.Client.Close()
-
-	if m.HasZookeeper() {
-		m.Zk.Close()
-	}
 }
 
 // --------------------------------

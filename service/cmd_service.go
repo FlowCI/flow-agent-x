@@ -124,6 +124,11 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	err := verifyAndInitShellCmd(in)
 	util.PanicIfErr(err)
 
+	appConfig.Status = domain.AgentBusy
+	defer func() {
+		appConfig.Status = domain.AgentIdle
+	}()
+
 	if in.HasPlugin() {
 		plugins := util.NewPlugins(appConfig.PluginDir, appConfig.Server)
 		err := plugins.Load(in.Plugin)

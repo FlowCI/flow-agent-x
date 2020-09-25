@@ -51,10 +51,16 @@ type (
 		server     string
 		client     *http.Client
 		cmdInbound chan []byte
+		pending    chan *message
 
 		reConn    chan struct{}
 		connState int32
 		conn      *websocket.Conn
+	}
+
+	message struct {
+		event   string
+		body    []byte
 	}
 )
 
@@ -91,6 +97,7 @@ func (c *client) Connect(init *domain.AgentInit) error {
 
 	// start to read message
 	go c.readMessage()
+	go c.consumePendingMessage()
 
 	util.LogInfo("Agent is connected to server %s", c.server)
 	return nil
@@ -186,6 +193,7 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 
 func (c *client) Close() {
 	if c.conn != nil {
+		close(c.pending)
 		_ = c.conn.Close()
 	}
 }
@@ -243,6 +251,18 @@ func (c *client) send(method, path, contentType string, body io.Reader) (out []b
 	return
 }
 
+func (c *client) consumePendingMessage() {
+	for message := range c.pending {
+		// wait until connected
+		for !c.isConnected() {
+			time.Sleep(5 * time.Second)
+		}
+
+		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
+		util.LogInfo("pending message has been sent: %s", message.event)
+	}
+}
+
 func (c *client) sendMessage(event string, msg interface{}, hasResp bool) (resp *domain.Response, out error) {
 	body, err := json.Marshal(msg)
 	if err != nil {
@@ -261,7 +281,11 @@ func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (
 
 	// wait until connected
 	if c.isReConnecting() {
-
+		c.pending <- &message{
+			event:   event,
+			body:    body,
+		}
+		return
 	}
 
 	_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
