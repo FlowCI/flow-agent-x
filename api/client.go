@@ -23,6 +23,7 @@ const (
 	timeout               = 30 * time.Second
 	connStateConnected    = 1
 	connStateReconnecting = 2
+	bufferSize            = 64 * 1024
 )
 
 var (
@@ -59,8 +60,8 @@ type (
 	}
 
 	message struct {
-		event   string
-		body    []byte
+		event string
+		body  []byte
 	}
 )
 
@@ -79,6 +80,8 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	dialer := websocket.Dialer{
 		Proxy:            http.ProxyFromEnvironment,
 		HandshakeTimeout: timeout,
+		ReadBufferSize:   bufferSize,
+		WriteBufferSize:  bufferSize,
 	}
 
 	// build connection
@@ -87,6 +90,7 @@ func (c *client) Connect(init *domain.AgentInit) error {
 		return err
 	}
 
+	c.conn.SetReadLimit(bufferSize)
 	c.setConnState(connStateConnected)
 
 	// send init connect event
@@ -220,8 +224,10 @@ func (c *client) readMessage() {
 				c.setConnState(connStateReconnecting)
 				c.reConn <- struct{}{}
 				c.conn = nil
+				break
 			}
-			break
+
+			panic(err)
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 		c.cmdInbound <- message
@@ -282,8 +288,8 @@ func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (
 	// wait until connected
 	if c.isReConnecting() {
 		c.pending <- &message{
-			event:   event,
-			body:    body,
+			event: event,
+			body:  body,
 		}
 		return
 	}
