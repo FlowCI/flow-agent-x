@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"fmt"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/mem"
@@ -72,7 +73,10 @@ func (m *Manager) Init() {
 	m.Client = api.NewClient(m.Token, m.Server)
 
 	m.initVolumes()
-	m.connect()
+	err := m.connect()
+	util.PanicIfErr(err)
+
+	m.listenReConn()
 	m.sendAgentProfile()
 }
 
@@ -116,7 +120,7 @@ func (m *Manager) initVolumes() {
 	m.Volumes = domain.NewVolumesFromString(m.VolumesStr)
 }
 
-func (m *Manager) connect() {
+func (m *Manager) connect() error {
 	initData := &domain.AgentInit{
 		IsK8sCluster: m.K8sCluster,
 		Port:         m.Port,
@@ -125,8 +129,31 @@ func (m *Manager) connect() {
 		Status:       string(m.Status),
 	}
 
-	err := m.Client.Connect(initData)
-	util.PanicIfErr(err)
+	return m.Client.Connect(initData)
+}
+
+func (m *Manager) listenReConn() {
+	go func() {
+		for range m.Client.ReConn() {
+			util.LogWarn("connection lost from server %s, start reconnecting..", m.Server)
+			connected := false
+
+			for i := 0; i < 6; i++ {
+				err := m.connect()
+				if err == nil {
+					connected = true
+					break
+				}
+
+				util.LogWarn("unable to connect to server %s, retry...", m.Server)
+				time.Sleep(10 * time.Second)
+			}
+
+			if !connected {
+				panic(fmt.Errorf("unable to connect to server %s, exit", m.Server))
+			}
+		}
+	}()
 }
 
 func (m *Manager) sendAgentProfile() {

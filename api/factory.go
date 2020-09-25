@@ -15,6 +15,7 @@ func NewClient(token, server string) Client {
 		token:      token,
 		server:     server,
 		cmdInbound: make(chan []byte),
+		reConn:     make(chan struct{}),
 		client: &http.Client{
 			Transport: transport,
 			Timeout:   10 * time.Second,

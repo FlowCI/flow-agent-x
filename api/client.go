@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"github/flowci/flow-agent-x/domain"
@@ -19,7 +20,9 @@ import (
 )
 
 const (
-	timeout = 30 * time.Second
+	timeout               = 30 * time.Second
+	connStateConnected    = 1
+	connStateReconnecting = 2
 )
 
 var (
@@ -30,6 +33,8 @@ var (
 type (
 	Client interface {
 		Connect(*domain.AgentInit) error
+		ReConn() <-chan struct{}
+
 		UploadLog(filePath string) error
 		ReportProfile(*domain.Resource) error
 
@@ -47,7 +52,9 @@ type (
 		client     *http.Client
 		cmdInbound chan []byte
 
-		conn *websocket.Conn
+		reConn    chan struct{}
+		connState int32
+		conn      *websocket.Conn
 	}
 )
 
@@ -74,6 +81,8 @@ func (c *client) Connect(init *domain.AgentInit) error {
 		return err
 	}
 
+	c.setConnState(connStateConnected)
+
 	// send init connect event
 	_, err = c.sendMessage(eventConnect, init, true)
 	if err != nil {
@@ -85,6 +94,10 @@ func (c *client) Connect(init *domain.AgentInit) error {
 
 	util.LogInfo("Agent is connected to server %s", c.server)
 	return nil
+}
+
+func (c *client) ReConn() <-chan struct{} {
+	return c.reConn
 }
 
 func (c *client) ReportProfile(r *domain.Resource) (err error) {
@@ -177,13 +190,28 @@ func (c *client) Close() {
 	}
 }
 
+func (c *client) setConnState(state int32) {
+	atomic.StoreInt32(&c.connState, state)
+}
+
+func (c *client) isReConnecting() bool {
+	return atomic.LoadInt32(&c.connState) == connStateReconnecting
+}
+
+func (c *client) isConnected() bool {
+	return atomic.LoadInt32(&c.connState) == connStateConnected
+}
+
 func (c *client) readMessage() {
 	// start receive data
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				util.LogIfError(err)
+			util.LogWarn("err on read message: %s", err.Error())
+			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				c.setConnState(connStateReconnecting)
+				c.reConn <- struct{}{}
+				c.conn = nil
 			}
 			break
 		}
@@ -230,6 +258,11 @@ func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (
 			out = r.(error)
 		}
 	}()
+
+	// wait until connected
+	if c.isReConnecting() {
+
+	}
 
 	_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
 
