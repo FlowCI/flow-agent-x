@@ -4,30 +4,42 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/streadway/amqp"
+	"github.com/gorilla/websocket"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 )
 
+const (
+	timeout               = 30 * time.Second
+	connStateConnected    = 1
+	connStateReconnecting = 2
+	bufferSize            = 64 * 1024
+)
+
+var (
+	newline = []byte{'\n'}
+	space   = []byte{' '}
+)
+
 type (
 	Client interface {
-		HasQueueSetup() bool
-		SetQueue(*domain.RabbitMQConfig, string) error
+		Connect(*domain.AgentInit) error
+		ReConn() <-chan struct{}
 
-		GetSettings(*domain.AgentInit) (*domain.Settings, error)
 		UploadLog(filePath string) error
 		ReportProfile(*domain.Resource) error
 
-		GetCmdIn() (<-chan amqp.Delivery, error)
+		GetCmdIn() <-chan []byte
 		SendCmdOut(out domain.CmdOut) error
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
@@ -36,82 +48,67 @@ type (
 	}
 
 	client struct {
-		token  string
-		server string
-		client *http.Client
+		token      string
+		server     string
+		client     *http.Client
+		cmdInbound chan []byte
+		pending    chan *message
 
-		qLock    sync.Mutex
-		qConn    *amqp.Connection
-		qChannel *amqp.Channel
-		qAgent   *amqp.Queue
+		reConn    chan struct{}
+		connState int32
+		conn      *websocket.Conn
+	}
 
-		qCallback  string
-		qShellLog string
-		qTtyLog   string
-
-		qAgentConsumer <-chan amqp.Delivery
+	message struct {
+		event string
+		body  []byte
 	}
 )
 
-func (c *client) HasQueueSetup() bool {
-	c.qLock.Lock()
-	defer c.qLock.Unlock()
-	return c.qConn != nil && c.qChannel != nil && c.qAgent != nil
-}
-
-func (c *client) SetQueue(config *domain.RabbitMQConfig, agentQ string) (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
-	}()
-
-	c.qLock.Lock()
-	defer c.qLock.Unlock()
-
-	conn, err := amqp.Dial(config.Uri)
-	util.PanicIfErr(err)
-
-	ch, err := conn.Channel()
-	util.PanicIfErr(err)
-
-	// init agent job queue to receive job
-	queue, err := ch.QueueDeclare(agentQ, false, false, false, false, nil)
-	util.PanicIfErr(err)
-
-	c.qConn = conn
-	c.qChannel = ch
-	c.qAgent = &queue
-
-	c.qCallback = config.Callback
-	c.qShellLog = config.ShellLog
-	c.qTtyLog = config.TtyLog
-
-	return
-}
-
-func (c *client) GetSettings(init *domain.AgentInit) (out *domain.Settings, err error) {
-	defer func() {
-		if err := recover(); err != nil {
-			return
-		}
-	}()
-
-	body, err := json.Marshal(init)
-	util.PanicIfErr(err)
-
-	raw, err := c.send("POST", "connect", util.HttpMimeJson, bytes.NewBuffer(body))
-	util.PanicIfErr(err)
-
-	var msg domain.SettingsResponse
-	errFromJSON := json.Unmarshal(raw, &msg)
-	util.PanicIfErr(errFromJSON)
-
-	if msg.IsOk() {
-		return msg.Data, nil
+func (c *client) Connect(init *domain.AgentInit) error {
+	u, err := url.Parse(c.server)
+	if err != nil {
+		return err
 	}
 
-	return nil, fmt.Errorf(msg.Message)
+	u.Scheme = "ws"
+	u.Path = "agent"
+
+	header := http.Header{}
+	header.Add(headerToken, c.token)
+
+	dialer := websocket.Dialer{
+		Proxy:            http.ProxyFromEnvironment,
+		HandshakeTimeout: timeout,
+		ReadBufferSize:   bufferSize,
+		WriteBufferSize:  bufferSize,
+	}
+
+	// build connection
+	c.conn, _, err = dialer.Dial(u.String(), header)
+	if err != nil {
+		return err
+	}
+
+	c.conn.SetReadLimit(bufferSize)
+	c.setConnState(connStateConnected)
+
+	// send init connect event
+	_, err = c.sendMessage(eventConnect, init, true)
+	if err != nil {
+		return err
+	}
+
+	// start to read message
+	go c.readMessage()
+	go c.consumePendingMessage()
+
+	util.LogInfo("Agent is connected to server %s", c.server)
+	return nil
+}
+
+func (c *client) ReConn() <-chan struct{} {
+	return c.reConn
 }
 
 func (c *client) ReportProfile(r *domain.Resource) (err error) {
@@ -166,27 +163,12 @@ func (c *client) UploadLog(filePath string) (err error) {
 	return fmt.Errorf(message.Message)
 }
 
-func (c *client) GetCmdIn() (<-chan amqp.Delivery, error) {
-	if c.qAgentConsumer != nil {
-		return c.qAgentConsumer, nil
-	}
-
-	msgs, err := c.qChannel.Consume(c.qAgent.Name, "", true, false, false, false, nil)
-
-	if err != nil {
-		return nil, err
-	}
-
-	c.qAgentConsumer = msgs
-	return c.qAgentConsumer, nil
+func (c *client) GetCmdIn() <-chan []byte {
+	return c.cmdInbound
 }
 
 func (c *client) SendCmdOut(out domain.CmdOut) error {
-	err := c.qChannel.Publish("", c.qCallback, false, false, amqp.Publishing{
-		ContentType: util.HttpMimeJson,
-		Body:        out.ToBytes(),
-	})
-
+	_, err := c.sendMessageWithBytes(eventCmdOut, out.ToBytes(), false)
 	if err != nil {
 		return err
 	}
@@ -196,38 +178,59 @@ func (c *client) SendCmdOut(out domain.CmdOut) error {
 }
 
 func (c *client) SendShellLog(jobId, stepId, b64Log string) {
-	raw, err := json.Marshal(&domain.CmdStdLog{
-		ID:      stepId,
-		Content: b64Log,
-	})
-
-	if err != nil {
-		util.LogWarn(err.Error())
-		return
+	body := &domain.ShellLog{
+		JobId:  jobId,
+		StepId: stepId,
+		Log:    b64Log,
 	}
 
-	_ = c.qChannel.Publish("", c.qShellLog, false, false, amqp.Publishing{
-		Body: raw,
-		Headers: map[string]interface{}{
-			"id":     jobId,
-			"stepId": stepId,
-		},
-	})
+	_, _ = c.sendMessage(eventShellLog, body, false)
 }
 
 func (c *client) SendTtyLog(ttyId, b64Log string) {
-	_ = c.qChannel.Publish("", c.qTtyLog, false, false, amqp.Publishing{
-		Body: []byte(b64Log),
-		Headers: map[string]interface{}{
-			"id": ttyId,
-		},
-	})
+	body := &domain.TtyLog{
+		ID:  ttyId,
+		Log: b64Log,
+	}
+	_, _ = c.sendMessage(eventTtyLog, body, false)
 }
 
 func (c *client) Close() {
-	if c.HasQueueSetup() {
-		_ = c.qChannel.Close()
-		_ = c.qConn.Close()
+	if c.conn != nil {
+		close(c.pending)
+		_ = c.conn.Close()
+	}
+}
+
+func (c *client) setConnState(state int32) {
+	atomic.StoreInt32(&c.connState, state)
+}
+
+func (c *client) isReConnecting() bool {
+	return atomic.LoadInt32(&c.connState) == connStateReconnecting
+}
+
+func (c *client) isConnected() bool {
+	return atomic.LoadInt32(&c.connState) == connStateConnected
+}
+
+func (c *client) readMessage() {
+	// start receive data
+	for {
+		_, message, err := c.conn.ReadMessage()
+		if err != nil {
+			util.LogWarn("err on read message: %s", err.Error())
+			if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				c.setConnState(connStateReconnecting)
+				c.reConn <- struct{}{}
+				c.conn = nil
+				break
+			}
+
+			panic(err)
+		}
+		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
+		c.cmdInbound <- message
 	}
 }
 
@@ -254,18 +257,60 @@ func (c *client) send(method, path, contentType string, body io.Reader) (out []b
 	return
 }
 
-func NewClient(token, server string) Client {
-	transport := &http.Transport{
-		MaxIdleConns:    5,
-		IdleConnTimeout: 30 * time.Second,
+func (c *client) consumePendingMessage() {
+	for message := range c.pending {
+		// wait until connected
+		for !c.isConnected() {
+			time.Sleep(5 * time.Second)
+		}
+
+		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
+		util.LogInfo("pending message has been sent: %s", message.event)
+	}
+}
+
+func (c *client) sendMessage(event string, msg interface{}, hasResp bool) (resp *domain.Response, out error) {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
 	}
 
-	return &client{
-		token:  token,
-		server: server,
-		client: &http.Client{
-			Transport: transport,
-			Timeout:   10 * time.Second,
-		},
+	return c.sendMessageWithBytes(event, body, hasResp)
+}
+
+func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (resp *domain.Response, out error) {
+	defer func() {
+		if r := recover(); r != nil {
+			out = r.(error)
+		}
+	}()
+
+	// wait until connected
+	if c.isReConnecting() {
+		c.pending <- &message{
+			event: event,
+			body:  body,
+		}
+		return
 	}
+
+	_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
+
+	if !hasResp {
+		return
+	}
+
+	_, data, err := c.conn.ReadMessage()
+	util.PanicIfErr(err)
+
+	resp = &domain.Response{}
+	err = json.Unmarshal(data, resp)
+	util.PanicIfErr(err)
+
+	if !resp.IsOk() {
+		out = fmt.Errorf(resp.Message)
+		return
+	}
+
+	return
 }

@@ -16,6 +16,7 @@ require (
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/golang/protobuf v1.3.5
 	github.com/google/uuid v1.1.2
+	github.com/gorilla/websocket v1.4.2
 	github.com/mattn/go-isatty v0.0.0-20170307163044-57fdcb988a5c // indirect
 	github.com/mattn/go-sqlite3 v1.10.0
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect

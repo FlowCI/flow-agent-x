@@ -25,6 +25,11 @@ type (
 		IsSuccess bool   `json:"success"`
 		Error     string `json:"error"`
 	}
+
+	TtyLog struct {
+		ID  string `json:"id"`
+		Log string `json:"log"`
+	}
 )
 
 // ===================================

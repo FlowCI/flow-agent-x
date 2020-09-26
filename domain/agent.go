@@ -1,9 +1,5 @@
 package domain
 
-import (
-	"fmt"
-)
-
 // AgentStatus string of agent status
 type AgentStatus string
 
@@ -34,46 +30,7 @@ type (
 		Token        string    `json:"token"`
 		Port         int       `json:"port"`
 		Os           string    `json:"os"`
+		Status       string    `json:"status"`
 		Resource     *Resource `json:"resource"`
 	}
-
-	// Agent Class
-	Agent struct {
-		ID       string
-		Name     string
-		Token    string
-		Host     string
-		Tags     []string
-		Status   AgentStatus
-		JobID    string
-		Resource *Resource
-	}
 )
-
-func (a *Agent) HasHost() bool {
-	return a.Host != ""
-}
-
-func (a *Agent) IsBusy() bool {
-	return a.Status == AgentBusy
-}
-
-func (a *Agent) IsIdle() bool {
-	return a.Status == AgentIdle
-}
-
-func (a *Agent) IsOffline() bool {
-	return a.Status == AgentOffline
-}
-
-func (a *Agent) IsOnline() bool {
-	return a.Status != AgentOffline
-}
-
-func (a *Agent) GetQueueName() string {
-	return "queue.agent." + a.ID
-}
-
-func (a Agent) String() string {
-	return fmt.Sprintf("Agent:[id=%s, name=%s, token=%s]", a.ID, a.Name, a.Token)
-}

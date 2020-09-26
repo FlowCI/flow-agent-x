@@ -10,11 +10,6 @@ type (
 		Code    int
 		Message string
 	}
-
-	SettingsResponse struct {
-		Response
-		Data *Settings
-	}
 )
 
 // IsOk check response code is equal to 200
