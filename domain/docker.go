@@ -9,11 +9,25 @@ import (
 type (
 	// DockerVolume volume will mount to step docker
 	DockerVolume struct {
-		Name   string
-		Dest   string
-		Script string
+		Name   string // volume name
+		Dest   string // dest path
+		Script string // script file name to execute
+		Image  string // image contain volume
+		Init   string // init script /ws/{init} in image that will copy required data to /target
 	}
 )
+
+func (v *DockerVolume) HasImage() bool {
+	return v.Image != ""
+}
+
+func (v *DockerVolume) InitScriptInImage() string {
+	return fmt.Sprintf("/ws/%s", v.Init)
+}
+
+func (v *DockerVolume) DefaultTargetInImage() string {
+	return "/target"
+}
 
 func (v *DockerVolume) ScriptPath() string {
 	return fmt.Sprintf("%s/%s", v.Dest, v.Script)
@@ -52,18 +66,22 @@ func NewVolumesFromString(val string) []*DockerVolume {
 		}
 
 		fields := strings.Split(token, ",")
-		if len(fields) != 3 {
-			panic(fmt.Errorf("'%s' is invalid volume string, fields must contain name, dest, script", token))
+		if len(fields) != 5 {
+			panic(fmt.Errorf("'%s' is invalid volume string, fields must contain name,dest,script,image,init", token))
 		}
 
 		name := fields[0]
 		dest := fields[1]
 		script := fields[2]
+		image := fields[3]
+		initScript := fields[4]
 
 		volumes = append(volumes, &DockerVolume{
 			Name:   getValue(name),
 			Dest:   getValue(dest),
 			Script: getValue(script),
+			Image:  getValue(image),
+			Init:   getValue(initScript),
 		})
 	}
 

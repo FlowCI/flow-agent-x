@@ -20,7 +20,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const version = "0.20.32"
+const version = "0.20.40"
 
 func init() {
 	util.LogInit()
@@ -55,6 +55,18 @@ func main() {
 			EnvVar: domain.VarAgentPort,
 		},
 
+		cli.BoolFlag{
+			Name:   "k8sEnabled",
+			Usage:  "Indicate is run from k8s",
+			EnvVar: domain.VarK8sEnabled,
+		},
+
+		cli.BoolFlag{
+			Name:   "k8sInCluster",
+			Usage:  "Indicate is k8s run in cluster",
+			EnvVar: domain.VarK8sInCluster,
+		},
+
 		cli.StringFlag{
 			Name:   "workspace, w",
 			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
@@ -81,7 +93,7 @@ func main() {
 }
 
 func start(c *cli.Context) error {
-	util.LogInfo("Staring flow.ci agent...")
+	util.LogInfo("Staring flow.ci agent (v%s)...", version)
 	defer func() {
 		if err := recover(); err != nil {
 			util.LogIfError(err.(error))
@@ -100,6 +112,16 @@ func start(c *cli.Context) error {
 	config.LoggingDir = filepath.Join(config.Workspace, ".logs")
 	config.VolumesStr = c.String("volumes")
 
+	config.K8sEnabled = c.Bool("k8sEnabled")
+	config.K8sCluster = c.Bool("k8sInCluster")
+
+	config.K8sNodeName = os.Getenv(domain.VarK8sNodeName)
+	config.K8sPodName = os.Getenv(domain.VarK8sPodName)
+	config.K8sPodIp = os.Getenv(domain.VarK8sPodIp)
+	config.K8sNamespace = os.Getenv(domain.VarK8sNamespace)
+
+	printInfo()
+
 	// exec given cmd
 	script := c.String("script")
 	if len(script) > 0 {
@@ -112,6 +134,26 @@ func start(c *cli.Context) error {
 	startGin(config)
 
 	return nil
+}
+
+func printInfo() {
+	appConfig := config.GetInstance()
+
+	util.LogInfo("--- [Server URL]: %s", appConfig.Server)
+	util.LogInfo("--- [Token]: %s", appConfig.Token)
+	util.LogInfo("--- [Port]: %d", appConfig.Port)
+	util.LogInfo("--- [Workspace]: %s", appConfig.Workspace)
+	util.LogInfo("--- [Plugin Dir]: %s", appConfig.PluginDir)
+	util.LogInfo("--- [Log Dir]: %s", appConfig.LoggingDir)
+	util.LogInfo("--- [Volume Str]: %s", appConfig.VolumesStr)
+
+	if appConfig.K8sEnabled {
+		util.LogInfo("--- [K8s InCluster]: %d", appConfig.K8sCluster)
+		util.LogInfo("--- [K8s Node]: %s", appConfig.K8sNodeName)
+		util.LogInfo("--- [K8s Namespace]: %s", appConfig.K8sNamespace)
+		util.LogInfo("--- [K8s Pod]: %s", appConfig.K8sPodName)
+		util.LogInfo("--- [K8s Pod IP]: %s", appConfig.K8sPodIp)
+	}
 }
 
 func execCmd(script string) {

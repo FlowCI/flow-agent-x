@@ -57,7 +57,7 @@ func TestShouldStartBashInteract(t *testing.T) {
 			"echo hello",
 		},
 		Timeout: 9999,
-	})
+	}, false)
 
 	go func() {
 		for {

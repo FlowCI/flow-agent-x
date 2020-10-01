@@ -32,6 +32,12 @@ type (
 		Error      string    `json:"error"`
 		LogSize    int64     `json:"logSize"`
 	}
+
+	ShellLog struct {
+		JobId  string `json:"jobId"`
+		StepId string `json:"stepId"`
+		Log    string `json:"log"` // b64
+	}
 )
 
 // ===================================
