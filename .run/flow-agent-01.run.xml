@@ -1,0 +1,19 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="flow-agent-01" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="flow-agent-x" />
+    <working_directory value="$PROJECT_DIR$/" />
+    <go_parameters value="-i" />
+    <envs>
+      <env name="FLOWCI_AGENT_TOKEN" value="861d1731-3bc7-489b-badb-329235c38edb" />
+      <env name="FLOWCI_SERVER_URL" value="http://192.168.0.104:8080" />
+      <env name="FLOWCI_AGENT_VOLUMES" value="name=pyenv,dest=/ci/python,script=init.sh,image=flowci/pyenv:1.3,init=init-pyenv-volume.sh" />
+      <env name="FLOWCI_AGENT_K8S_ENABLED" value="false" />
+      <env name="FLOWCI_AGENT_K8S_IN_CLUSTER" value="false" />
+    </envs>
+    <kind value="FILE" />
+    <filePath value="$PROJECT_DIR$/app.go" />
+    <package value="flow-agent-x" />
+    <directory value="$PROJECT_DIR$/" />
+    <method v="2" />
+  </configuration>
+</component>
