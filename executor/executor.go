@@ -113,7 +113,7 @@ func NewExecutor(options Options) Executor {
 		}
 	}
 
-	return &BashExecutor{
+	return &shellExecutor{
 		BaseExecutor: base,
 	}
 }

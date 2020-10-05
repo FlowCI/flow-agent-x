@@ -1,3 +1,5 @@
+// +build !windows
+
 package executor
 
 import (
@@ -14,7 +16,7 @@ import (
 )
 
 type (
-	BashExecutor struct {
+	shellExecutor struct {
 		BaseExecutor
 		command *exec.Cmd
 		tty     *exec.Cmd
@@ -24,7 +26,7 @@ type (
 	}
 )
 
-func (b *BashExecutor) Init() (err error) {
+func (b *shellExecutor) Init() (err error) {
 	b.result.StartAt = time.Now()
 
 	if util.IsEmptyString(b.workspace) {
@@ -53,7 +55,7 @@ func (b *BashExecutor) Init() (err error) {
 }
 
 // Start run the cmd from domain.CmdIn
-func (b *BashExecutor) Start() (out error) {
+func (b *shellExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -145,7 +147,7 @@ func (b *BashExecutor) Start() (out error) {
 	return b.context.Err()
 }
 
-func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -186,7 +188,7 @@ func (b *BashExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out
 	return
 }
 
-func (b *BashExecutor) StopTty() {
+func (b *shellExecutor) StopTty() {
 	if b.IsInteracting() {
 		_ = b.tty.Process.Kill()
 	}
@@ -196,7 +198,7 @@ func (b *BashExecutor) StopTty() {
 //	private
 //====================================================================
 
-func (b *BashExecutor) exportEnv() {
+func (b *shellExecutor) exportEnv() {
 	if util.IsEmptyString(b.envFile) {
 		return
 	}
@@ -210,7 +212,7 @@ func (b *BashExecutor) exportEnv() {
 	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
 }
 
-func (b *BashExecutor) handleErrors(err error) {
+func (b *shellExecutor) handleErrors(err error) {
 	kill := func() {
 		if b.command != nil {
 			_ = b.command.Process.Kill()
