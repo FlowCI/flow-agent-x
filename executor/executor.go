@@ -13,6 +13,7 @@ import (
 )
 
 const (
+	winPowerShell = "powershell.exe"
 	linuxBash = "/bin/bash"
 	//linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
 

@@ -21,7 +21,7 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 	output := domain.NewVariables()
 
 	for {
-		line, err := reader.ReadString(util.UnixLineBreak)
+		line, err := reader.ReadString(util.LineBreak)
 		if err != nil {
 			return output
 		}
@@ -45,8 +45,8 @@ func matchEnvFilter(env string, filters []string) bool {
 }
 
 func appendNewLine(script string) string {
-	if !strings.HasSuffix(script, util.UnixLineBreakStr) {
-		script += util.UnixLineBreakStr
+	if !strings.HasSuffix(script, util.NewLine) {
+		script += util.NewLine
 	}
 	return script
 }
@@ -66,6 +66,6 @@ func getEnvKeyAndVal(line string) (ok bool, key, val string) {
 
 func trimByte(in []byte) (out []byte) {
 	out = bytes.TrimLeft(in, "\x00")
-	out = bytes.TrimRight(out, util.UnixLineBreakStr)
+	out = bytes.TrimRight(out, util.NewLine)
 	return
 }

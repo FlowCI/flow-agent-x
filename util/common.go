@@ -8,16 +8,23 @@ import (
 )
 
 const (
-	CRLF             = "\r\n"
-	UnixLineBreak    = '\n'
-	UnixLineBreakStr = "\n"
-
+	LineBreak = '\n'
 	EmptyStr = ""
 
 	OSWin   = "windows"
 	OSLinux = "linux"
 	OSMac   = "darwin"
 )
+
+var (
+	NewLine = "\n"
+)
+
+func init() {
+	if IsWindows() {
+		NewLine = "\r\n"
+	}
+}
 
 func OS() string {
 	if IsMac() {
