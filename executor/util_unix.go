@@ -24,3 +24,16 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 		}
 	}
 }
+
+func getEnvKeyAndVal(line string) (ok bool, key, val string) {
+	index := strings.IndexAny(line, "=")
+	if index == -1 {
+		ok = false
+		return
+	}
+
+	key = line[0:index]
+	val = line[index+1:]
+	ok = true
+	return
+}

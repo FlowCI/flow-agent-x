@@ -28,6 +28,7 @@ require (
 	github.com/ugorji/go v0.0.0-20170215201144-c88ee250d022 // indirect
 	github.com/urfave/cli v1.20.0
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect
+	golang.org/x/text v0.3.2
 	gopkg.in/go-playground/assert.v1 v1.2.1 // indirect
 	gopkg.in/go-playground/validator.v8 v8.18.1 // indirect
 	gopkg.in/src-d/go-billy.v4 v4.3.0 // indirect

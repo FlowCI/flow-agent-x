@@ -58,10 +58,11 @@ func (b *shellExecutor) setupBin(in chan string) {
 
 func (b *shellExecutor) writeEnv(in chan string) {
 	tmpFile, err := ioutil.TempFile("", "agent_env_")
+	util.PanicIfErr(err)
 
-	if err == nil {
-		in <- "env > " + tmpFile.Name()
-		b.envFile = tmpFile.Name()
-	}
+	defer tmpFile.Close()
+
+	in <- "env > " + tmpFile.Name()
+	b.envFile = tmpFile.Name()
+
 }
-
