@@ -182,12 +182,14 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	go consumer()
 
 	// source volume script
-	b.stdin <- "set +e" // ignore source file failure
-	for _, v := range b.volumes {
-		if util.IsEmptyString(v.Script) {
-			continue
+	if !util.IsWindows() {
+		b.stdin <- "set +e" // ignore source file failure
+		for _, v := range b.volumes {
+			if util.IsEmptyString(v.Script) {
+				continue
+			}
+			b.stdin <- fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath())
 		}
-		b.stdin <- fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath())
 	}
 
 	if before != nil {
@@ -195,7 +197,10 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string)
 	}
 
 	// write shell script from cmd
-	b.stdin <- "set -e"
+	for _, script := range scriptForExitOnError() {
+		b.stdin <- script
+	}
+
 	for _, script := range b.inCmd.Scripts {
 		b.stdin <- doScript(script)
 	}

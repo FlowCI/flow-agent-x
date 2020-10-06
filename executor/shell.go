@@ -1,9 +1,7 @@
-// +build windows
-
 package executor
 
 import (
-	"fmt"
+	"context"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
@@ -16,10 +14,8 @@ import (
 type (
 	shellExecutor struct {
 		BaseExecutor
-
-		powerShellPath string
-		command        *exec.Cmd
-
+		command *exec.Cmd
+		tty     *exec.Cmd
 		workDir string
 		binDir  string
 		envFile string
@@ -28,11 +24,6 @@ type (
 
 func (b *shellExecutor) Init() (err error) {
 	b.result.StartAt = time.Now()
-
-	b.powerShellPath, err = exec.LookPath(winPowerShell)
-	if err != nil {
-		return
-	}
 
 	if util.IsEmptyString(b.workspace) {
 		b.workDir, err = ioutil.TempDir("", "agent_")
@@ -59,6 +50,8 @@ func (b *shellExecutor) Init() (err error) {
 	return
 }
 
+
+// Start run the cmd from domain.CmdIn
 func (b *shellExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
@@ -72,7 +65,9 @@ func (b *shellExecutor) Start() (out error) {
 	// init wait group fro StdOut and StdErr
 	b.stdOutWg.Add(2)
 
-	command := exec.Command(b.powerShellPath, []string{"-NoProfile", "-NonInteractive"}...)
+	command, err := createCommand()
+	util.PanicIfErr(err)
+
 	command.Dir = b.workDir
 	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
 
@@ -108,26 +103,13 @@ func (b *shellExecutor) Start() (out error) {
 		return b.toErrorStatus(err)
 	}
 
-	setupBin := func(in chan string) {
-		in <- fmt.Sprintf("$Env:PATH += ;%s", b.binDir)
-	}
-
-	writeEnv := func(in chan string) {
-		tmpFile, err := ioutil.TempFile("", "agent_env_")
-
-		if err == nil {
-			in <- "gci env: > " + tmpFile.Name()
-			b.envFile = tmpFile.Name()
-		}
-	}
-
 	doScript := func(script string) string {
 		return script
 	}
 
 	b.writeLog(stdout, true, true)
 	b.writeLog(stderr, true, true)
-	b.writeCmd(stdin, setupBin, writeEnv, doScript)
+	b.writeCmd(stdin, b.setupBin, b.writeEnv, doScript)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
@@ -151,18 +133,54 @@ func (b *shellExecutor) Start() (out error) {
 	return b.context.Err()
 }
 
-func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
-	return nil
+func (b *shellExecutor) StopTty() {
+	if b.IsInteracting() {
+		_ = b.tty.Process.Kill()
+	}
 }
 
-func (b *shellExecutor) StopTty() {
+//====================================================================
+//	private
+//====================================================================
 
+func (b *shellExecutor) exportEnv() {
+	if util.IsEmptyString(b.envFile) {
+		return
+	}
+
+	file, err := os.Open(b.envFile)
+	if err != nil {
+		return
+	}
+
+	defer file.Close()
+	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
 }
 
 func (b *shellExecutor) handleErrors(err error) {
+	kill := func() {
+		if b.command != nil {
+			_ = b.command.Process.Kill()
+		}
 
-}
+		if b.tty != nil {
+			_ = b.tty.Process.Kill()
+		}
+	}
 
-func (b *shellExecutor) exportEnv() {
+	if err == context.DeadlineExceeded {
+		util.LogDebug("Timeout..")
+		kill()
+		b.toTimeOutStatus()
+		return
+	}
 
+	if err == context.Canceled {
+		util.LogDebug("Cancel..")
+		kill()
+		b.toKilledStatus()
+		return
+	}
+
+	_ = b.toErrorStatus(err)
 }

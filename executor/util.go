@@ -1,11 +1,8 @@
 package executor
 
 import (
-	"bufio"
 	"bytes"
-	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"io"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -14,25 +11,6 @@ import (
 func getExitCode(cmd *exec.Cmd) int {
 	ws := cmd.ProcessState.Sys().(syscall.WaitStatus)
 	return ws.ExitStatus()
-}
-
-func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
-	reader := bufio.NewReader(r)
-	output := domain.NewVariables()
-
-	for {
-		line, err := reader.ReadString(util.LineBreak)
-		if err != nil {
-			return output
-		}
-
-		line = strings.TrimSpace(line)
-		if ok, key, val := getEnvKeyAndVal(line); ok {
-			if matchEnvFilter(key, filters) {
-				output[key] = val
-			}
-		}
-	}
 }
 
 func matchEnvFilter(env string, filters []string) bool {

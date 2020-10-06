@@ -23,6 +23,7 @@ func createPowerShellTestCmd() *domain.ShellIn {
 		ID: "1-1-1",
 		Scripts: []string{
 			"echo ${home}",
+			"abcccc",
 		},
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
 		Timeout:    1800,
