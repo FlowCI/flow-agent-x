@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bytes"
 	"github/flowci/flow-agent-x/util"
 	"os/exec"
 	"strings"
@@ -27,10 +26,4 @@ func appendNewLine(script string) string {
 		script += util.NewLine
 	}
 	return script
-}
-
-func trimByte(in []byte) (out []byte) {
-	out = bytes.TrimLeft(in, "\x00")
-	out = bytes.TrimRight(out, util.NewLine)
-	return
 }

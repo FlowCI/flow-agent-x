@@ -404,7 +404,10 @@ func (k *K8sExecutor) setProcessId() {
 
 	data, err := ioutil.ReadAll(buffer)
 	if err == nil {
-		num, _ := strconv.Atoi(string(trimByte(data)))
+		data = bytes.TrimLeft(data, "\x00")
+		data = bytes.TrimRight(data, util.NewLine)
+
+		num, _ := strconv.Atoi(string(data))
 		k.result.ProcessId = num
 	}
 }
