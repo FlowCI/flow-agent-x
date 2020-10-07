@@ -51,17 +51,21 @@ type Executor interface {
 type BaseExecutor struct {
 	k8sConfig *domain.K8sConfig
 
-	agentId    string // should be agent token
-	workspace  string
-	pluginDir  string
-	volumes    []*domain.DockerVolume
+	agentId   string // should be agent token
+	workspace string
+	pluginDir string
+
+	os         string // current operation system
 	context    context.Context
 	cancelFunc context.CancelFunc
-	inCmd      *domain.ShellIn
-	result     *domain.ShellOut
-	vars       domain.Variables // vars from input and in cmd
-	stdout     chan string      // output log
-	stdOutWg   sync.WaitGroup   // init on subclasses
+
+	volumes []*domain.DockerVolume
+	inCmd   *domain.ShellIn
+	result  *domain.ShellOut
+	vars    domain.Variables // vars from input and in cmd
+
+	stdout   chan string    // output log
+	stdOutWg sync.WaitGroup // init on subclasses
 
 	ttyId     string
 	ttyIn     chan string // b64 script
@@ -107,7 +111,7 @@ func NewExecutor(options Options) Executor {
 	base.cancelFunc = cancel
 
 	if cmd.HasDockerOption() {
-		return &DockerExecutor{
+		return &dockerExecutor{
 			BaseExecutor: base,
 		}
 	}
@@ -162,12 +166,12 @@ func (b *BaseExecutor) isK8sEnabled() bool {
 
 func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string, inDocker bool) {
 	write := func(script string) {
-		_, _ = io.WriteString(stdin, appendNewLine(script, inDocker))
+		_, _ = io.WriteString(stdin, appendNewLine(script, b.os))
 		util.LogDebug("----- exec: %s", script)
 	}
 
 	// source volume script
-	if !util.IsWindows() {
+	if b.os != util.OSWin {
 		write("set +e") // ignore source file failure
 		for _, v := range b.volumes {
 			if util.IsEmptyString(v.Script) {
@@ -258,7 +262,7 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for inputStr := range b.ttyIn {
 		if inputStr == "\r" {
-			inputStr = util.NewLine
+			inputStr = newLineForOs(b.os)
 		}
 
 		in := []byte(inputStr)

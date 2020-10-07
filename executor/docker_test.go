@@ -88,7 +88,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 		Timeout: 9999,
 	}, false)
 
-	dockerExecutor := executor.(*DockerExecutor)
+	dockerExecutor := executor.(*dockerExecutor)
 	assert.NotNil(dockerExecutor)
 
 	err := dockerExecutor.Init()

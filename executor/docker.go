@@ -37,7 +37,7 @@ const (
 )
 
 type (
-	DockerExecutor struct {
+	dockerExecutor struct {
 		BaseExecutor
 		agentVolume types.Volume
 		cli         *client.Client
@@ -48,7 +48,7 @@ type (
 	}
 )
 
-func (d *DockerExecutor) runtime() *domain.DockerConfig {
+func (d *dockerExecutor) runtime() *domain.DockerConfig {
 	if len(d.configs) > 0 {
 		return d.configs[0]
 	}
@@ -56,13 +56,14 @@ func (d *DockerExecutor) runtime() *domain.DockerConfig {
 	return nil
 }
 
-func (d *DockerExecutor) Init() (out error) {
+func (d *dockerExecutor) Init() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 	}()
 
+	d.os = util.OSLinux // only support unix based image
 	d.result.StartAt = time.Now()
 
 	d.cli, out = client.NewEnvClient()
@@ -77,7 +78,7 @@ func (d *DockerExecutor) Init() (out error) {
 	return
 }
 
-func (d *DockerExecutor) Start() (out error) {
+func (d *dockerExecutor) Start() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = d.handleErrors(err.(error))
@@ -116,7 +117,7 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
-func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -172,7 +173,7 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	return
 }
 
-func (d *DockerExecutor) StopTty() {
+func (d *dockerExecutor) StopTty() {
 	err := d.runSingleScript(killTty)
 	util.LogIfError(err)
 }
@@ -181,7 +182,7 @@ func (d *DockerExecutor) StopTty() {
 // private methods
 //--------------------------------------------
 
-func (d *DockerExecutor) initVolumeData() {
+func (d *dockerExecutor) initVolumeData() {
 	runCmd := func(v *domain.DockerVolume) {
 		c, err := d.cli.ContainerCreate(d.context,
 			&container.Config{
@@ -244,7 +245,7 @@ func (d *DockerExecutor) initVolumeData() {
 }
 
 // setup default network for agent
-func (d *DockerExecutor) initNetwork() {
+func (d *dockerExecutor) initNetwork() {
 	args := filters.NewArgs()
 	args.Add("name", dockerNetwork)
 
@@ -264,7 +265,7 @@ func (d *DockerExecutor) initNetwork() {
 }
 
 // agent volume that bind to /ws inside docker
-func (d *DockerExecutor) initAgentVolume() {
+func (d *dockerExecutor) initAgentVolume() {
 	name := "agent-" + d.agentId
 	ok, v := d.getVolume(name)
 
@@ -284,7 +285,7 @@ func (d *DockerExecutor) initAgentVolume() {
 	}
 }
 
-func (d *DockerExecutor) initConfig() {
+func (d *dockerExecutor) initConfig() {
 	d.configs = make([]*domain.DockerConfig, len(d.inCmd.Dockers))
 
 	// find run time docker option
@@ -349,7 +350,7 @@ func (d *DockerExecutor) initConfig() {
 	d.configs[0] = config
 }
 
-func (d *DockerExecutor) handleErrors(err error) error {
+func (d *dockerExecutor) handleErrors(err error) error {
 	kill := func() {
 		_ = d.runSingleScript(killShell)
 		_ = d.runSingleScript(killTty)
@@ -375,14 +376,14 @@ func (d *DockerExecutor) handleErrors(err error) error {
 	return err
 }
 
-func (d *DockerExecutor) pullImage() {
+func (d *dockerExecutor) pullImage() {
 	for _, c := range d.configs {
 		err := d.pullImageWithName(c.Config.Image)
 		util.PanicIfErr(err)
 	}
 }
 
-func (d *DockerExecutor) pullImageWithName(image string) (err error) {
+func (d *dockerExecutor) pullImageWithName(image string) (err error) {
 	fullRef := "docker.io/library/" + image
 	if strings.Contains(image, "/") {
 		fullRef = "docker.io/" + image
@@ -402,7 +403,7 @@ func (d *DockerExecutor) pullImageWithName(image string) (err error) {
 	return
 }
 
-func (d *DockerExecutor) startContainer() {
+func (d *dockerExecutor) startContainer() {
 	ids := make([]string, len(d.configs))
 
 	// create and start containers
@@ -425,7 +426,7 @@ func (d *DockerExecutor) startContainer() {
 	d.result.Containers = ids
 }
 
-func (d *DockerExecutor) resume(cid string) bool {
+func (d *dockerExecutor) resume(cid string) bool {
 	if util.IsEmptyString(cid) {
 		return false
 	}
@@ -462,7 +463,7 @@ func (d *DockerExecutor) resume(cid string) bool {
 }
 
 // copy plugin to docker container from real plugin dir
-func (d *DockerExecutor) copyPlugins() {
+func (d *dockerExecutor) copyPlugins() {
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	}
@@ -477,7 +478,7 @@ func (d *DockerExecutor) copyPlugins() {
 	}
 }
 
-func (d *DockerExecutor) runShell() string {
+func (d *dockerExecutor) runShell() string {
 	runtime := d.runtime()
 
 	config := types.ExecConfig{
@@ -543,7 +544,7 @@ func (d *DockerExecutor) runShell() string {
 }
 
 // run single bash script with new context
-func (d *DockerExecutor) runSingleScript(script string) error {
+func (d *dockerExecutor) runSingleScript(script string) error {
 	ctx := context.Background()
 
 	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
@@ -558,7 +559,7 @@ func (d *DockerExecutor) runSingleScript(script string) error {
 	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 }
 
-func (d *DockerExecutor) exportEnv() {
+func (d *dockerExecutor) exportEnv() {
 	reader, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, dockerEnvFile)
 	if err != nil {
 		return
@@ -568,7 +569,7 @@ func (d *DockerExecutor) exportEnv() {
 	d.result.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
 }
 
-func (d *DockerExecutor) cleanupContainer() {
+func (d *dockerExecutor) cleanupContainer() {
 	if d.cli == nil {
 		return
 	}
@@ -591,7 +592,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	}
 }
 
-func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
+func (d *dockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
 	util.PanicIfErr(err)
 	if onStarted != nil {
@@ -612,7 +613,7 @@ func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	return inspect.ExitCode
 }
 
-func (d *DockerExecutor) getVolume(name string) (bool, *types.Volume) {
+func (d *dockerExecutor) getVolume(name string) (bool, *types.Volume) {
 	filter := filters.NewArgs()
 	filter.Add("name", name)
 

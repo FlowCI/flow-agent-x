@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -23,6 +24,7 @@ type (
 )
 
 func (b *shellExecutor) Init() (err error) {
+	b.os = runtime.GOOS
 	b.result.StartAt = time.Now()
 
 	if util.IsEmptyString(b.workspace) {

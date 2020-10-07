@@ -69,7 +69,7 @@ func main() {
 
 		cli.StringFlag{
 			Name:   "workspace, w",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
+			Value:  filepath.Join(util.HomeDir, ".flow.ci.agent"),
 			Usage:  "Agent working directory",
 			EnvVar: domain.VarAgentWorkspace,
 		},

@@ -21,16 +21,20 @@ func matchEnvFilter(env string, filters []string) bool {
 	return false
 }
 
-func appendNewLine(script string, inDocker bool) string {
-	if inDocker {
-		if !strings.HasSuffix(script, util.UnixNewLine) {
-			script += util.UnixNewLine
-		}
-		return script
+func newLineForOs(os string) string {
+	if os == util.OSWin {
+		return util.WinNewLine
 	}
 
-	if !strings.HasSuffix(script, util.NewLine) {
-		script += util.NewLine
+	return util.UnixNewLine
+}
+
+func appendNewLine(script, os string) string {
+	newLine := newLineForOs(os)
+
+	if !strings.HasSuffix(script, newLine) {
+		script += newLine
 	}
+
 	return script
 }

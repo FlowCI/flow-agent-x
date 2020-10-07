@@ -12,8 +12,10 @@ import (
 
 const (
 	UnixNewLine = "\n"
-	LineBreak   = '\n'
-	EmptyStr    = ""
+	WinNewLine  = "\r\n"
+
+	LineBreak = '\n'
+	EmptyStr  = ""
 
 	OSWin   = "windows"
 	OSLinux = "linux"
@@ -21,13 +23,11 @@ const (
 )
 
 var (
-	NewLine = "\n"
+	HomeDir = ""
 )
 
 func init() {
-	if IsWindows() {
-		NewLine = "\r\n"
-	}
+	HomeDir, _ = os.UserHomeDir()
 }
 
 func OS() string {
