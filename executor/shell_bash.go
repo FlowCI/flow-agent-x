@@ -66,7 +66,7 @@ func (b *shellExecutor) Start() (out error) {
 	b.writeLog(stderr, true, true)
 	b.writeCmd(stdin, b.setupBin, b.writeEnv, func(script string) string {
 		return script
-	})
+	}, false)
 	b.toStartStatus(command.Process.Pid)
 
 	// wait or timeout

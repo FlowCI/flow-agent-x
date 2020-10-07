@@ -13,7 +13,6 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -310,7 +309,7 @@ func (d *DockerExecutor) initConfig() {
 	}
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
+	d.workDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
@@ -538,7 +537,7 @@ func (d *DockerExecutor) runShell() string {
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true, true)
-	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript, true)
 
 	return exec.ID
 }

@@ -160,9 +160,9 @@ func (b *BaseExecutor) isK8sEnabled() bool {
 	return b.k8sConfig != nil && b.k8sConfig.Enabled
 }
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string, inDocker bool) {
 	write := func(script string) {
-		_, _ = io.WriteString(stdin, appendNewLine(script))
+		_, _ = io.WriteString(stdin, appendNewLine(script, inDocker))
 		util.LogDebug("----- exec: %s", script)
 	}
 
@@ -257,6 +257,10 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for inputStr := range b.ttyIn {
+		if inputStr == "\r" {
+			inputStr = util.NewLine
+		}
+
 		in := []byte(inputStr)
 		_, err := writer.Write(in)
 

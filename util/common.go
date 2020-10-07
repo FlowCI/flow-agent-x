@@ -11,8 +11,9 @@ import (
 )
 
 const (
-	LineBreak = '\n'
-	EmptyStr  = ""
+	UnixNewLine = "\n"
+	LineBreak   = '\n'
+	EmptyStr    = ""
 
 	OSWin   = "windows"
 	OSLinux = "linux"
