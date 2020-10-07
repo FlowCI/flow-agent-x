@@ -80,7 +80,10 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.Shell
 func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = false
-	cmd.Scripts = []string{"notCommand should exit with error"}
+	cmd.Scripts = []string{
+		"notCommand should exit with error",
+		"echo should_not_printed",
+	}
 
 	// when:
 	executor := newExecutor(cmd, false)
@@ -94,7 +97,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// then:
 	result := executor.GetResult()
 	assert.True(result.LogSize > 0)
-	assert.Equal(127, result.Code)
+	assert.True(result.Code != 0)
 	assert.Equal(domain.CmdStatusException, result.Status)
 	assert.NotNil(result.FinishAt)
 }

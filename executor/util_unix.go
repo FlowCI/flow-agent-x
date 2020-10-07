@@ -2,6 +2,14 @@
 
 package executor
 
+import (
+	"bufio"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
+	"io"
+	"strings"
+)
+
 func scriptForExitOnError() []string {
 	return []string{"set -e"}
 }

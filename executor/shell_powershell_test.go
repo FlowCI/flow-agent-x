@@ -8,11 +8,17 @@ import (
 	"testing"
 )
 
-func TestPowerShellShouldExecuteCmd(t *testing.T) {
+func TestShouldExecInPowerShell(t *testing.T) {
 	assert := assert.New(t)
 
 	cmdIn := createPowerShellTestCmd()
 	shouldExecCmd(assert, cmdIn)
+}
+
+func TestShouldExecWithErrorInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+	cmd := createPowerShellTestCmd()
+	shouldExecWithError(assert, cmd)
 }
 
 func createPowerShellTestCmd() *domain.ShellIn {

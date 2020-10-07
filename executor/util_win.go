@@ -8,7 +8,6 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io"
-	"os/exec"
 	"strings"
 )
 
@@ -18,18 +17,8 @@ var (
 	winNUL       = []byte{0}
 )
 
-func createCommand() (*exec.Cmd, error) {
-	path, err := exec.LookPath(winPowerShell)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return exec.Command(path, []string{"-NoProfile", "-NonInteractive"}...), nil
-}
-
 func scriptForExitOnError() []string {
-	return []string{"Set-StrictMode -Version Latest", "$ErrorActionPreference = \"Stop\""}
+	return []string{"$ErrorActionPreference = \"Stop\""}
 }
 
 func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
@@ -56,7 +45,6 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 			}
 
 			strLine := util.UTF16BytesToString(line, binary.BigEndian)
-			util.LogDebug(strLine)
 
 			if ok, key, val := getEnvKeyAndVal(strLine); ok {
 				if matchEnvFilter(key, filters) {

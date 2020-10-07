@@ -495,7 +495,9 @@ func (d *DockerExecutor) runShell() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	setupContainerIpAndBin := func(in chan string) {
+	setupContainerIpAndBin := func() []string {
+		var scripts []string
+
 		for i, c := range d.configs {
 			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
 			address := inspect.NetworkSettings.IPAddress
@@ -507,23 +509,26 @@ func (d *DockerExecutor) runShell() string {
 				address = address[:len(address)-1]
 			}
 
-			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
-			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
+			scripts = append(scripts, fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID))
+			scripts = append(scripts, fmt.Sprintf(domain.VarExportContainerIpPattern, i, address))
 		}
 
-		in <- fmt.Sprintf("mkdir -p %s", dockerBin)
-		in <- fmt.Sprintf("export PATH=%s:$PATH", dockerBin)
+		scripts = append(scripts, fmt.Sprintf("mkdir -p %s", dockerBin))
+		scripts = append(scripts, fmt.Sprintf("export PATH=%s:$PATH", dockerBin))
 
 		for _, f := range binFiles {
 			path := dockerBin + "/" + f.name
 			b64 := base64.StdEncoding.EncodeToString(f.content)
-			in <- fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path)
-			in <- fmt.Sprintf("chmod %s %s", f.permissionStr, path)
+
+			scripts = append(scripts, fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path))
+			scripts = append(scripts, fmt.Sprintf("chmod %s %s", f.permissionStr, path))
 		}
+
+		return scripts
 	}
 
-	writeEnvAfter := func(in chan string) {
-		in <- "env > " + dockerEnvFile
+	writeEnvAfter := func() []string {
+		return []string{"env > " + dockerEnvFile}
 	}
 
 	doScript := func(script string) string {

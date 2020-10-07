@@ -7,9 +7,88 @@ import (
 	"fmt"
 	"github.com/creack/pty"
 	"github/flowci/flow-agent-x/util"
+	"io/ioutil"
 	"os"
 	"os/exec"
 )
+
+// Start run the cmd from domain.CmdIn
+func (b *shellExecutor) Start() (out error) {
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+			b.handleErrors(out)
+		}
+
+		b.closeChannels()
+	}()
+
+	// init wait group fro StdOut and StdErr
+	b.stdOutWg.Add(2)
+
+	command := exec.Command(linuxBash)
+	command.Dir = b.workDir
+	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
+
+	stdin, err := command.StdinPipe()
+	util.PanicIfErr(err)
+
+	stdout, err := command.StdoutPipe()
+	util.PanicIfErr(err)
+
+	stderr, err := command.StderrPipe()
+	util.PanicIfErr(err)
+
+	defer func() {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+	}()
+
+	b.command = command
+
+	// handle context error
+	go func() {
+		<-b.context.Done()
+		err := b.context.Err()
+
+		if err != nil {
+			b.handleErrors(err)
+		}
+	}()
+
+	// start command
+	if err := command.Start(); err != nil {
+		return b.toErrorStatus(err)
+	}
+
+	b.writeLog(stdout, true, true)
+	b.writeLog(stderr, true, true)
+	b.writeCmd(stdin, b.setupBin, b.writeEnv, func(script string) string {
+		return script
+	})
+	b.toStartStatus(command.Process.Pid)
+
+	// wait or timeout
+	_ = command.Wait()
+	util.LogDebug("[Done]: Shell for %s", b.inCmd.ID)
+
+	b.exportEnv()
+
+	// wait for tty if it's running
+	if b.IsInteracting() {
+		util.LogDebug("Tty is running, wait..")
+		<-b.ttyCtx.Done()
+	}
+
+	if b.result.IsFinishStatus() {
+		return nil
+	}
+
+	// to finish status
+	b.toFinishStatus(getExitCode(command))
+	return b.context.Err()
+}
 
 func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
@@ -52,17 +131,16 @@ func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (ou
 	return
 }
 
-func (b *shellExecutor) setupBin(in chan string) {
-	in <- fmt.Sprintf("export PATH=%s:$PATH", b.binDir)
+func (b *shellExecutor) setupBin() []string {
+	return []string{fmt.Sprintf("export PATH=%s:$PATH", b.binDir)}
 }
 
-func (b *shellExecutor) writeEnv(in chan string) {
+func (b *shellExecutor) writeEnv() []string {
 	tmpFile, err := ioutil.TempFile("", "agent_env_")
 	util.PanicIfErr(err)
 
 	defer tmpFile.Close()
 
-	in <- "env > " + tmpFile.Name()
 	b.envFile = tmpFile.Name()
-
+	return []string{"env > " + tmpFile.Name()}
 }
