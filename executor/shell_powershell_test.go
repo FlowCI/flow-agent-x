@@ -21,6 +21,24 @@ func TestShouldExecWithErrorInPowerShell(t *testing.T) {
 	shouldExecWithError(assert, cmd)
 }
 
+func TestShouldExecWithErrorButAllowFailureInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+	cmd := createPowerShellTestCmd()
+	shouldExecWithErrorButAllowFailure(assert, cmd)
+}
+
+func TestShouldExecButTimeoutInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+	cmd := createPowerShellTestCmd()
+	shouldExecButTimeOut(assert, cmd)
+}
+
+func TestShouldExitByKillInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+	cmd := createPowerShellTestCmd()
+	shouldExecButKilled(assert, cmd)
+}
+
 func createPowerShellTestCmd() *domain.ShellIn {
 	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{
@@ -28,7 +46,8 @@ func createPowerShellTestCmd() *domain.ShellIn {
 		},
 		ID: "1-1-1",
 		Scripts: []string{
-			"echo ${home}",
+			"echo bbb",
+			"sleep 5",
 			"$env:FLOW_VVV=\"flowci\"",
 			"$env:FLOW_AAA=\"flow...\"",
 		},

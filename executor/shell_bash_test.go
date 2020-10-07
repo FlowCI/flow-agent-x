@@ -37,13 +37,13 @@ func TestShouldExecWithErrorButAllowFailureInBash(t *testing.T) {
 	shouldExecWithErrorButAllowFailure(assert, cmd)
 }
 
-func TestShouldExecButTimeout(t *testing.T) {
+func TestShouldExecButTimeoutInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
 	shouldExecButTimeOut(assert, cmd)
 }
 
-func TestShouldExitByKill(t *testing.T) {
+func TestShouldExitByKillInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
 	shouldExecButKilled(assert, cmd)
