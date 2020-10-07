@@ -3,8 +3,10 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"github/flowci/flow-agent-x/util"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -89,7 +91,60 @@ func (b *shellExecutor) Start() (out error) {
 }
 
 func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
-	return nil
+	defer func() {
+		if err := recover(); err != nil {
+			out = err.(error)
+		}
+
+		b.tty = nil
+		b.ttyId = ""
+	}()
+
+	if b.IsInteracting() {
+		panic(fmt.Errorf("interaction is ongoning"))
+	}
+
+	path, err := exec.LookPath(winPowerShell)
+	util.PanicIfErr(err)
+
+	c := exec.Command(path, "-NoLogo", "-NoProfile")
+	c.Dir = b.workDir
+	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
+
+	stdin, err := c.StdinPipe()
+	util.PanicIfErr(err)
+
+	stdout, err := c.StdoutPipe()
+	util.PanicIfErr(err)
+
+	stderr, err := c.StderrPipe()
+	util.PanicIfErr(err)
+
+	b.tty = c
+	b.ttyId = ttyId
+	b.ttyCtx, b.ttyCancel = context.WithCancel(b.context)
+
+	defer func() {
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
+
+		b.ttyCancel()
+		b.ttyCtx = nil
+		b.ttyCancel = nil
+	}()
+
+	if err := c.Start(); err != nil {
+		return b.toErrorStatus(err)
+	}
+
+	onStarted(ttyId)
+
+	go b.writeTtyIn(stdin)
+	go b.writeTtyOut(io.MultiReader(stdout, stderr))
+
+	_ = c.Wait()
+	return
 }
 
 func (b *shellExecutor) setupBin() []string {

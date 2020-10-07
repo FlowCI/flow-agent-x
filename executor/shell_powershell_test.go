@@ -3,9 +3,12 @@
 package executor
 
 import (
+	"encoding/base64"
 	"github.com/stretchr/testify/assert"
 	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 	"testing"
+	"time"
 )
 
 func TestShouldExecInPowerShell(t *testing.T) {
@@ -37,6 +40,45 @@ func TestShouldExitByKillInPowerShell(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createPowerShellTestCmd()
 	shouldExecButKilled(assert, cmd)
+}
+
+func TestShouldStartTtyInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+
+	executor := newExecutor(&domain.ShellIn{
+		ID:     "test111",
+		FlowId: "test111",
+		Scripts: []string{
+			"echo hello",
+		},
+		Timeout: 9999,
+	}, false)
+
+	go func() {
+		for {
+			log, ok := <-executor.TtyOut()
+			if !ok {
+				return
+			}
+
+			content, _ := base64.StdEncoding.DecodeString(log)
+			util.LogDebug("------ %s", content)
+		}
+	}()
+
+	go func() {
+		time.Sleep(2 * time.Second)
+		executor.TtyIn() <- "cd ~/\r\n"
+		executor.TtyIn() <- "ls\r\n"
+		time.Sleep(2 * time.Second)
+		executor.TtyIn() <- "exit\r\n"
+	}()
+
+	err := executor.StartTty("fakeId", func(ttyId string) {
+		util.LogDebug("Tty Started")
+	})
+	assert.NoError(err)
+	assert.False(executor.IsInteracting())
 }
 
 func createPowerShellTestCmd() *domain.ShellIn {

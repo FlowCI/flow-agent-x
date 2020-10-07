@@ -270,16 +270,11 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 	buf := make([]byte, defaultReaderBufferSize)
 	for {
-		select {
-		case <-b.ttyCtx.Done():
+		n, err := reader.Read(buf)
+		if err != nil {
 			return
-		default:
-			n, err := reader.Read(buf)
-			if err != nil {
-				return
-			}
-			b.ttyOut <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 		}
+		b.ttyOut <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 	}
 }
 
