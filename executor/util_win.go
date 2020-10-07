@@ -1,5 +1,3 @@
-// +build windows
-
 package executor
 
 import (
@@ -17,11 +15,7 @@ var (
 	winNUL       = []byte{0}
 )
 
-func scriptForExitOnError() []string {
-	return []string{"$ErrorActionPreference = \"Stop\""}
-}
-
-func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
+func readEnvFromReaderForWin(r io.Reader, filters []string) domain.Variables {
 	reader := bufio.NewReaderSize(r, 1024*8)
 	output := domain.NewVariables()
 	process := false
@@ -46,7 +40,7 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 
 			strLine := util.UTF16BytesToString(line, binary.BigEndian)
 
-			if ok, key, val := getEnvKeyAndVal(strLine); ok {
+			if ok, key, val := getEnvKeyAndValForWin(strLine); ok {
 				if matchEnvFilter(key, filters) {
 					output[key] = val
 				}
@@ -55,7 +49,7 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 	}
 }
 
-func getEnvKeyAndVal(line string) (ok bool, key, val string) {
+func getEnvKeyAndValForWin(line string) (ok bool, key, val string) {
 	index := strings.IndexByte(line, ' ')
 	if index == -1 {
 		ok = false

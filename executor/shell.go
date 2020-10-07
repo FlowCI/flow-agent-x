@@ -73,7 +73,7 @@ func (b *shellExecutor) exportEnv() {
 	}
 
 	defer file.Close()
-	b.result.Output = readEnvFromReader(file, b.inCmd.EnvFilters)
+	b.result.Output = readEnvFromReader(b.os, file, b.inCmd.EnvFilters)
 }
 
 func (b *shellExecutor) handleErrors(err error) {

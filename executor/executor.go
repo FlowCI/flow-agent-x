@@ -188,7 +188,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, 
 	}
 
 	// write shell script from cmd
-	for _, script := range scriptForExitOnError() {
+	for _, script := range scriptForExitOnError(b.os) {
 		write(script)
 	}
 

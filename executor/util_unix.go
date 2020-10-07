@@ -1,5 +1,3 @@
-// +build !windows
-
 package executor
 
 import (
@@ -10,11 +8,7 @@ import (
 	"strings"
 )
 
-func scriptForExitOnError() []string {
-	return []string{"set -e"}
-}
-
-func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
+func readEnvFromReaderForUnix(r io.Reader, filters []string) domain.Variables {
 	reader := bufio.NewReader(r)
 	output := domain.NewVariables()
 
@@ -25,7 +19,7 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 		}
 
 		line = strings.TrimSpace(line)
-		if ok, key, val := getEnvKeyAndVal(line); ok {
+		if ok, key, val := getEnvKeyAndValForUnix(line); ok {
 			if matchEnvFilter(key, filters) {
 				output[key] = val
 			}
@@ -33,7 +27,7 @@ func readEnvFromReader(r io.Reader, filters []string) domain.Variables {
 	}
 }
 
-func getEnvKeyAndVal(line string) (ok bool, key, val string) {
+func getEnvKeyAndValForUnix(line string) (ok bool, key, val string) {
 	index := strings.IndexAny(line, "=")
 	if index == -1 {
 		ok = false

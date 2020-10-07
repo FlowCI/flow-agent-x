@@ -1,7 +1,9 @@
 package executor
 
 import (
+	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -21,12 +23,12 @@ func matchEnvFilter(env string, filters []string) bool {
 	return false
 }
 
-func newLineForOs(os string) string {
+func scriptForExitOnError(os string) []string {
 	if os == util.OSWin {
-		return util.WinNewLine
+		return []string{"$ErrorActionPreference = \"Stop\""}
 	}
 
-	return util.UnixNewLine
+	return []string{"set -e"}
 }
 
 func appendNewLine(script, os string) string {
@@ -37,4 +39,20 @@ func appendNewLine(script, os string) string {
 	}
 
 	return script
+}
+
+func newLineForOs(os string) string {
+	if os == util.OSWin {
+		return util.WinNewLine
+	}
+
+	return util.UnixNewLine
+}
+
+func readEnvFromReader(os string, r io.Reader, filters []string) domain.Variables {
+	if os == util.OSWin {
+		return readEnvFromReaderForWin(r,filters)
+	}
+
+	return readEnvFromReaderForUnix(r, filters)
 }

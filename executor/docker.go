@@ -566,7 +566,7 @@ func (d *dockerExecutor) exportEnv() {
 	}
 
 	defer reader.Close()
-	d.result.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
+	d.result.Output = readEnvFromReader(d.os, reader, d.inCmd.EnvFilters)
 }
 
 func (d *dockerExecutor) cleanupContainer() {
