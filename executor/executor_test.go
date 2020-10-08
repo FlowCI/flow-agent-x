@@ -34,12 +34,14 @@ func newExecutor(cmd *domain.ShellIn, k8s bool) Executor {
 	app := config.GetInstance()
 
 	options := Options{
-		K8sEnabled: k8s,
-		K8sCluster: false,
-		Parent:     ctx,
-		Workspace:  app.Workspace,
-		PluginDir:  app.PluginDir,
-		Cmd:        cmd,
+		K8s: &domain.K8sConfig{
+			Enabled:   k8s,
+			InCluster: false,
+		},
+		Parent:    ctx,
+		Workspace: app.Workspace,
+		PluginDir: app.PluginDir,
+		Cmd:       cmd,
 		Volumes: []*domain.DockerVolume{
 			{
 				Name:   "pyenv",
@@ -78,7 +80,10 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.Shell
 func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = false
-	cmd.Scripts = []string{"notCommand should exit with error"}
+	cmd.Scripts = []string{
+		"notCommand should exit with error",
+		"echo should_not_printed",
+	}
 
 	// when:
 	executor := newExecutor(cmd, false)
@@ -92,7 +97,7 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// then:
 	result := executor.GetResult()
 	assert.True(result.LogSize > 0)
-	assert.Equal(127, result.Code)
+	assert.True(result.Code != 0)
 	assert.Equal(domain.CmdStatusException, result.Status)
 	assert.NotNil(result.FinishAt)
 }
@@ -114,7 +119,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 	// then:
 	result := executor.GetResult()
 	assert.True(result.LogSize > 0)
-	assert.Equal(127, result.Code)
+	assert.True(result.Code != 0)
 	assert.Equal(domain.CmdStatusSuccess, result.Status)
 	assert.NotNil(result.FinishAt)
 }
@@ -122,7 +127,7 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Timeout = 5
-	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
+	cmd.Scripts = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
 
 	// when:
 	executor := newExecutor(cmd, false)
@@ -143,7 +148,7 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 
 func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
-	cmd.Scripts = []string{"echo $HOME", "sleep 9999", "echo ...."}
+	cmd.Scripts = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
 
 	// when:
 	executor := newExecutor(cmd, false)

@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/binary"
 	"os/user"
 	"reflect"
 	"testing"
@@ -34,5 +35,14 @@ func TestShouldParseStringWithEnvVariable(t *testing.T) {
 	assert.Equal(usr.HomeDir+"/hello", ParseString("${HOME}/hello"))
 	assert.Equal("/test"+usr.HomeDir+"/hello", ParseString("/test${HOME}/hello"))
 	assert.Equal(usr.HomeDir+usr.HomeDir, ParseString("${HOME}${HOME}"))
+}
 
+func TestShouldDecodeUTF16(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal("-", UTF16BytesToString([]byte{0, 45}, binary.BigEndian))
+}
+
+func TestShouldTrimLeftBytes(t *testing.T) {
+	assert := assert.New(t)
+	assert.Equal([]byte{0, 1, 2}, BytesTrimLeft([]byte{0, 1, 2, 3, 4}, []byte{3, 4}))
 }

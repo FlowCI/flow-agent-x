@@ -1,3 +1,5 @@
+// +build windows
+
 package executor
 
 import (
@@ -9,45 +11,38 @@ import (
 	"time"
 )
 
-func init() {
-	util.EnableDebugLog()
+func TestShouldExecInPowerShell(t *testing.T) {
+	assert := assert.New(t)
+
+	cmdIn := createPowerShellTestCmd()
+	shouldExecCmd(assert, cmdIn)
 }
 
-func TestShouldExecInBash(t *testing.T) {
+func TestShouldExecWithErrorInPowerShell(t *testing.T) {
 	assert := assert.New(t)
-	cmd := createBashTestCmd()
-	//
-	//ok, _ := hasPyenv()
-	//assert.True(ok)
-
-	shouldExecCmd(assert, cmd)
-}
-
-func TestShouldExecWithErrorInBash(t *testing.T) {
-	assert := assert.New(t)
-	cmd := createBashTestCmd()
+	cmd := createPowerShellTestCmd()
 	shouldExecWithError(assert, cmd)
 }
 
-func TestShouldExecWithErrorButAllowFailureInBash(t *testing.T) {
+func TestShouldExecWithErrorButAllowFailureInPowerShell(t *testing.T) {
 	assert := assert.New(t)
-	cmd := createBashTestCmd()
+	cmd := createPowerShellTestCmd()
 	shouldExecWithErrorButAllowFailure(assert, cmd)
 }
 
-func TestShouldExecButTimeout(t *testing.T) {
+func TestShouldExecButTimeoutInPowerShell(t *testing.T) {
 	assert := assert.New(t)
-	cmd := createBashTestCmd()
+	cmd := createPowerShellTestCmd()
 	shouldExecButTimeOut(assert, cmd)
 }
 
-func TestShouldExitByKill(t *testing.T) {
+func TestShouldExitByKillInPowerShell(t *testing.T) {
 	assert := assert.New(t)
-	cmd := createBashTestCmd()
+	cmd := createPowerShellTestCmd()
 	shouldExecButKilled(assert, cmd)
 }
 
-func TestShouldStartBashInteract(t *testing.T) {
+func TestShouldStartTtyInPowerShell(t *testing.T) {
 	assert := assert.New(t)
 
 	executor := newExecutor(&domain.ShellIn{
@@ -73,10 +68,10 @@ func TestShouldStartBashInteract(t *testing.T) {
 
 	go func() {
 		time.Sleep(2 * time.Second)
-		executor.TtyIn() <- "cd ~/\n"
-		executor.TtyIn() <- "ls -l\n"
+		executor.TtyIn() <- "cd ~/\r\n"
+		executor.TtyIn() <- "ls\r\n"
 		time.Sleep(2 * time.Second)
-		executor.TtyIn() <- string([]byte{4})
+		executor.TtyIn() <- "exit\r\n"
 	}()
 
 	err := executor.StartTty("fakeId", func(ttyId string) {
@@ -86,19 +81,17 @@ func TestShouldStartBashInteract(t *testing.T) {
 	assert.False(executor.IsInteracting())
 }
 
-func createBashTestCmd() *domain.ShellIn {
+func createPowerShellTestCmd() *domain.ShellIn {
 	return &domain.ShellIn{
 		CmdIn: domain.CmdIn{
 			Type: domain.CmdTypeShell,
 		},
 		ID: "1-1-1",
 		Scripts: []string{
-			"set -e",
 			"echo bbb",
 			"sleep 5",
-			">&2 echo $INPUT_VAR",
-			"export FLOW_VVV=flowci",
-			"export FLOW_AAA=flow...",
+			"$env:FLOW_VVV=\"flowci\"",
+			"$env:FLOW_AAA=\"flow...\"",
 		},
 		Inputs:     domain.Variables{"INPUT_VAR": "aaa"},
 		Timeout:    1800,
