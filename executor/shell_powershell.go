@@ -179,7 +179,7 @@ func (b *shellExecutor) writeScriptToTmpFile() string {
 		return script
 	}
 
-	b.writeCmd(file, b.setupBin, b.writeEnv, doScript, false)
+	b.writeCmd(file, b.setupBin, b.writeEnv, doScript)
 
 	_ = file.Close()
 	return file.Name()

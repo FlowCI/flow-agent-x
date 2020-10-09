@@ -159,7 +159,7 @@ func printInfo() {
 func execCmd(script string) {
 	cmd := &domain.ShellIn{
 		ID:      "local",
-		Scripts: []string{script},
+		Bash:    []string{script},
 		Inputs:  domain.Variables{},
 		Timeout: 1800,
 	}
