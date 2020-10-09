@@ -55,7 +55,7 @@ func TestShouldStartBashInteract(t *testing.T) {
 	executor := newExecutor(&domain.ShellIn{
 		ID:     "test111",
 		FlowId: "test111",
-		Scripts: []string{
+		Bash: []string{
 			"echo hello",
 		},
 		Timeout: 9999,
@@ -94,7 +94,7 @@ func createBashTestCmd() *domain.ShellIn {
 			Type: domain.CmdTypeShell,
 		},
 		ID: "1-1-1",
-		Scripts: []string{
+		Bash: []string{
 			"set -e",
 			"echo bbb",
 			"sleep 5",

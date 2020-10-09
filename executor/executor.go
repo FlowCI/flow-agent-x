@@ -164,7 +164,7 @@ func (b *BaseExecutor) isK8sEnabled() bool {
 	return b.k8sConfig != nil && b.k8sConfig.Enabled
 }
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string, inDocker bool) {
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string) {
 	write := func(script string) {
 		_, _ = io.WriteString(stdin, appendNewLine(script, b.os))
 		util.LogDebug("----- exec: %s", script)
@@ -192,7 +192,7 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, 
 		write(script)
 	}
 
-	for _, script := range b.inCmd.Scripts {
+	for _, script := range b.getScripts() {
 		write(doScript(script))
 	}
 
@@ -203,6 +203,19 @@ func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, 
 	}
 
 	write("exit")
+}
+
+func (b *BaseExecutor) getScripts() []string {
+	scripts := b.inCmd.Bash
+	if b.os == util.OSWin {
+		scripts = b.inCmd.Pwsh
+	}
+
+	if len(scripts) == 0 {
+		panic(fmt.Errorf("agent: the cmd missing shell script"))
+	}
+
+	return scripts
 }
 
 func (b *BaseExecutor) closeChannels() {

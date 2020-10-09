@@ -540,7 +540,7 @@ func (d *dockerExecutor) runShell() string {
 	_, _ = attach.Conn.Write([]byte(writeShellPid))
 
 	d.writeLog(attach.Reader, true, true)
-	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript, true)
+	d.writeCmd(attach.Conn, setupContainerIpAndBin, writeEnvAfter, doScript)
 
 	return exec.ID
 }

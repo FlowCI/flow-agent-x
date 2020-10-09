@@ -80,7 +80,11 @@ func shouldExecCmd(assert *assert.Assertions, cmd *domain.ShellIn) *domain.Shell
 func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = false
-	cmd.Scripts = []string{
+	cmd.Bash = []string{
+		"notCommand should exit with error",
+		"echo should_not_printed",
+	}
+	cmd.Pwsh = []string{
 		"notCommand should exit with error",
 		"echo should_not_printed",
 	}
@@ -105,7 +109,8 @@ func shouldExecWithError(assert *assert.Assertions, cmd *domain.ShellIn) {
 func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.AllowFailure = true
-	cmd.Scripts = []string{"notCommand should exit with error"}
+	cmd.Bash = []string{"notCommand should exit with error"}
+	cmd.Pwsh = []string{"notCommand should exit with error"}
 
 	// when:
 	executor := newExecutor(cmd, false)
@@ -127,7 +132,8 @@ func shouldExecWithErrorButAllowFailure(assert *assert.Assertions, cmd *domain.S
 func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
 	cmd.Timeout = 5
-	cmd.Scripts = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
+	cmd.Bash = []string{"echo $HOME", "sleep 9999", "echo ...."}
+	cmd.Pwsh = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
 
 	// when:
 	executor := newExecutor(cmd, false)
@@ -148,7 +154,8 @@ func shouldExecButTimeOut(assert *assert.Assertions, cmd *domain.ShellIn) {
 
 func shouldExecButKilled(assert *assert.Assertions, cmd *domain.ShellIn) {
 	// init:
-	cmd.Scripts = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
+	cmd.Bash = []string{"echo $HOME", "sleep 9999", "echo ...."}
+	cmd.Pwsh = []string{"echo ${HOME}", "sleep 9999", "echo ...."}
 
 	// when:
 	executor := newExecutor(cmd, false)
