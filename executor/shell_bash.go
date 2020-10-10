@@ -45,16 +45,6 @@ func (se *shellExecutor) doStart() (out error) {
 
 	se.command = command
 
-	// handle context error
-	go func() {
-		<-se.context.Done()
-		err := se.context.Err()
-
-		if err != nil {
-			se.handleErrors(err)
-		}
-	}()
-
 	// start command
 	if err := command.Start(); err != nil {
 		return se.toErrorStatus(err)

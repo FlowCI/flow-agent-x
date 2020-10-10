@@ -84,12 +84,14 @@ func (d *dockerExecutor) Start() (out error) {
 		out = d.doStart()
 		r := d.result
 
-		if out == nil && r.Status != domain.CmdStatusException {
+		if r.Status == domain.CmdStatusException || out != nil {
 			if i > 0 {
 				d.writeSingleLog(">>>>>>> retry >>>>>>>")
 			}
 			continue
 		}
+
+		break
 	}
 	return
 }

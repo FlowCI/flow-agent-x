@@ -53,6 +53,16 @@ func (se *shellExecutor) Init() (err error) {
 }
 
 func (se *shellExecutor) Start() (out error) {
+	// handle context error
+	go func() {
+		<-se.context.Done()
+		err := se.context.Err()
+
+		if err != nil {
+			se.handleErrors(err)
+		}
+	}()
+
 	for i := se.inCmd.Retry; i >= 0; i-- {
 		out = se.doStart()
 		r := se.result
@@ -63,6 +73,8 @@ func (se *shellExecutor) Start() (out error) {
 			}
 			continue
 		}
+
+		break
 	}
 	return
 }
