@@ -101,6 +101,7 @@ func (s *CmdService) start() {
 func (s *CmdService) release() {
 	if s.executor != nil {
 		s.executor.Close()
+		s.executor = nil
 	}
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
