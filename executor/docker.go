@@ -374,6 +374,8 @@ func (d *dockerExecutor) handleErrors(err error) error {
 		_ = d.runSingleScript(killTty)
 	}
 
+	util.LogWarn("handleError on docker: %s", err.Error())
+
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		kill()

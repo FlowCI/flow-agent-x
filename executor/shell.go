@@ -114,6 +114,8 @@ func (se *shellExecutor) handleErrors(err error) {
 		}
 	}
 
+	util.LogWarn("handleError on shell: %s", err.Error())
+
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		kill()
