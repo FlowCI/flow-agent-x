@@ -80,13 +80,27 @@ func (d *dockerExecutor) Init() (out error) {
 }
 
 func (d *dockerExecutor) Start() (out error) {
+	for i := d.inCmd.Retry; i >= 0; i-- {
+		out = d.doStart()
+		r := d.result
+
+		if out == nil && r.Status != domain.CmdStatusException {
+			if i > 0 {
+				d.writeSingleLog(">>>>>>> retry >>>>>>>")
+			}
+			continue
+		}
+	}
+	return
+}
+
+func (d *dockerExecutor) doStart() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = d.handleErrors(err.(error))
 		}
 
 		d.cleanupContainer()
-		d.closeChannels()
 	}()
 
 	// one for pull image output, and one for cmd output

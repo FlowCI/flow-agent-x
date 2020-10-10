@@ -13,22 +13,20 @@ import (
 )
 
 // Start run the cmd from domain.CmdIn
-func (b *shellExecutor) Start() (out error) {
+func (se *shellExecutor) doStart() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-			b.handleErrors(out)
+			se.handleErrors(out)
 		}
-
-		b.closeChannels()
 	}()
 
 	// init wait group fro StdOut and StdErr
-	b.stdOutWg.Add(2)
+	se.stdOutWg.Add(2)
 
 	command := exec.Command(linuxBash)
-	command.Dir = b.workDir
-	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
+	command.Dir = se.workDir
+	command.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	stdin, err := command.StdinPipe()
 	util.PanicIfErr(err)
@@ -45,102 +43,102 @@ func (b *shellExecutor) Start() (out error) {
 		_ = stderr.Close()
 	}()
 
-	b.command = command
+	se.command = command
 
 	// handle context error
 	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
+		<-se.context.Done()
+		err := se.context.Err()
 
 		if err != nil {
-			b.handleErrors(err)
+			se.handleErrors(err)
 		}
 	}()
 
 	// start command
 	if err := command.Start(); err != nil {
-		return b.toErrorStatus(err)
+		return se.toErrorStatus(err)
 	}
 
-	b.writeLog(stdout, true, true)
-	b.writeLog(stderr, true, true)
-	b.writeCmd(stdin, b.setupBin, b.writeEnv, func(script string) string {
+	se.writeLog(stdout, true, true)
+	se.writeLog(stderr, true, true)
+	se.writeCmd(stdin, se.setupBin, se.writeEnv, func(script string) string {
 		return script
 	})
-	b.toStartStatus(command.Process.Pid)
+	se.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
 	_ = command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.inCmd.ID)
+	util.LogDebug("[Done]: Shell for %s", se.inCmd.ID)
 
-	b.exportEnv()
+	se.exportEnv()
 
 	// wait for tty if it's running
-	if b.IsInteracting() {
+	if se.IsInteracting() {
 		util.LogDebug("Tty is running, wait..")
-		<-b.ttyCtx.Done()
+		<-se.ttyCtx.Done()
 	}
 
-	if b.result.IsFinishStatus() {
+	if se.result.IsFinishStatus() {
 		return nil
 	}
 
 	// to finish status
-	b.toFinishStatus(getExitCode(command))
-	return b.context.Err()
+	se.toFinishStatus(getExitCode(command))
+	return se.context.Err()
 }
 
-func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+func (se *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 
-		b.tty = nil
-		b.ttyId = ""
+		se.tty = nil
+		se.ttyId = ""
 	}()
 
-	if b.IsInteracting() {
+	if se.IsInteracting() {
 		panic(fmt.Errorf("interaction is ongoning"))
 	}
 
 	c := exec.Command(linuxBash)
-	c.Dir = b.workDir
-	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
+	c.Dir = se.workDir
+	c.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	ptmx, err := pty.Start(c)
 	util.PanicIfErr(err)
 
-	b.tty = c
-	b.ttyId = ttyId
-	b.ttyCtx, b.ttyCancel = context.WithCancel(b.context)
+	se.tty = c
+	se.ttyId = ttyId
+	se.ttyCtx, se.ttyCancel = context.WithCancel(se.context)
 
 	defer func() {
 		_ = ptmx.Close()
-		b.ttyCancel()
-		b.ttyCtx = nil
-		b.ttyCancel = nil
+		se.ttyCancel()
+		se.ttyCtx = nil
+		se.ttyCancel = nil
 	}()
 
 	onStarted(ttyId)
 
-	go b.writeTtyIn(ptmx)
-	go b.writeTtyOut(ptmx)
+	go se.writeTtyIn(ptmx)
+	go se.writeTtyOut(ptmx)
 
 	_ = c.Wait()
 	return
 }
 
-func (b *shellExecutor) setupBin() []string {
-	return []string{fmt.Sprintf("export PATH=%s:$PATH", b.binDir)}
+func (se *shellExecutor) setupBin() []string {
+	return []string{fmt.Sprintf("export PATH=%s:$PATH", se.binDir)}
 }
 
-func (b *shellExecutor) writeEnv() []string {
+func (se *shellExecutor) writeEnv() []string {
 	tmpFile, err := ioutil.TempFile("", "agent_env_")
 	util.PanicIfErr(err)
 
 	defer tmpFile.Close()
 
-	b.envFile = tmpFile.Name()
+	se.envFile = tmpFile.Name()
 	return []string{"env > " + tmpFile.Name()}
 }

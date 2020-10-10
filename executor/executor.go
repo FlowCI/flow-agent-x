@@ -45,6 +45,8 @@ type Executor interface {
 
 	Kill()
 
+	Close()
+
 	GetResult() *domain.ShellOut
 }
 
@@ -156,6 +158,16 @@ func (b *BaseExecutor) Kill() {
 	b.cancelFunc()
 }
 
+func (b *BaseExecutor) Close() {
+	if len(b.stdout) > 0 {
+		util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
+	}
+
+	close(b.stdout)
+	close(b.ttyIn)
+	close(b.ttyOut)
+}
+
 //====================================================================
 //	private
 //====================================================================
@@ -216,17 +228,6 @@ func (b *BaseExecutor) getScripts() []string {
 	}
 
 	return scripts
-}
-
-func (b *BaseExecutor) closeChannels() {
-	if len(b.stdout) > 0 {
-		util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
-	}
-
-	close(b.stdout)
-
-	close(b.ttyIn)
-	close(b.ttyOut)
 }
 
 func (b *BaseExecutor) writeLog(src io.Reader, inThread, doneOnWaitGroup bool) {

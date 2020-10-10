@@ -23,38 +23,53 @@ type (
 	}
 )
 
-func (b *shellExecutor) Init() (err error) {
-	b.os = runtime.GOOS
-	b.result.StartAt = time.Now()
+func (se *shellExecutor) Init() (err error) {
+	se.os = runtime.GOOS
+	se.result.StartAt = time.Now()
 
-	if util.IsEmptyString(b.workspace) {
-		b.workDir, err = ioutil.TempDir("", "agent_")
-		b.vars[domain.VarAgentJobDir] = b.workDir
+	if util.IsEmptyString(se.workspace) {
+		se.workDir, err = ioutil.TempDir("", "agent_")
+		se.vars[domain.VarAgentJobDir] = se.workDir
 		return
 	}
 
 	// setup bin under workspace
-	b.binDir = filepath.Join(b.workspace, "bin")
-	err = os.MkdirAll(b.binDir, os.ModePerm)
+	se.binDir = filepath.Join(se.workspace, "bin")
+	err = os.MkdirAll(se.binDir, os.ModePerm)
 	for _, f := range binFiles {
-		path := filepath.Join(b.binDir, f.name)
+		path := filepath.Join(se.binDir, f.name)
 		if !util.IsFileExists(path) {
 			_ = ioutil.WriteFile(path, f.content, f.permission)
 		}
 	}
 
 	// setup job dir under workspace
-	b.workDir = filepath.Join(b.workspace, util.ParseString(b.inCmd.FlowId))
-	b.vars[domain.VarAgentJobDir] = b.workDir
-	err = os.MkdirAll(b.workDir, os.ModePerm)
+	se.workDir = filepath.Join(se.workspace, util.ParseString(se.inCmd.FlowId))
+	se.vars[domain.VarAgentJobDir] = se.workDir
+	err = os.MkdirAll(se.workDir, os.ModePerm)
 
-	b.vars.Resolve()
+	se.vars.Resolve()
 	return
 }
 
-func (b *shellExecutor) StopTty() {
-	if b.IsInteracting() {
-		_ = b.tty.Process.Kill()
+func (se *shellExecutor) Start() (out error) {
+	for i := se.inCmd.Retry; i >= 0; i-- {
+		out = se.doStart()
+		r := se.result
+
+		if r.Status == domain.CmdStatusException || out != nil {
+			if i > 0 {
+				se.writeSingleLog(">>>>>>> retry >>>>>>>")
+			}
+			continue
+		}
+	}
+	return
+}
+
+func (se *shellExecutor) StopTty() {
+	if se.IsInteracting() {
+		_ = se.tty.Process.Kill()
 	}
 }
 
@@ -62,44 +77,44 @@ func (b *shellExecutor) StopTty() {
 //	private
 //====================================================================
 
-func (b *shellExecutor) exportEnv() {
-	if util.IsEmptyString(b.envFile) {
+func (se *shellExecutor) exportEnv() {
+	if util.IsEmptyString(se.envFile) {
 		return
 	}
 
-	file, err := os.Open(b.envFile)
+	file, err := os.Open(se.envFile)
 	if err != nil {
 		return
 	}
 
 	defer file.Close()
-	b.result.Output = readEnvFromReader(b.os, file, b.inCmd.EnvFilters)
+	se.result.Output = readEnvFromReader(se.os, file, se.inCmd.EnvFilters)
 }
 
-func (b *shellExecutor) handleErrors(err error) {
+func (se *shellExecutor) handleErrors(err error) {
 	kill := func() {
-		if b.command != nil {
-			_ = b.command.Process.Kill()
+		if se.command != nil {
+			_ = se.command.Process.Kill()
 		}
 
-		if b.tty != nil {
-			_ = b.tty.Process.Kill()
+		if se.tty != nil {
+			_ = se.tty.Process.Kill()
 		}
 	}
 
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
 		kill()
-		b.toTimeOutStatus()
+		se.toTimeOutStatus()
 		return
 	}
 
 	if err == context.Canceled {
 		util.LogDebug("Cancel..")
 		kill()
-		b.toKilledStatus()
+		se.toKilledStatus()
 		return
 	}
 
-	_ = b.toErrorStatus(err)
+	_ = se.toErrorStatus(err)
 }
