@@ -80,13 +80,29 @@ func (d *dockerExecutor) Init() (out error) {
 }
 
 func (d *dockerExecutor) Start() (out error) {
+	for i := d.inCmd.Retry; i >= 0; i-- {
+		out = d.doStart()
+		r := d.result
+
+		if r.Status == domain.CmdStatusException || out != nil {
+			if i > 0 {
+				d.writeSingleLog(">>>>>>> retry >>>>>>>")
+			}
+			continue
+		}
+
+		break
+	}
+	return
+}
+
+func (d *dockerExecutor) doStart() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = d.handleErrors(err.(error))
 		}
 
 		d.cleanupContainer()
-		d.closeChannels()
 	}()
 
 	// one for pull image output, and one for cmd output
@@ -357,6 +373,8 @@ func (d *dockerExecutor) handleErrors(err error) error {
 		_ = d.runSingleScript(killShell)
 		_ = d.runSingleScript(killTty)
 	}
+
+	util.LogWarn("handleError on docker: %s", err.Error())
 
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")

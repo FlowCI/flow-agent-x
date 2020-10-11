@@ -28,6 +28,7 @@ func TestShouldExecInBash(t *testing.T) {
 func TestShouldExecWithErrorInBash(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createBashTestCmd()
+	cmd.Retry = 1
 	shouldExecWithError(assert, cmd)
 }
 

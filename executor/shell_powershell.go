@@ -12,30 +12,28 @@ import (
 	"os/exec"
 )
 
-func (b *shellExecutor) Start() (out error) {
+func (se *shellExecutor) doStart() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
-			b.handleErrors(out)
+			se.handleErrors(out)
 		}
-
-		b.closeChannels()
 	}()
 
 	path, err := exec.LookPath(winPowerShell)
 	util.PanicIfErr(err)
 
-	ps1File := b.writeScriptToTmpFile()
+	ps1File := se.writeScriptToTmpFile()
 	defer func() {
 		_ = os.Remove(ps1File)
 	}()
 
 	// init wait group fro StdOut and StdErr
-	b.stdOutWg.Add(2)
+	se.stdOutWg.Add(2)
 
 	command := exec.Command(path, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", ps1File)
-	command.Dir = b.workDir
-	command.Env = append(os.Environ(), b.vars.ToStringArray()...)
+	command.Dir = se.workDir
+	command.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	stdout, err := command.StdoutPipe()
 	util.PanicIfErr(err)
@@ -43,7 +41,7 @@ func (b *shellExecutor) Start() (out error) {
 	stderr, err := command.StderrPipe()
 	util.PanicIfErr(err)
 
-	b.command = command
+	se.command = command
 
 	defer func() {
 		_ = stdout.Close()
@@ -52,55 +50,55 @@ func (b *shellExecutor) Start() (out error) {
 
 	// handle context error
 	go func() {
-		<-b.context.Done()
-		err := b.context.Err()
+		<-se.context.Done()
+		err := se.context.Err()
 
 		if err != nil {
-			b.handleErrors(err)
+			se.handleErrors(err)
 		}
 	}()
 
 	// start command
 	if err := command.Start(); err != nil {
-		return b.toErrorStatus(err)
+		return se.toErrorStatus(err)
 	}
 
-	b.writeLog(stdout, true, true)
-	b.writeLog(stderr, true, true)
-	b.toStartStatus(command.Process.Pid)
+	se.writeLog(stdout, true, true)
+	se.writeLog(stderr, true, true)
+	se.toStartStatus(command.Process.Pid)
 
 	// wait or timeout
 	_ = command.Wait()
-	util.LogDebug("[Done]: Shell for %s", b.inCmd.ID)
+	util.LogDebug("[Done]: Shell for %s", se.inCmd.ID)
 
-	b.exportEnv()
+	se.exportEnv()
 
 	// wait for tty if it's running
-	if b.IsInteracting() {
+	if se.IsInteracting() {
 		util.LogDebug("Tty is running, wait..")
-		<-b.ttyCtx.Done()
+		<-se.ttyCtx.Done()
 	}
 
-	if b.result.IsFinishStatus() {
+	if se.result.IsFinishStatus() {
 		return nil
 	}
 
 	// to finish status
-	b.toFinishStatus(getExitCode(command))
-	return b.context.Err()
+	se.toFinishStatus(getExitCode(command))
+	return se.context.Err()
 }
 
-func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+func (se *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 
-		b.tty = nil
-		b.ttyId = ""
+		se.tty = nil
+		se.ttyId = ""
 	}()
 
-	if b.IsInteracting() {
+	if se.IsInteracting() {
 		panic(fmt.Errorf("interaction is ongoning"))
 	}
 
@@ -108,8 +106,8 @@ func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (ou
 	util.PanicIfErr(err)
 
 	c := exec.Command(path, "-NoLogo", "-NoProfile")
-	c.Dir = b.workDir
-	c.Env = append(os.Environ(), b.vars.ToStringArray()...)
+	c.Dir = se.workDir
+	c.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	stdin, err := c.StdinPipe()
 	util.PanicIfErr(err)
@@ -120,48 +118,48 @@ func (b *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (ou
 	stderr, err := c.StderrPipe()
 	util.PanicIfErr(err)
 
-	b.tty = c
-	b.ttyId = ttyId
-	b.ttyCtx, b.ttyCancel = context.WithCancel(b.context)
+	se.tty = c
+	se.ttyId = ttyId
+	se.ttyCtx, se.ttyCancel = context.WithCancel(se.context)
 
 	defer func() {
 		_ = stdin.Close()
 		_ = stdout.Close()
 		_ = stderr.Close()
 
-		b.ttyCancel()
-		b.ttyCtx = nil
-		b.ttyCancel = nil
+		se.ttyCancel()
+		se.ttyCtx = nil
+		se.ttyCancel = nil
 	}()
 
 	if err := c.Start(); err != nil {
-		return b.toErrorStatus(err)
+		return se.toErrorStatus(err)
 	}
 
 	onStarted(ttyId)
 
-	go b.writeTtyIn(stdin)
-	go b.writeTtyOut(io.MultiReader(stdout, stderr))
+	go se.writeTtyIn(stdin)
+	go se.writeTtyOut(io.MultiReader(stdout, stderr))
 
 	_ = c.Wait()
 	return
 }
 
-func (b *shellExecutor) setupBin() []string {
-	return []string{fmt.Sprintf("$Env:PATH += \";%s\"", b.binDir)}
+func (se *shellExecutor) setupBin() []string {
+	return []string{fmt.Sprintf("$Env:PATH += \";%s\"", se.binDir)}
 }
 
-func (b *shellExecutor) writeEnv() []string {
+func (se *shellExecutor) writeEnv() []string {
 	tmpFile, err := ioutil.TempFile("", "agent_env_")
 	util.PanicIfErr(err)
 
 	defer tmpFile.Close()
 
-	b.envFile = tmpFile.Name()
+	se.envFile = tmpFile.Name()
 	return []string{"gci env: > " + tmpFile.Name()}
 }
 
-func (b *shellExecutor) writeScriptToTmpFile() string {
+func (se *shellExecutor) writeScriptToTmpFile() string {
 	tempScriptFile, err := ioutil.TempFile("", "agent_tmp_script_")
 	util.PanicIfErr(err)
 	_ = tempScriptFile.Close()
@@ -179,7 +177,7 @@ func (b *shellExecutor) writeScriptToTmpFile() string {
 		return script
 	}
 
-	b.writeCmd(file, b.setupBin, b.writeEnv, doScript)
+	se.writeCmd(file, se.setupBin, se.writeEnv, doScript)
 
 	_ = file.Close()
 	return file.Name()

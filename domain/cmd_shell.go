@@ -16,6 +16,7 @@ type (
 		Dockers      []*DockerOption `json:"dockers"`
 		Bash         []string        `json:"bash"`
 		Pwsh         []string        `json:"pwsh"`
+		Retry        int             `json:"retry"`
 		Timeout      int             `json:"timeout"`
 		Inputs       Variables       `json:"inputs"`
 		EnvFilters   []string        `json:"envFilters"`
