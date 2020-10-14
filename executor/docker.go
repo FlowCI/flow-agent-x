@@ -37,7 +37,17 @@ const (
 	killTty   = "kill -9 $(cat /tmp/.tty.pid)"
 )
 
+var (
+	placeHolder void
+
+	imagePrefixSkip = map[string]struct{}{
+		"mcr.microsoft.com": placeHolder,
+	}
+)
+
 type (
+	void struct{}
+
 	dockerExecutor struct {
 		BaseExecutor
 		agentVolume types.Volume
@@ -403,15 +413,21 @@ func (d *dockerExecutor) pullImage() {
 	}
 }
 
-func (d *dockerExecutor) pullImageWithName(image string) (err error) {
-	fullRef := "docker.io/library/" + image
-	if strings.Contains(image, "/") {
-		fullRef = "docker.io/" + image
+func (d *dockerExecutor) pullImageWithName(image string) (out error) {
+	split := strings.Split(image, "/")
+	fullRef := image
+
+	if _, exist := imagePrefixSkip[split[0]]; !exist {
+		fullRef = "docker.io/library/" + image
+		if strings.Contains(image, "/") {
+			fullRef = "docker.io/" + image
+		}
 	}
 
 	for i := 0; i < dockerPullRetry; i++ {
 		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 		if err != nil {
+			out = err
 			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))
 			continue
 		}
