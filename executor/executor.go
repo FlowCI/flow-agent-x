@@ -223,8 +223,15 @@ func (b *BaseExecutor) getScripts() []string {
 		scripts = b.inCmd.Pwsh
 	}
 
-	if len(scripts) == 0 {
-		panic(fmt.Errorf("agent: the cmd missing shell script"))
+	isAllEmpty := true
+	for _, script := range scripts {
+		if !util.IsEmptyString(script) {
+			isAllEmpty = false
+		}
+	}
+
+	if isAllEmpty {
+		panic(fmt.Errorf("agent: Missing bash or pwsh section in flow YAML"))
 	}
 
 	return scripts
