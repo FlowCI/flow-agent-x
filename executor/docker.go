@@ -13,7 +13,6 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -355,7 +354,7 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	// mount docker dock if exit or running on windows
-	if util.IsFileExists(dockerSock) || runtime.GOOS == util.OSWin {
+	if util.IsFileExists(dockerSock) || util.IsWindows() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 

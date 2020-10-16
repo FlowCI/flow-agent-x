@@ -103,7 +103,14 @@ func tarArchiveFromPath(path string) (io.Reader, error) {
 		header, err := tar.FileInfoHeader(fi, fi.Name())
 		util.PanicIfErr(err)
 
-		header.Name = strings.TrimPrefix(strings.Replace(file, dir, "", -1), string(filepath.Separator))
+		relativeDir := strings.Replace(file, dir, "", -1)
+		header.Name = strings.TrimPrefix(relativeDir, string(filepath.Separator))
+
+		// convert path to linux path
+		if util.IsWindows() {
+			header.Name = strings.ReplaceAll(header.Name, util.WinPathSeparator, util.UnixPathSeparator)
+		}
+
 		err = tw.WriteHeader(header)
 		util.PanicIfErr(err)
 

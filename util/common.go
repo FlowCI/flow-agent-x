@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	UnixNewLine = "\n"
-	WinNewLine  = "\r\n"
+	UnixNewLine       = "\n"
+	UnixPathSeparator = "/"
+
+	WinNewLine       = "\r\n"
+	WinPathSeparator = "\\"
 
 	LineBreak = '\n'
 	EmptyStr  = ""
