@@ -1,23 +1,37 @@
 package util
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"runtime"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 )
 
 const (
-	CRLF             = "\r\n"
-	UnixLineBreak    = '\n'
-	UnixLineBreakStr = "\n"
+	UnixNewLine       = "\n"
+	UnixPathSeparator = "/"
 
-	EmptyStr = ""
+	WinNewLine       = "\r\n"
+	WinPathSeparator = "\\"
+
+	LineBreak = '\n'
+	EmptyStr  = ""
 
 	OSWin   = "windows"
 	OSLinux = "linux"
 	OSMac   = "darwin"
 )
+
+var (
+	HomeDir = ""
+)
+
+func init() {
+	HomeDir, _ = os.UserHomeDir()
+}
 
 func OS() string {
 	if IsMac() {
@@ -122,4 +136,55 @@ func GetEnv(env, def string) string {
 
 func ByteToMB(bytes uint64) uint64 {
 	return (bytes / 1024) / 1024
+}
+
+func IsByteStartWith(src []byte, start []byte) bool {
+	if len(src) < len(start) {
+		return false
+	}
+
+	for i, c := range start {
+		if src[i] != c {
+			return false
+		}
+	}
+
+	return true
+}
+
+func BytesTrimLeft(src []byte, trim []byte) []byte {
+	if len(src) < len(trim) {
+		return src
+	}
+
+	canTrim := true
+
+	j := len(trim) - 1
+	for i := len(src) - 1; i >= len(src)-len(trim); i-- {
+		if src[i] != trim[j] {
+			canTrim = false
+			break
+		}
+		j--
+	}
+
+	if canTrim {
+		return src[0 : len(src)-len(trim)]
+	}
+
+	return src
+}
+
+func UTF16BytesToString(b []byte, o binary.ByteOrder) string {
+	utf := make([]uint16, (len(b)+(2-1))/2)
+
+	for i := 0; i+(2-1) < len(b); i += 2 {
+		utf[i/2] = o.Uint16(b[i:])
+	}
+
+	if len(b)/2 < len(utf) {
+		utf[len(utf)-1] = utf8.RuneError
+	}
+
+	return string(utf16.Decode(utf))
 }

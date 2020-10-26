@@ -13,7 +13,6 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -37,8 +36,18 @@ const (
 	killTty   = "kill -9 $(cat /tmp/.tty.pid)"
 )
 
+var (
+	placeHolder void
+
+	imagePrefixSkip = map[string]struct{}{
+		"mcr.microsoft.com": placeHolder,
+	}
+)
+
 type (
-	DockerExecutor struct {
+	void struct{}
+
+	dockerExecutor struct {
 		BaseExecutor
 		agentVolume types.Volume
 		cli         *client.Client
@@ -49,7 +58,7 @@ type (
 	}
 )
 
-func (d *DockerExecutor) runtime() *domain.DockerConfig {
+func (d *dockerExecutor) runtime() *domain.DockerConfig {
 	if len(d.configs) > 0 {
 		return d.configs[0]
 	}
@@ -57,13 +66,14 @@ func (d *DockerExecutor) runtime() *domain.DockerConfig {
 	return nil
 }
 
-func (d *DockerExecutor) Init() (out error) {
+func (d *dockerExecutor) Init() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
 		}
 	}()
 
+	d.os = util.OSLinux // only support unix based image
 	d.result.StartAt = time.Now()
 
 	d.cli, out = client.NewEnvClient()
@@ -78,14 +88,30 @@ func (d *DockerExecutor) Init() (out error) {
 	return
 }
 
-func (d *DockerExecutor) Start() (out error) {
+func (d *dockerExecutor) Start() (out error) {
+	for i := d.inCmd.Retry; i >= 0; i-- {
+		out = d.doStart()
+		r := d.result
+
+		if r.Status == domain.CmdStatusException || out != nil {
+			if i > 0 {
+				d.writeSingleLog(">>>>>>> retry >>>>>>>")
+			}
+			continue
+		}
+
+		break
+	}
+	return
+}
+
+func (d *dockerExecutor) doStart() (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = d.handleErrors(err.(error))
 		}
 
 		d.cleanupContainer()
-		d.closeChannels()
 	}()
 
 	// one for pull image output, and one for cmd output
@@ -117,7 +143,7 @@ func (d *DockerExecutor) Start() (out error) {
 	return
 }
 
-func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
+func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
 	defer func() {
 		if err := recover(); err != nil {
 			out = err.(error)
@@ -173,7 +199,7 @@ func (d *DockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	return
 }
 
-func (d *DockerExecutor) StopTty() {
+func (d *dockerExecutor) StopTty() {
 	err := d.runSingleScript(killTty)
 	util.LogIfError(err)
 }
@@ -182,7 +208,7 @@ func (d *DockerExecutor) StopTty() {
 // private methods
 //--------------------------------------------
 
-func (d *DockerExecutor) initVolumeData() {
+func (d *dockerExecutor) initVolumeData() {
 	runCmd := func(v *domain.DockerVolume) {
 		c, err := d.cli.ContainerCreate(d.context,
 			&container.Config{
@@ -245,7 +271,7 @@ func (d *DockerExecutor) initVolumeData() {
 }
 
 // setup default network for agent
-func (d *DockerExecutor) initNetwork() {
+func (d *dockerExecutor) initNetwork() {
 	args := filters.NewArgs()
 	args.Add("name", dockerNetwork)
 
@@ -265,7 +291,7 @@ func (d *DockerExecutor) initNetwork() {
 }
 
 // agent volume that bind to /ws inside docker
-func (d *DockerExecutor) initAgentVolume() {
+func (d *dockerExecutor) initAgentVolume() {
 	name := "agent-" + d.agentId
 	ok, v := d.getVolume(name)
 
@@ -285,7 +311,7 @@ func (d *DockerExecutor) initAgentVolume() {
 	}
 }
 
-func (d *DockerExecutor) initConfig() {
+func (d *dockerExecutor) initConfig() {
 	d.configs = make([]*domain.DockerConfig, len(d.inCmd.Dockers))
 
 	// find run time docker option
@@ -310,7 +336,7 @@ func (d *DockerExecutor) initConfig() {
 	}
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = filepath.Join(dockerWorkspace, util.ParseString(d.inCmd.FlowId))
+	d.workDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
 	d.vars[domain.VarAgentJobDir] = d.workDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
@@ -327,7 +353,8 @@ func (d *DockerExecutor) initConfig() {
 		binds = append(binds, v.ToBindStr())
 	}
 
-	if util.IsFileExists(dockerSock) {
+	// mount docker dock if exit or running on windows
+	if util.IsFileExists(dockerSock) || util.IsWindows() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
 
@@ -350,11 +377,13 @@ func (d *DockerExecutor) initConfig() {
 	d.configs[0] = config
 }
 
-func (d *DockerExecutor) handleErrors(err error) error {
+func (d *dockerExecutor) handleErrors(err error) error {
 	kill := func() {
 		_ = d.runSingleScript(killShell)
 		_ = d.runSingleScript(killTty)
 	}
+
+	util.LogWarn("handleError on docker: %s", err.Error())
 
 	if err == context.DeadlineExceeded {
 		util.LogDebug("Timeout..")
@@ -376,22 +405,28 @@ func (d *DockerExecutor) handleErrors(err error) error {
 	return err
 }
 
-func (d *DockerExecutor) pullImage() {
+func (d *dockerExecutor) pullImage() {
 	for _, c := range d.configs {
 		err := d.pullImageWithName(c.Config.Image)
 		util.PanicIfErr(err)
 	}
 }
 
-func (d *DockerExecutor) pullImageWithName(image string) (err error) {
-	fullRef := "docker.io/library/" + image
-	if strings.Contains(image, "/") {
-		fullRef = "docker.io/" + image
+func (d *dockerExecutor) pullImageWithName(image string) (out error) {
+	split := strings.Split(image, "/")
+	fullRef := image
+
+	if _, exist := imagePrefixSkip[split[0]]; !exist {
+		fullRef = "docker.io/library/" + image
+		if strings.Contains(image, "/") {
+			fullRef = "docker.io/" + image
+		}
 	}
 
 	for i := 0; i < dockerPullRetry; i++ {
 		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
 		if err != nil {
+			out = err
 			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))
 			continue
 		}
@@ -403,7 +438,7 @@ func (d *DockerExecutor) pullImageWithName(image string) (err error) {
 	return
 }
 
-func (d *DockerExecutor) startContainer() {
+func (d *dockerExecutor) startContainer() {
 	ids := make([]string, len(d.configs))
 
 	// create and start containers
@@ -426,7 +461,7 @@ func (d *DockerExecutor) startContainer() {
 	d.result.Containers = ids
 }
 
-func (d *DockerExecutor) resume(cid string) bool {
+func (d *dockerExecutor) resume(cid string) bool {
 	if util.IsEmptyString(cid) {
 		return false
 	}
@@ -463,7 +498,7 @@ func (d *DockerExecutor) resume(cid string) bool {
 }
 
 // copy plugin to docker container from real plugin dir
-func (d *DockerExecutor) copyPlugins() {
+func (d *dockerExecutor) copyPlugins() {
 	config := types.CopyToContainerOptions{
 		AllowOverwriteDirWithFile: true,
 	}
@@ -478,7 +513,7 @@ func (d *DockerExecutor) copyPlugins() {
 	}
 }
 
-func (d *DockerExecutor) runShell() string {
+func (d *dockerExecutor) runShell() string {
 	runtime := d.runtime()
 
 	config := types.ExecConfig{
@@ -495,7 +530,9 @@ func (d *DockerExecutor) runShell() string {
 	attach, err := d.cli.ContainerExecAttach(d.context, exec.ID, types.ExecConfig{Tty: false})
 	util.PanicIfErr(err)
 
-	setupContainerIpAndBin := func(in chan string) {
+	setupContainerIpAndBin := func() []string {
+		var scripts []string
+
 		for i, c := range d.configs {
 			inspect, _ := d.cli.ContainerInspect(d.context, c.ContainerID)
 			address := inspect.NetworkSettings.IPAddress
@@ -507,23 +544,26 @@ func (d *DockerExecutor) runShell() string {
 				address = address[:len(address)-1]
 			}
 
-			in <- fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID)
-			in <- fmt.Sprintf(domain.VarExportContainerIpPattern, i, address)
+			scripts = append(scripts, fmt.Sprintf(domain.VarExportContainerIdPattern, i, c.ContainerID))
+			scripts = append(scripts, fmt.Sprintf(domain.VarExportContainerIpPattern, i, address))
 		}
 
-		in <- fmt.Sprintf("mkdir -p %s", dockerBin)
-		in <- fmt.Sprintf("export PATH=%s:$PATH", dockerBin)
+		scripts = append(scripts, fmt.Sprintf("mkdir -p %s", dockerBin))
+		scripts = append(scripts, fmt.Sprintf("export PATH=%s:$PATH", dockerBin))
 
 		for _, f := range binFiles {
 			path := dockerBin + "/" + f.name
 			b64 := base64.StdEncoding.EncodeToString(f.content)
-			in <- fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path)
-			in <- fmt.Sprintf("chmod %s %s", f.permissionStr, path)
+
+			scripts = append(scripts, fmt.Sprintf("echo -e \"%s\" | base64 -d > %s", b64, path))
+			scripts = append(scripts, fmt.Sprintf("chmod %s %s", f.permissionStr, path))
 		}
+
+		return scripts
 	}
 
-	writeEnvAfter := func(in chan string) {
-		in <- "env > " + dockerEnvFile
+	writeEnvAfter := func() []string {
+		return []string{"env > " + dockerEnvFile}
 	}
 
 	doScript := func(script string) string {
@@ -539,7 +579,7 @@ func (d *DockerExecutor) runShell() string {
 }
 
 // run single bash script with new context
-func (d *DockerExecutor) runSingleScript(script string) error {
+func (d *dockerExecutor) runSingleScript(script string) error {
 	ctx := context.Background()
 
 	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
@@ -554,17 +594,17 @@ func (d *DockerExecutor) runSingleScript(script string) error {
 	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 }
 
-func (d *DockerExecutor) exportEnv() {
+func (d *dockerExecutor) exportEnv() {
 	reader, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, dockerEnvFile)
 	if err != nil {
 		return
 	}
 
 	defer reader.Close()
-	d.result.Output = readEnvFromReader(reader, d.inCmd.EnvFilters)
+	d.result.Output = readEnvFromReader(d.os, reader, d.inCmd.EnvFilters)
 }
 
-func (d *DockerExecutor) cleanupContainer() {
+func (d *dockerExecutor) cleanupContainer() {
 	if d.cli == nil {
 		return
 	}
@@ -587,7 +627,7 @@ func (d *DockerExecutor) cleanupContainer() {
 	}
 }
 
-func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
+func (d *dockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
 	util.PanicIfErr(err)
 	if onStarted != nil {
@@ -608,7 +648,7 @@ func (d *DockerExecutor) waitForExit(eid string, onStarted func(int)) int {
 	return inspect.ExitCode
 }
 
-func (d *DockerExecutor) getVolume(name string) (bool, *types.Volume) {
+func (d *dockerExecutor) getVolume(name string) (bool, *types.Volume) {
 	filter := filters.NewArgs()
 	filter.Add("name", name)
 

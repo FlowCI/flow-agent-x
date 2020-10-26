@@ -14,7 +14,9 @@ type (
 		AllowFailure bool            `json:"allowFailure"`
 		Plugin       string          `json:"plugin"`
 		Dockers      []*DockerOption `json:"dockers"`
-		Scripts      []string        `json:"scripts"`
+		Bash         []string        `json:"bash"`
+		Pwsh         []string        `json:"pwsh"`
+		Retry        int             `json:"retry"`
 		Timeout      int             `json:"timeout"`
 		Inputs       Variables       `json:"inputs"`
 		EnvFilters   []string        `json:"envFilters"`
@@ -50,14 +52,6 @@ func (in *ShellIn) HasPlugin() bool {
 
 func (in *ShellIn) HasDockerOption() bool {
 	return in.Dockers != nil && len(in.Dockers) > 0
-}
-
-func (in *ShellIn) HasScripts() bool {
-	if in.Scripts == nil {
-		return false
-	}
-
-	return len(in.Scripts) != 0
 }
 
 func (in *ShellIn) HasEnvFilters() bool {

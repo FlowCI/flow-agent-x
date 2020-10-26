@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	linuxBash = "/bin/bash"
+	winPowerShell = "powershell.exe"
+	linuxBash     = "/bin/bash"
 	//linuxBashShebang = "#!/bin/bash -i" // add -i enable to source .bashrc
 
 	defaultChannelBufferSize  = 1000
@@ -44,24 +45,29 @@ type Executor interface {
 
 	Kill()
 
+	Close()
+
 	GetResult() *domain.ShellOut
 }
 
 type BaseExecutor struct {
 	k8sConfig *domain.K8sConfig
 
-	agentId    string // should be agent token
-	workspace  string
-	pluginDir  string
-	volumes    []*domain.DockerVolume
+	agentId   string // should be agent token
+	workspace string
+	pluginDir string
+
+	os         string // current operation system
 	context    context.Context
 	cancelFunc context.CancelFunc
-	inCmd      *domain.ShellIn
-	result     *domain.ShellOut
-	vars       domain.Variables // vars from input and in cmd
-	stdin      chan string      // bash script comes from
-	stdout     chan string      // output log
-	stdOutWg   sync.WaitGroup   // init on subclasses
+
+	volumes []*domain.DockerVolume
+	inCmd   *domain.ShellIn
+	result  *domain.ShellOut
+	vars    domain.Variables // vars from input and in cmd
+
+	stdout   chan string    // output log
+	stdOutWg sync.WaitGroup // init on subclasses
 
 	ttyId     string
 	ttyIn     chan string // b64 script
@@ -94,7 +100,6 @@ func NewExecutor(options Options) Executor {
 		workspace: options.Workspace,
 		pluginDir: options.PluginDir,
 		volumes:   options.Volumes,
-		stdin:     make(chan string),
 		stdout:    make(chan string, defaultChannelBufferSize),
 		inCmd:     cmd,
 		vars:      domain.ConnectVars(options.Vars, cmd.Inputs),
@@ -108,12 +113,12 @@ func NewExecutor(options Options) Executor {
 	base.cancelFunc = cancel
 
 	if cmd.HasDockerOption() {
-		return &DockerExecutor{
+		return &dockerExecutor{
 			BaseExecutor: base,
 		}
 	}
 
-	return &BashExecutor{
+	return &shellExecutor{
 		BaseExecutor: base,
 	}
 }
@@ -153,6 +158,16 @@ func (b *BaseExecutor) Kill() {
 	b.cancelFunc()
 }
 
+func (b *BaseExecutor) Close() {
+	if len(b.stdout) > 0 {
+		util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
+	}
+
+	close(b.stdout)
+	close(b.ttyIn)
+	close(b.ttyOut)
+}
+
 //====================================================================
 //	private
 //====================================================================
@@ -161,61 +176,65 @@ func (b *BaseExecutor) isK8sEnabled() bool {
 	return b.k8sConfig != nil && b.k8sConfig.Enabled
 }
 
-func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func(chan string), doScript func(string) string) {
-	consumer := func() {
-		for {
-			select {
-			case <-b.context.Done():
-				return
-			case script, ok := <-b.stdin:
-				if !ok {
-					return
-				}
-				_, _ = io.WriteString(stdin, appendNewLine(script))
-				util.LogDebug("----- exec: %s", script)
-			}
-		}
+func (b *BaseExecutor) writeCmd(stdin io.Writer, before, after func() []string, doScript func(string) string) {
+	write := func(script string) {
+		_, _ = io.WriteString(stdin, appendNewLine(script, b.os))
+		util.LogDebug("----- exec: %s", script)
 	}
 
-	// start
-	go consumer()
-
 	// source volume script
-	b.stdin <- "set +e" // ignore source file failure
-	for _, v := range b.volumes {
-		if util.IsEmptyString(v.Script) {
-			continue
+	if b.os != util.OSWin {
+		write("set +e") // ignore source file failure
+		for _, v := range b.volumes {
+			if util.IsEmptyString(v.Script) {
+				continue
+			}
+			write(fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath()))
 		}
-		b.stdin <- fmt.Sprintf("source %s > /dev/null 2>&1", v.ScriptPath())
 	}
 
 	if before != nil {
-		before(b.stdin)
+		for _, script := range before() {
+			write(script)
+		}
 	}
 
 	// write shell script from cmd
-	b.stdin <- "set -e"
-	for _, script := range b.inCmd.Scripts {
-		b.stdin <- doScript(script)
+	for _, script := range scriptForExitOnError(b.os) {
+		write(script)
+	}
+
+	for _, script := range b.getScripts() {
+		write(doScript(script))
 	}
 
 	if after != nil {
-		after(b.stdin)
+		for _, script := range after() {
+			write(script)
+		}
 	}
 
-	b.stdin <- "exit"
+	write("exit")
 }
 
-func (b *BaseExecutor) closeChannels() {
-	if len(b.stdout) > 0 {
-		util.Wait(&b.stdOutWg, defaultLogWaitingDuration)
+func (b *BaseExecutor) getScripts() []string {
+	scripts := b.inCmd.Bash
+	if b.os == util.OSWin {
+		scripts = b.inCmd.Pwsh
 	}
 
-	close(b.stdin)
-	close(b.stdout)
+	isAllEmpty := true
+	for _, script := range scripts {
+		if !util.IsEmptyString(script) {
+			isAllEmpty = false
+		}
+	}
 
-	close(b.ttyIn)
-	close(b.ttyOut)
+	if isAllEmpty {
+		panic(fmt.Errorf("agent: Missing bash or pwsh section in flow YAML"))
+	}
+
+	return scripts
 }
 
 func (b *BaseExecutor) writeLog(src io.Reader, inThread, doneOnWaitGroup bool) {
@@ -263,6 +282,10 @@ func (b *BaseExecutor) writeSingleLog(msg string) {
 
 func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 	for inputStr := range b.ttyIn {
+		if inputStr == "\r" {
+			inputStr = newLineForOs(b.os)
+		}
+
 		in := []byte(inputStr)
 		_, err := writer.Write(in)
 
@@ -276,16 +299,11 @@ func (b *BaseExecutor) writeTtyIn(writer io.Writer) {
 func (b *BaseExecutor) writeTtyOut(reader io.Reader) {
 	buf := make([]byte, defaultReaderBufferSize)
 	for {
-		select {
-		case <-b.ttyCtx.Done():
+		n, err := reader.Read(buf)
+		if err != nil {
 			return
-		default:
-			n, err := reader.Read(buf)
-			if err != nil {
-				return
-			}
-			b.ttyOut <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 		}
+		b.ttyOut <- base64.StdEncoding.EncodeToString(removeDockerHeader(buf[0:n]))
 	}
 }
 

@@ -20,7 +20,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const version = "0.20.40"
+const version = "0.20.45"
 
 func init() {
 	util.LogInit()
@@ -69,7 +69,7 @@ func main() {
 
 		cli.StringFlag{
 			Name:   "workspace, w",
-			Value:  filepath.Join("${HOME}", ".flow.ci.agent"),
+			Value:  filepath.Join(util.HomeDir, ".flow.ci.agent"),
 			Usage:  "Agent working directory",
 			EnvVar: domain.VarAgentWorkspace,
 		},
@@ -159,7 +159,7 @@ func printInfo() {
 func execCmd(script string) {
 	cmd := &domain.ShellIn{
 		ID:      "local",
-		Scripts: []string{script},
+		Bash:    []string{script},
 		Inputs:  domain.Variables{},
 		Timeout: 1800,
 	}

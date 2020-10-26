@@ -75,7 +75,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 	executor := newExecutor(&domain.ShellIn{
 		ID:     "test111",
 		FlowId: "test111",
-		Scripts: []string{
+		Bash: []string{
 			"echo hello",
 			"sleep 9999",
 		},
@@ -88,7 +88,7 @@ func TestShouldStartDockerInteract(t *testing.T) {
 		Timeout: 9999,
 	}, false)
 
-	dockerExecutor := executor.(*DockerExecutor)
+	dockerExecutor := executor.(*dockerExecutor)
 	assert.NotNil(dockerExecutor)
 
 	err := dockerExecutor.Init()
@@ -184,7 +184,7 @@ func createDockerTestCmd() *domain.ShellIn {
 				IsRuntime:         true,
 			},
 		},
-		Scripts: []string{
+		Bash: []string{
 			"echo bbb",
 			"sleep 5",
 			">&2 echo $INPUT_VAR",

@@ -99,7 +99,10 @@ func (s *CmdService) start() {
 }
 
 func (s *CmdService) release() {
-	s.executor = nil
+	if s.executor != nil {
+		s.executor.Close()
+		s.executor = nil
+	}
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
@@ -121,7 +124,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		return ErrorCmdIsRunning
 	}
 
-	err := verifyAndInitShellCmd(in)
+	err := initShellCmd(in)
 	util.PanicIfErr(err)
 
 	appConfig.Status = domain.AgentBusy
@@ -364,11 +367,7 @@ func (s *CmdService) startLogConsumer() {
 // 	Utils
 // ---------------------------------
 
-func verifyAndInitShellCmd(in *domain.ShellIn) error {
-	if !in.HasScripts() {
-		return ErrorCmdMissingScripts
-	}
-
+func initShellCmd(in *domain.ShellIn) error {
 	// init cmd id if undefined
 	if util.IsEmptyString(in.ID) {
 		in.ID = uuid.New().String()
