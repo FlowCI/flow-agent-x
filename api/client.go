@@ -94,7 +94,7 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	c.setConnState(connStateConnected)
 
 	// send init connect event
-	_, err = c.sendMessage(eventConnect, init, true)
+	_, err = c.sendMessageWithResp(eventConnect, init)
 	if err != nil {
 		return err
 	}
@@ -168,11 +168,7 @@ func (c *client) GetCmdIn() <-chan []byte {
 }
 
 func (c *client) SendCmdOut(out domain.CmdOut) error {
-	_, err := c.sendMessageWithBytes(eventCmdOut, out.ToBytes(), false)
-	if err != nil {
-		return err
-	}
-
+	_ = c.sendMessageWithBytes(eventCmdOut, out.ToBytes())
 	util.LogDebug("Result of cmd been pushed")
 	return nil
 }
@@ -184,7 +180,7 @@ func (c *client) SendShellLog(jobId, stepId, b64Log string) {
 		Log:    b64Log,
 	}
 
-	_, _ = c.sendMessage(eventShellLog, body, false)
+	_ = c.sendMessageWithJson(eventShellLog, body)
 }
 
 func (c *client) SendTtyLog(ttyId, b64Log string) {
@@ -192,7 +188,7 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 		ID:  ttyId,
 		Log: b64Log,
 	}
-	_, _ = c.sendMessage(eventTtyLog, body, false)
+	_ = c.sendMessageWithJson(eventTtyLog, body)
 }
 
 func (c *client) Close() {
@@ -269,36 +265,39 @@ func (c *client) consumePendingMessage() {
 	}
 }
 
-func (c *client) sendMessage(event string, msg interface{}, hasResp bool) (resp *domain.Response, out error) {
+func (c *client) sendMessageWithJson(event string, msg interface{}) error {
 	body, err := json.Marshal(msg)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return c.sendMessageWithBytes(event, body, hasResp)
+	c.pending <- &message{
+		event: event,
+		body:  body,
+	}
+	return nil
 }
 
-func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (resp *domain.Response, out error) {
+func (c *client) sendMessageWithBytes(event string, body []byte) error {
+	c.pending <- &message{
+		event: event,
+		body:  body,
+	}
+	return nil
+}
+
+func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domain.Response, out error) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = r.(error)
 		}
 	}()
 
-	// wait until connected
-	if c.isReConnecting() {
-		c.pending <- &message{
-			event: event,
-			body:  body,
-		}
-		return
-	}
+	body, err := json.Marshal(msg)
+	util.PanicIfErr(err)
 
-	_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
-
-	if !hasResp {
-		return
-	}
+	err = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
+	util.PanicIfErr(err)
 
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
