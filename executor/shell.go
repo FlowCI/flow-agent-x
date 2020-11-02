@@ -28,9 +28,7 @@ func (se *shellExecutor) Init() (err error) {
 	se.result.StartAt = time.Now()
 
 	if util.IsEmptyString(se.workspace) {
-		se.workDir, err = ioutil.TempDir("", "agent_")
-		se.vars[domain.VarAgentJobDir] = se.workDir
-		return
+		se.workspace, _ = ioutil.TempDir("", "agent_")
 	}
 
 	// setup bin under workspace

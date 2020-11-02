@@ -295,20 +295,19 @@ func (d *dockerExecutor) initAgentVolume() {
 	name := "agent-" + d.agentId
 	ok, v := d.getVolume(name)
 
-	if !ok {
-		body := volume.VolumesCreateBody{
-			Name: name,
-		}
-
-		created, err := d.cli.VolumeCreate(d.context, body)
-		util.PanicIfErr(err)
-
-		d.agentVolume = created
-		util.LogInfo("Agent volume '%s' created", name)
-	} else {
+	if ok {
 		d.agentVolume = *v
 		util.LogInfo("Agent volume '%s' existed", name)
+		return
 	}
+
+	body := volume.VolumesCreateBody{Name: name}
+	created, err := d.cli.VolumeCreate(d.context, body)
+	util.PanicIfErr(err)
+
+	d.agentVolume = created
+	util.LogInfo("Agent volume '%s' created", name)
+	return
 }
 
 func (d *dockerExecutor) initConfig() {
