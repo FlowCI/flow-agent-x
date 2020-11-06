@@ -44,6 +44,10 @@ type (
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
 
+		CachePut(jobId, key string, paths []string)
+		CacheGet(jobId, key string)
+		CacheDownload(cacheId, file string)
+
 		Close()
 	}
 
@@ -189,6 +193,31 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 		Log: b64Log,
 	}
 	_ = c.sendMessageWithJson(eventTtyLog, body)
+}
+
+func (c *client) CachePut(jobId, key string, paths []string) {
+	for _, path := range paths {
+		info, exist := util.IsFileExistsAndReturn(path)
+
+		if !exist {
+			util.LogWarn("the file %s not exist", path)
+			continue
+		}
+
+		// zip dir
+		if info.IsDir() {
+
+		}
+	}
+
+}
+
+func (c *client) CacheGet(jobId, key string) {
+
+}
+
+func (c *client) CacheDownload(cacheId, file string) {
+
 }
 
 func (c *client) Close() {

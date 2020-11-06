@@ -6,6 +6,11 @@ import (
 )
 
 type (
+	Cache struct {
+		Key   string   `json:"key"`
+		Paths []string `json:"paths"`
+	}
+
 	ShellIn struct {
 		CmdIn
 		ID           string          `json:"id"`
@@ -13,6 +18,7 @@ type (
 		JobId        string          `json:"jobId"`
 		AllowFailure bool            `json:"allowFailure"`
 		Plugin       string          `json:"plugin"`
+		Cache        *Cache           `json:"cache"`
 		Dockers      []*DockerOption `json:"dockers"`
 		Bash         []string        `json:"bash"`
 		Pwsh         []string        `json:"pwsh"`
@@ -45,6 +51,10 @@ type (
 // ===================================
 //		ShellIn Methods
 // ===================================
+
+func (in *ShellIn) HasCache() bool {
+	return in.Cache != nil
+}
 
 func (in *ShellIn) HasPlugin() bool {
 	return in.Plugin != ""
