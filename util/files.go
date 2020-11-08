@@ -13,15 +13,7 @@ func IsFileExists(path string) bool {
 	return false
 }
 
-func IsFileExistsAndReturn(path string) (os.FileInfo, bool) {
-	fileInfo, err := os.Stat(path)
-	if !os.IsNotExist(err) {
-		return fileInfo, true
-	}
-	return fileInfo, false
-}
-
-func Zip(source, target string) (out error) {
+func Zip(source, target, separator string) (out error) {
 	defer func() {
 		if r := recover(); r != nil {
 			out = r.(error)
@@ -34,7 +26,7 @@ func Zip(source, target string) (out error) {
 	defer outFile.Close()
 
 	w := zip.NewWriter(outFile)
-	addFiles(w, source, "", "/")
+	addFiles(w, source, "", separator)
 
 	err = w.Close()
 	PanicIfErr(err)

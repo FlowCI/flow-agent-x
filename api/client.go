@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -12,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -44,9 +46,9 @@ type (
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
 
-		CachePut(jobId, key string, paths []string)
+		CachePut(jobId, key, workspace string, paths []string)
 		CacheGet(jobId, key string)
-		CacheDownload(cacheId, file string)
+		CacheDownload(cacheId, workspace, file string)
 
 		Close()
 	}
@@ -66,6 +68,12 @@ type (
 	message struct {
 		event string
 		body  []byte
+	}
+
+	// part: multipart data
+	part struct {
+		key  string
+		file string
 	}
 )
 
@@ -132,39 +140,22 @@ func (c *client) UploadLog(filePath string) (err error) {
 		}
 	}()
 
-	file, err := os.Open(filePath)
-	util.PanicIfErr(err)
-
-	defer file.Close()
-
-	// construct multi part
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
-	util.PanicIfErr(err)
-
-	_, err = io.Copy(part, file)
-	util.PanicIfErr(err)
-
-	// flush file to writer
-	_ = writer.Close()
+	buffer, contentType := c.buildMultipartContent([]*part{
+		{
+			key:  "file",
+			file: filePath,
+		},
+	})
 
 	// send request
-	raw, err := c.send("POST", "logs/upload", writer.FormDataContentType(), body)
+	raw, err := c.send("POST", "logs/upload", contentType, buffer)
 	util.PanicIfErr(err)
 
-	// get response data
-	var message domain.Response
-	err = json.Unmarshal(raw, &message)
+	_, err = c.parseResponse(raw)
 	util.PanicIfErr(err)
 
-	if message.IsOk() {
-		util.LogInfo("[Uploaded]: %s", filePath)
-		return nil
-	}
-
-	return fmt.Errorf(message.Message)
+	util.LogInfo("[Uploaded]: %s", filePath)
+	return
 }
 
 func (c *client) GetCmdIn() <-chan []byte {
@@ -195,28 +186,63 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 	_ = c.sendMessageWithJson(eventTtyLog, body)
 }
 
-func (c *client) CachePut(jobId, key string, paths []string) {
-	for _, path := range paths {
-		info, exist := util.IsFileExistsAndReturn(path)
+func (c *client) CachePut(jobId, key, workspace string, paths []string) {
+	defer func() {
+		if r := recover(); r != nil {
+			util.LogWarn(r.(error).Error())
+		}
+	}()
 
-		if !exist {
+	tempDir, err := ioutil.TempDir("", "agent_cache_")
+	util.PanicIfErr(err)
+	defer os.RemoveAll(tempDir)
+
+	var parts []*part
+	for _, path := range paths {
+		if !util.IsFileExists(path) {
 			util.LogWarn("the file %s not exist", path)
 			continue
 		}
 
-		// zip dir
-		if info.IsDir() {
-
+		if !strings.HasPrefix(path, workspace) {
+			util.LogWarn("the cache path must be under workspace")
+			continue
 		}
+
+		// cache file name is base64(a/b/c).zip from /{workspace}/a/b/c
+		cacheName := strings.TrimLeft(path, workspace)
+		cacheZipName := base64.StdEncoding.EncodeToString([]byte(cacheName)) + ".zip"
+
+		zipPath := tempDir + "/" + cacheZipName
+		err = util.Zip(path, zipPath, "/")
+
+		if err != nil {
+			util.LogWarn(err.Error())
+			continue
+		}
+
+		parts = append(parts, &part{
+			key:  "files",
+			file: zipPath,
+		})
 	}
 
+	buffer, contentType := c.buildMultipartContent(parts)
+
+	raw, err := c.send("POST", fmt.Sprintf("cache/%s/%s", jobId, key), contentType, buffer)
+	util.PanicIfErr(err)
+
+	_, err = c.parseResponse(raw)
+	util.PanicIfErr(err)
+
+	util.LogInfo("[CachePut] %d/%d files cached in %s", len(parts), len(paths), key)
 }
 
 func (c *client) CacheGet(jobId, key string) {
 
 }
 
-func (c *client) CacheDownload(cacheId, file string) {
+func (c *client) CacheDownload(cacheId, workspace, file string) {
 
 }
 
@@ -225,6 +251,27 @@ func (c *client) Close() {
 		close(c.pending)
 		_ = c.conn.Close()
 	}
+}
+
+func (c *client) buildMultipartContent(parts []*part) (*bytes.Buffer, string) {
+	buffer := &bytes.Buffer{}
+	writer := multipart.NewWriter(buffer)
+	defer writer.Close()
+
+	for _, part := range parts {
+		file, err := os.Open(part.file)
+		util.PanicIfErr(err)
+
+		part, err := writer.CreateFormFile(part.key, filepath.Base(part.file))
+		util.PanicIfErr(err)
+
+		_, err = io.Copy(part, file)
+		util.PanicIfErr(err)
+
+		_ = file.Close()
+	}
+
+	return buffer, writer.FormDataContentType()
 }
 
 func (c *client) setConnState(state int32) {
@@ -331,14 +378,21 @@ func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domai
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
 
-	resp = &domain.Response{}
-	err = json.Unmarshal(data, resp)
-	util.PanicIfErr(err)
+	_, out = c.parseResponse(data)
+	return
+}
 
-	if !resp.IsOk() {
-		out = fmt.Errorf(resp.Message)
-		return
+func (c *client) parseResponse(body []byte) (*domain.Response, error) {
+	// get response data
+	message := &domain.Response{}
+	err := json.Unmarshal(body, message)
+	if err != nil {
+		return nil, err
 	}
 
-	return
+	if message.IsOk() {
+		return message, nil
+	}
+
+	return nil, fmt.Errorf(message.Message)
 }
