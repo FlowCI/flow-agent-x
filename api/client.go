@@ -47,7 +47,7 @@ type (
 		SendTtyLog(ttyId, b64Log string)
 
 		CachePut(jobId, key, workspace string, paths []string)
-		CacheGet(jobId, key string)
+		CacheGet(jobId, key string) *domain.JobCache
 		CacheDownload(cacheId, workspace, file string)
 
 		Close()
@@ -151,7 +151,7 @@ func (c *client) UploadLog(filePath string) (err error) {
 	raw, err := c.send("POST", "logs/upload", contentType, buffer)
 	util.PanicIfErr(err)
 
-	_, err = c.parseResponse(raw)
+	_, err = c.parseResponse(raw, &domain.Response{})
 	util.PanicIfErr(err)
 
 	util.LogInfo("[Uploaded]: %s", filePath)
@@ -232,14 +232,21 @@ func (c *client) CachePut(jobId, key, workspace string, paths []string) {
 	raw, err := c.send("POST", fmt.Sprintf("cache/%s/%s", jobId, key), contentType, buffer)
 	util.PanicIfErr(err)
 
-	_, err = c.parseResponse(raw)
+	_, err = c.parseResponse(raw, &domain.Response{})
 	util.PanicIfErr(err)
 
 	util.LogInfo("[CachePut] %d/%d files cached in %s", len(parts), len(paths), key)
 }
 
-func (c *client) CacheGet(jobId, key string) {
+func (c *client) CacheGet(jobId, key string) *domain.JobCache {
+	raw, err := c.send("GET", fmt.Sprintf("cache/%s/%s", jobId, key), "", nil)
+	util.PanicIfErr(err)
 
+	resp, err := c.parseResponse(raw, &domain.JobCacheResponse{})
+	util.PanicIfErr(err)
+
+	jobCache := resp.(*domain.JobCacheResponse)
+	return jobCache.Data
 }
 
 func (c *client) CacheDownload(cacheId, workspace, file string) {
@@ -378,21 +385,23 @@ func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domai
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
 
-	_, out = c.parseResponse(data)
+	message, err := c.parseResponse(data, &domain.Response{})
+	util.PanicIfErr(err)
+
+	resp = message.(*domain.Response)
 	return
 }
 
-func (c *client) parseResponse(body []byte) (*domain.Response, error) {
+func (c *client) parseResponse(body []byte, resp domain.ResponseMessage) (domain.ResponseMessage, error) {
 	// get response data
-	message := &domain.Response{}
-	err := json.Unmarshal(body, message)
+	err := json.Unmarshal(body, resp)
 	if err != nil {
 		return nil, err
 	}
 
-	if message.IsOk() {
-		return message, nil
+	if resp.IsOk() {
+		return resp, nil
 	}
 
-	return nil, fmt.Errorf(message.Message)
+	return nil, fmt.Errorf(resp.GetMessage())
 }
