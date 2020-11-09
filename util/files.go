@@ -2,12 +2,10 @@ package util
 
 import (
 	"archive/zip"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func IsFileExists(path string) bool {
@@ -18,11 +16,9 @@ func IsFileExists(path string) bool {
 }
 
 func Zip(src, dest, separator string) (out error) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = r.(error)
-		}
-	}()
+	defer RecoverPanic(func(e error) {
+		out = e
+	})
 
 	outFile, err := os.Create(dest)
 	PanicIfErr(err)
@@ -38,11 +34,9 @@ func Zip(src, dest, separator string) (out error) {
 }
 
 func Unzip(src string, dest string) (out error) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = r.(error)
-		}
-	}()
+	defer RecoverPanic(func(e error) {
+		out = e
+	})
 
 	r, err := zip.OpenReader(src)
 	PanicIfErr(err)
@@ -50,11 +44,7 @@ func Unzip(src string, dest string) (out error) {
 
 	for _, f := range r.File {
 		fpath := filepath.Join(dest, f.Name)
-
-		if !strings.HasPrefix(fpath, filepath.Clean(dest)+string(os.PathSeparator)) {
-			PanicIfErr(fmt.Errorf("%s: illegal file path", fpath))
-		}
-
+		
 		if f.FileInfo().IsDir() {
 			_ = os.MkdirAll(fpath, os.ModePerm)
 			continue

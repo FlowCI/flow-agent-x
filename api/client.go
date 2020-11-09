@@ -45,8 +45,8 @@ type (
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
 
-		CachePut(jobId, key, workspace string, paths []string)
-		CacheGet(jobId, key string) *domain.JobCache
+		CachePut(jobId, name, workspace string, paths []string)
+		CacheGet(jobId, name string) *domain.JobCache
 		CacheDownload(cacheId, workspace, file string)
 
 		Close()
@@ -133,8 +133,8 @@ func (c *client) ReportProfile(r *domain.Resource) (err error) {
 }
 
 func (c *client) UploadLog(filePath string) (err error) {
-	defer util.RecoverPanic(func(r error) {
-		err = r
+	defer util.RecoverPanic(func(e error) {
+		err = e
 	})
 
 	buffer, contentType := c.buildMultipartContent([]*part{
@@ -184,8 +184,8 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 }
 
 func (c *client) CachePut(jobId, key, workspace string, paths []string) {
-	defer util.RecoverPanic(func(r error) {
-		util.LogWarn(r.Error())
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
 	})
 
 	tempDir, err := ioutil.TempDir("", "agent_cache_")
@@ -242,8 +242,8 @@ func (c *client) CacheGet(jobId, key string) *domain.JobCache {
 }
 
 func (c *client) CacheDownload(cacheId, workspace, file string) {
-	defer util.RecoverPanic(func(r error) {
-		util.LogWarn(r.Error())
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
 	})
 
 	tmpPath := fmt.Sprintf("%s/%s.tmp", workspace, file)
@@ -260,17 +260,10 @@ func (c *client) CacheDownload(cacheId, workspace, file string) {
 	defer os.RemoveAll(zippedFile)
 
 	cacheFileName := decodeCacheName(file)
-	dirs := strings.Split(cacheFileName, util.UnixPathSeparator)
+	dest := workspace + util.UnixPathSeparator + cacheFileName
 
-	// cache file is just a file/dir without parent, unzip and write back to workspace directly
-	if len(dirs) == 1 {
-		dest := workspace + util.UnixPathSeparator + cacheFileName
-		err = util.Unzip(zippedFile, dest)
-		util.PanicIfErr(err)
-		return
-	}
-
-	// cache file is a directory, check parent dir and write back
+	err = util.Unzip(zippedFile, dest)
+	util.PanicIfErr(err)
 }
 
 func (c *client) Close() {
@@ -411,11 +404,9 @@ func (c *client) sendMessageWithBytes(event string, body []byte) error {
 }
 
 func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domain.Response, out error) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = r.(error)
-		}
-	}()
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
 
 	body, err := json.Marshal(msg)
 	util.PanicIfErr(err)

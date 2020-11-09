@@ -11,7 +11,7 @@ func PanicIfErr(err error) {
 	}
 }
 
-func RecoverPanic(handler func(r error)) {
+func RecoverPanic(handler func(e error)) {
 	if r := recover(); r != nil {
 		handler(r.(error))
 	}
