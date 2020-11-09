@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
@@ -134,11 +133,9 @@ func (c *client) ReportProfile(r *domain.Resource) (err error) {
 }
 
 func (c *client) UploadLog(filePath string) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
+	defer util.RecoverPanic(func(r error) {
+		err = r
+	})
 
 	buffer, contentType := c.buildMultipartContent([]*part{
 		{
@@ -187,11 +184,9 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 }
 
 func (c *client) CachePut(jobId, key, workspace string, paths []string) {
-	defer func() {
-		if r := recover(); r != nil {
-			util.LogWarn(r.(error).Error())
-		}
-	}()
+	defer util.RecoverPanic(func(r error) {
+		util.LogWarn(r.Error())
+	})
 
 	tempDir, err := ioutil.TempDir("", "agent_cache_")
 	util.PanicIfErr(err)
@@ -209,12 +204,9 @@ func (c *client) CachePut(jobId, key, workspace string, paths []string) {
 			continue
 		}
 
-		// cache file name is base64(a/b/c).zip from /{workspace}/a/b/c
-		cacheName := strings.TrimLeft(path, workspace)
-		cacheZipName := base64.StdEncoding.EncodeToString([]byte(cacheName)) + ".zip"
-
-		zipPath := tempDir + "/" + cacheZipName
-		err = util.Zip(path, zipPath, "/")
+		cacheZipName := encodeCacheName(workspace, path)
+		zipPath := tempDir + util.UnixPathSeparator + cacheZipName
+		err = util.Zip(path, zipPath, util.UnixPathSeparator)
 
 		if err != nil {
 			util.LogWarn(err.Error())
@@ -250,7 +242,35 @@ func (c *client) CacheGet(jobId, key string) *domain.JobCache {
 }
 
 func (c *client) CacheDownload(cacheId, workspace, file string) {
+	defer util.RecoverPanic(func(r error) {
+		util.LogWarn(r.Error())
+	})
 
+	tmpPath := fmt.Sprintf("%s/%s.tmp", workspace, file)
+	tmpFile, err := os.Create(tmpPath)
+	util.PanicIfErr(err)
+
+	err = c.download(fmt.Sprintf("cache/%s?file=%s", cacheId, file), tmpFile)
+	util.PanicIfErr(err)
+
+	zippedFile := workspace + util.UnixPathSeparator + file
+	err = os.Rename(tmpPath, zippedFile)
+	util.PanicIfErr(err)
+
+	defer os.RemoveAll(zippedFile)
+
+	cacheFileName := decodeCacheName(file)
+	dirs := strings.Split(cacheFileName, util.UnixPathSeparator)
+
+	// cache file is just a file/dir without parent, unzip and write back to workspace directly
+	if len(dirs) == 1 {
+		dest := workspace + util.UnixPathSeparator + cacheFileName
+		err = util.Unzip(zippedFile, dest)
+		util.PanicIfErr(err)
+		return
+	}
+
+	// cache file is a directory, check parent dir and write back
 }
 
 func (c *client) Close() {
@@ -314,7 +334,7 @@ func (c *client) readMessage() {
 }
 
 // method: GET/POST, path: {server}/agents/api/:path
-func (c *client) send(method, path, contentType string, body io.Reader) (out []byte, err error) {
+func (c *client) send(method, path, contentType string, body io.Reader) ([]byte, error) {
 	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
 	req, _ := http.NewRequest(method, url, body)
 
@@ -323,17 +343,38 @@ func (c *client) send(method, path, contentType string, body io.Reader) (out []b
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	out, err = ioutil.ReadAll(resp.Body)
+	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	return
+	return data, nil
+}
+
+func (c *client) download(path string, dist io.Writer) error {
+	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
+
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set(util.HttpHeaderAgentToken, c.token)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	_, err = io.Copy(dist, io.TeeReader(resp.Body, &CounterWrite{}))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *client) consumePendingMessage() {
