@@ -221,7 +221,8 @@ func (c *client) CachePut(jobId, key, workspace string, paths []string) {
 
 	buffer, contentType := c.buildMultipartContent(parts)
 
-	raw, err := c.send("POST", fmt.Sprintf("cache/%s/%s", jobId, key), contentType, buffer)
+	path := fmt.Sprintf("cache/%s/%s/%s", jobId, key, util.OS())
+	raw, err := c.send("POST", path, contentType, buffer)
 	util.PanicIfErr(err)
 
 	_, err = c.parseResponse(raw, &domain.Response{})
