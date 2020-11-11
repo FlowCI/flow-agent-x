@@ -133,9 +133,13 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}()
 
 	if in.HasPlugin() {
-		plugins := util.NewPlugins(appConfig.PluginDir, appConfig.Server)
+		plugins := NewPluginManager(appConfig.PluginDir, appConfig.Server)
 		err := plugins.Load(in.Plugin)
 		util.PanicIfErr(err)
+	}
+
+	if in.HasCache() {
+
 	}
 
 	s.executor = executor.NewExecutor(executor.Options{
