@@ -2,11 +2,9 @@ package service
 
 import (
 	"github/flowci/flow-agent-x/util"
+	git "gopkg.in/src-d/go-git.v4"
 	"os"
 	"path/filepath"
-	"strings"
-
-	git "gopkg.in/src-d/go-git.v4"
 )
 
 type PluginManager struct {
@@ -15,13 +13,6 @@ type PluginManager struct {
 
 	// server url
 	server string
-}
-
-func NewPluginManager(dir, server string) *PluginManager {
-	return &PluginManager{
-		dir:    dir,
-		server: strings.TrimRight(server, "/"),
-	}
 }
 
 func (p *PluginManager) Load(name string) error {

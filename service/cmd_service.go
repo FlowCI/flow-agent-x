@@ -20,27 +20,18 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
-var (
-	singleton *CmdService
-	once      sync.Once
-)
-
 type (
 	// CmdService receive and execute cmd
 	CmdService struct {
+		pluginManager *PluginManager
+		cacheManager  *CacheManager
+
+		cmdIn <-chan []byte
+
 		executor executor.Executor
 		mux      sync.Mutex
 	}
 )
-
-// GetCmdService get singleton of cmd service
-func GetCmdService() *CmdService {
-	once.Do(func() {
-		singleton = new(CmdService)
-		singleton.start()
-	})
-	return singleton
-}
 
 // IsRunning check is available to run cmd
 func (s *CmdService) IsRunning() bool {
@@ -71,17 +62,13 @@ func (s *CmdService) Execute(bytes []byte) error {
 	}
 }
 
-// new thread to consume rabbitmq message
 func (s *CmdService) start() {
-	appConfig := config.GetInstance()
-	cmdIn := appConfig.Client.GetCmdIn()
-
 	go func() {
 		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
-			case bytes, ok := <-cmdIn:
+			case bytes, ok := <-s.cmdIn:
 				if !ok {
 					break
 				}
@@ -133,8 +120,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}()
 
 	if in.HasPlugin() {
-		plugins := NewPluginManager(appConfig.PluginDir, appConfig.Server)
-		err := plugins.Load(in.Plugin)
+		err := s.pluginManager.Load(in.Plugin)
 		util.PanicIfErr(err)
 	}
 
