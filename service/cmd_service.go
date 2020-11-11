@@ -145,7 +145,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		Volumes:   appConfig.Volumes,
 	})
 
-	err = s.executor.Init()
+	_, err = s.executor.Init()
 	util.PanicIfErr(err)
 
 	s.startLogConsumer()

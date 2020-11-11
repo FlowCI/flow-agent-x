@@ -17,13 +17,16 @@ type (
 		BaseExecutor
 		command *exec.Cmd
 		tty     *exec.Cmd
-		workDir string
 		binDir  string
 		envFile string
 	}
 )
 
-func (se *shellExecutor) Init() (err error) {
+func (se *shellExecutor) Init() (jobDir string, out error) {
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
+
 	se.os = runtime.GOOS
 	se.result.StartAt = time.Now()
 
@@ -33,7 +36,9 @@ func (se *shellExecutor) Init() (err error) {
 
 	// setup bin under workspace
 	se.binDir = filepath.Join(se.workspace, "bin")
-	err = os.MkdirAll(se.binDir, os.ModePerm)
+	err := os.MkdirAll(se.binDir, os.ModePerm)
+	util.PanicIfErr(err)
+
 	for _, f := range binFiles {
 		path := filepath.Join(se.binDir, f.name)
 		if !util.IsFileExists(path) {
@@ -42,12 +47,14 @@ func (se *shellExecutor) Init() (err error) {
 	}
 
 	// setup job dir under workspace
-	se.workDir = filepath.Join(se.workspace, util.ParseString(se.inCmd.FlowId))
-	se.vars[domain.VarAgentJobDir] = se.workDir
-	err = os.MkdirAll(se.workDir, os.ModePerm)
+	se.jobDir = filepath.Join(se.workspace, util.ParseString(se.inCmd.FlowId))
+	se.vars[domain.VarAgentJobDir] = se.jobDir
+
+	err = os.MkdirAll(se.jobDir, os.ModePerm)
+	util.PanicIfErr(err)
 
 	se.vars.Resolve()
-	return
+	return se.jobDir, nil
 }
 
 func (se *shellExecutor) Start() (out error) {

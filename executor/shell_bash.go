@@ -25,7 +25,7 @@ func (se *shellExecutor) doStart() (out error) {
 	se.stdOutWg.Add(2)
 
 	command := exec.Command(linuxBash)
-	command.Dir = se.workDir
+	command.Dir = se.jobDir
 	command.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	stdin, err := command.StdinPipe()
@@ -93,7 +93,7 @@ func (se *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	}
 
 	c := exec.Command(linuxBash)
-	c.Dir = se.workDir
+	c.Dir = se.jobDir
 	c.Env = append(os.Environ(), se.vars.ToStringArray()...)
 
 	ptmx, err := pty.Start(c)

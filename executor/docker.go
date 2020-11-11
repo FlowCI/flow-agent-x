@@ -53,7 +53,6 @@ type (
 		cli         *client.Client
 		configs     []*domain.DockerConfig
 		ttyExecId   string
-		workDir     string
 		envFile     string
 	}
 )
@@ -66,12 +65,10 @@ func (d *dockerExecutor) runtime() *domain.DockerConfig {
 	return nil
 }
 
-func (d *dockerExecutor) Init() (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
-	}()
+func (d *dockerExecutor) Init() (jobDir string, out error) {
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
 
 	d.os = util.OSLinux // only support unix based image
 	d.result.StartAt = time.Now()
@@ -85,7 +82,7 @@ func (d *dockerExecutor) Init() (out error) {
 	d.initAgentVolume()
 	d.initConfig()
 
-	return
+	return d.jobDir, nil
 }
 
 func (d *dockerExecutor) Start() (out error) {
@@ -106,13 +103,10 @@ func (d *dockerExecutor) Start() (out error) {
 }
 
 func (d *dockerExecutor) doStart() (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = d.handleErrors(err.(error))
-		}
-
+	defer util.RecoverPanic(func(e error) {
+		out = d.handleErrors(e)
 		d.cleanupContainer()
-	}()
+	})
 
 	// one for pull image output, and one for cmd output
 	d.stdOutWg.Add(1)
@@ -144,23 +138,21 @@ func (d *dockerExecutor) doStart() (out error) {
 }
 
 func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
+	defer util.RecoverPanic(func(e error) {
+		out = e
 
 		d.ttyExecId = ""
 		d.ttyId = ""
-	}()
+	})
 
 	if d.IsInteracting() {
-		return fmt.Errorf("interaction is ongoning")
+		panic(fmt.Errorf("interaction is ongoning"))
 	}
 
 	runtime := d.runtime()
 
 	if runtime.ContainerID == "" {
-		return fmt.Errorf("container not started")
+		panic(fmt.Errorf("container not started"))
 	}
 
 	config := types.ExecConfig{
@@ -335,9 +327,9 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
+	d.jobDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
-	d.vars[domain.VarAgentJobDir] = d.workDir
+	d.vars[domain.VarAgentJobDir] = d.jobDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
@@ -365,7 +357,7 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	d.vars.Resolve()
-	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
+	config := runtimeOption.ToRuntimeConfig(d.vars, d.jobDir, binds)
 
 	// set default entrypoint for runtime container
 	if !config.HasEntrypoint() {

@@ -23,7 +23,8 @@ const (
 )
 
 type Executor interface {
-	Init() error
+	// Init return job workspace or error
+	Init() (string, error)
 
 	CmdIn() *domain.ShellIn
 
@@ -54,8 +55,9 @@ type BaseExecutor struct {
 	k8sConfig *domain.K8sConfig
 
 	agentId   string // should be agent token
-	workspace string
+	workspace string // agent workspace
 	pluginDir string
+	jobDir    string // job workspace
 
 	os         string // current operation system
 	context    context.Context
