@@ -124,10 +124,6 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		util.PanicIfErr(err)
 	}
 
-	if in.HasCache() {
-
-	}
-
 	s.executor = executor.NewExecutor(executor.Options{
 		K8s: &domain.K8sConfig{
 			Enabled:   appConfig.K8sEnabled,
@@ -145,8 +141,12 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		Volumes:   appConfig.Volumes,
 	})
 
-	_, err = s.executor.Init()
+	jobDir, err := s.executor.Init()
 	util.PanicIfErr(err)
+
+	if in.HasCache() {
+		s.cacheManager.Download(in, jobDir)
+	}
 
 	s.startLogConsumer()
 

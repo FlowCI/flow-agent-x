@@ -24,6 +24,6 @@ func TestShouldCacheFile(t *testing.T) {
 	jobCache := c.CacheGet(jobId, cacheName)
 	assert.NotNil(jobCache)
 
-	c.CacheDownload(jobCache.Id, "/ws/out", "Y2FjaGVfMg==")
-	c.CacheDownload(jobCache.Id, "/ws/out", "Y2FjaGVfMS90ZXN0")
+	c.CacheDownload(jobCache.Id, "/ws/out", "Y2FjaGVfMg==", nil)
+	c.CacheDownload(jobCache.Id, "/ws/out", "Y2FjaGVfMS90ZXN0", nil)
 }

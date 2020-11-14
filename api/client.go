@@ -47,7 +47,7 @@ type (
 
 		CachePut(jobId, name, workspace string, paths []string)
 		CacheGet(jobId, name string) *domain.JobCache
-		CacheDownload(cacheId, workspace, file string)
+		CacheDownload(cacheId, workspace, file string, progress io.Writer)
 
 		Close()
 	}
@@ -242,7 +242,7 @@ func (c *client) CacheGet(jobId, key string) *domain.JobCache {
 	return jobCache.Data
 }
 
-func (c *client) CacheDownload(cacheId, workspace, file string) {
+func (c *client) CacheDownload(cacheId, workspace, file string, progress io.Writer) {
 	defer util.RecoverPanic(func(e error) {
 		util.LogWarn(e.Error())
 	})
@@ -251,7 +251,7 @@ func (c *client) CacheDownload(cacheId, workspace, file string) {
 	tmpFile, err := os.Create(tmpPath)
 	util.PanicIfErr(err)
 
-	err = c.download(fmt.Sprintf("cache/%s?file=%s", cacheId, file), tmpFile)
+	err = c.download(fmt.Sprintf("cache/%s?file=%s", cacheId, file), tmpFile, progress)
 	util.PanicIfErr(err)
 
 	zippedFile := workspace + util.UnixPathSeparator + file
@@ -350,7 +350,7 @@ func (c *client) send(method, path, contentType string, body io.Reader) ([]byte,
 	return data, nil
 }
 
-func (c *client) download(path string, dist io.Writer) error {
+func (c *client) download(path string, dist io.Writer, progress io.Writer) error {
 	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
 
 	req, _ := http.NewRequest("GET", url, nil)
@@ -363,7 +363,11 @@ func (c *client) download(path string, dist io.Writer) error {
 
 	defer resp.Body.Close()
 
-	_, err = io.Copy(dist, io.TeeReader(resp.Body, &CounterWrite{}))
+	if progress == nil {
+		progress = &CounterWrite{}
+	}
+
+	_, err = io.Copy(dist, io.TeeReader(resp.Body, progress))
 	if err != nil {
 		return err
 	}
