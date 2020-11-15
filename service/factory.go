@@ -29,7 +29,10 @@ func GetCmdService() *CmdService {
 }
 
 func NewCacheManager() *CacheManager {
-	return &CacheManager{}
+	appConfig := config.GetInstance()
+	return &CacheManager{
+		client: appConfig.Client,
+	}
 }
 
 func NewPluginManager(dir, server string) *PluginManager {

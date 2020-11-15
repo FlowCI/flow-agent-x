@@ -105,8 +105,9 @@ func (d *dockerExecutor) Start() (out error) {
 func (d *dockerExecutor) doStart() (out error) {
 	defer util.RecoverPanic(func(e error) {
 		out = d.handleErrors(e)
-		d.cleanupContainer()
 	})
+
+	defer d.cleanupContainer()
 
 	// one for pull image output, and one for cmd output
 	d.stdOutWg.Add(1)
