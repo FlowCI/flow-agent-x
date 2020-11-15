@@ -65,7 +65,7 @@ func (d *dockerExecutor) runtime() *domain.DockerConfig {
 	return nil
 }
 
-func (d *dockerExecutor) Init() (jobDir string, out error) {
+func (d *dockerExecutor) Init() (out error) {
 	defer util.RecoverPanic(func(e error) {
 		out = e
 	})
@@ -82,7 +82,7 @@ func (d *dockerExecutor) Init() (jobDir string, out error) {
 	d.initAgentVolume()
 	d.initConfig()
 
-	return d.jobDir, nil
+	return nil
 }
 
 func (d *dockerExecutor) Start() (out error) {

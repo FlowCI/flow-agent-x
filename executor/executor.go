@@ -24,7 +24,7 @@ const (
 
 type Executor interface {
 	// Init return job workspace or error
-	Init() (string, error)
+	Init() error
 
 	CmdIn() *domain.ShellIn
 
@@ -54,10 +54,11 @@ type Executor interface {
 type BaseExecutor struct {
 	k8sConfig *domain.K8sConfig
 
-	agentId   string // should be agent token
-	workspace string // agent workspace
-	pluginDir string
-	jobDir    string // job workspace
+	agentId     string // should be agent token
+	workspace   string // agent workspace
+	cacheSrcDir string // downloaded cache temp dir
+	pluginDir   string
+	jobDir      string // job workspace
 
 	os         string // current operation system
 	context    context.Context
@@ -81,13 +82,14 @@ type BaseExecutor struct {
 type Options struct {
 	K8s *domain.K8sConfig
 
-	AgentId   string
-	Parent    context.Context
-	Workspace string
-	PluginDir string
-	Cmd       *domain.ShellIn
-	Vars      domain.Variables
-	Volumes   []*domain.DockerVolume
+	AgentId     string
+	Parent      context.Context
+	Workspace   string
+	PluginDir   string
+	CacheSrcDir string
+	Cmd         *domain.ShellIn
+	Vars        domain.Variables
+	Volumes     []*domain.DockerVolume
 }
 
 func NewExecutor(options Options) Executor {
@@ -97,17 +99,18 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 	base := BaseExecutor{
-		k8sConfig: options.K8s,
-		agentId:   options.AgentId,
-		workspace: options.Workspace,
-		pluginDir: options.PluginDir,
-		volumes:   options.Volumes,
-		stdout:    make(chan string, defaultChannelBufferSize),
-		inCmd:     cmd,
-		vars:      domain.ConnectVars(options.Vars, cmd.Inputs),
-		result:    domain.NewShellOutput(cmd),
-		ttyIn:     make(chan string, defaultChannelBufferSize),
-		ttyOut:    make(chan string, defaultChannelBufferSize),
+		k8sConfig:   options.K8s,
+		agentId:     options.AgentId,
+		workspace:   options.Workspace,
+		pluginDir:   options.PluginDir,
+		cacheSrcDir: options.CacheSrcDir,
+		volumes:     options.Volumes,
+		stdout:      make(chan string, defaultChannelBufferSize),
+		inCmd:       cmd,
+		vars:        domain.ConnectVars(options.Vars, cmd.Inputs),
+		result:      domain.NewShellOutput(cmd),
+		ttyIn:       make(chan string, defaultChannelBufferSize),
+		ttyOut:      make(chan string, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)

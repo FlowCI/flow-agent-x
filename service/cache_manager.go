@@ -7,7 +7,7 @@ import (
 	"github/flowci/flow-agent-x/api"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
-	"strings"
+	"io/ioutil"
 )
 
 type CacheManager struct {
@@ -20,7 +20,8 @@ type progressWriter struct {
 	cmdIn  *domain.ShellIn
 }
 
-func (cm *CacheManager) Download(cmdIn *domain.ShellIn, jobDir string) {
+// Download download cache into a temp dir and return
+func (cm *CacheManager) Download(cmdIn *domain.ShellIn) string {
 	defer util.RecoverPanic(func(e error) {
 		util.LogWarn(e.Error())
 	})
@@ -33,28 +34,30 @@ func (cm *CacheManager) Download(cmdIn *domain.ShellIn, jobDir string) {
 		cmdIn:  cmdIn,
 	}
 
+	cacheDir, err := ioutil.TempDir("", "cache_")
+	util.PanicIfErr(err)
+
 	for _, file := range cache.Files {
 		sendLog(cm.client, cmdIn, fmt.Sprintf("---> cache %s", file))
-		cm.client.CacheDownload(cache.Id, jobDir, file, writer)
+		cm.client.CacheDownload(cache.Id, cacheDir, file, writer)
 	}
 
 	sendLog(cm.client, cmdIn, "All cache file downloaded")
+	util.LogDebug("cache src file loaded at %s", cacheDir)
+	return cacheDir
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {
 	n := len(p)
 	pw.total += uint64(n)
 
-	text := fmt.Sprintf("\r%s", strings.Repeat(" ", 50))
-	sendLog(pw.client, pw.cmdIn, text)
-
-	text = fmt.Sprintf("\rDownloading... %s complete", humanize.Bytes(pw.total))
+	text := fmt.Sprintf("Downloading... %s complete", humanize.Bytes(pw.total))
 	sendLog(pw.client, pw.cmdIn, text)
 
 	return n, nil
 }
 
 func sendLog(client api.Client, cmdIn *domain.ShellIn, text string) {
-	b64 := base64.StdEncoding.EncodeToString([]byte(text))
+	b64 := base64.StdEncoding.EncodeToString([]byte(text + "\n"))
 	client.SendShellLog(cmdIn.JobId, cmdIn.ID, b64)
 }

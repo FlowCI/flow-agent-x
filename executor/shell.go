@@ -22,7 +22,7 @@ type (
 	}
 )
 
-func (se *shellExecutor) Init() (jobDir string, out error) {
+func (se *shellExecutor) Init() (out error) {
 	defer util.RecoverPanic(func(e error) {
 		out = e
 	})
@@ -54,7 +54,7 @@ func (se *shellExecutor) Init() (jobDir string, out error) {
 	util.PanicIfErr(err)
 
 	se.vars.Resolve()
-	return se.jobDir, nil
+	return nil
 }
 
 func (se *shellExecutor) Start() (out error) {

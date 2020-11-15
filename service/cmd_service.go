@@ -90,6 +90,7 @@ func (s *CmdService) release() {
 		s.executor.Close()
 		s.executor = nil
 	}
+
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
@@ -124,6 +125,11 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		util.PanicIfErr(err)
 	}
 
+	cacheSrcDir := ""
+	if in.HasCache() {
+		cacheSrcDir = s.cacheManager.Download(in)
+	}
+
 	s.executor = executor.NewExecutor(executor.Options{
 		K8s: &domain.K8sConfig{
 			Enabled:   appConfig.K8sEnabled,
@@ -132,26 +138,27 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 			PodName:   appConfig.K8sPodName,
 			PodIp:     appConfig.K8sPodIp,
 		},
-		AgentId:   appConfig.Token,
-		Parent:    appConfig.AppCtx,
-		Workspace: appConfig.Workspace,
-		PluginDir: appConfig.PluginDir,
-		Cmd:       in,
-		Vars:      s.initEnv(),
-		Volumes:   appConfig.Volumes,
+		AgentId:     appConfig.Token,
+		Parent:      appConfig.AppCtx,
+		Workspace:   appConfig.Workspace,
+		PluginDir:   appConfig.PluginDir,
+		CacheSrcDir: cacheSrcDir,
+		Cmd:         in,
+		Vars:        s.initEnv(),
+		Volumes:     appConfig.Volumes,
 	})
 
-	jobDir, err := s.executor.Init()
+	err = s.executor.Init()
 	util.PanicIfErr(err)
-
-	if in.HasCache() {
-		s.cacheManager.Download(in, jobDir)
-	}
 
 	s.startLogConsumer()
 
 	go func() {
-		defer s.release()
+		defer func() {
+			s.release()
+			os.RemoveAll(cacheSrcDir)
+		}()
+
 		_ = s.executor.Start()
 
 		result := s.executor.GetResult()
