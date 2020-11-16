@@ -23,7 +23,6 @@ const (
 )
 
 type Executor interface {
-	// Init return job workspace or error
 	Init() error
 
 	CmdIn() *domain.ShellIn

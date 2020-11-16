@@ -53,6 +53,19 @@ func (se *shellExecutor) Init() (out error) {
 	err = os.MkdirAll(se.jobDir, os.ModePerm)
 	util.PanicIfErr(err)
 
+	// copy cache to job workspace if cache defined
+	if util.HasString(se.cacheSrcDir) {
+		files, err := ioutil.ReadDir(se.cacheSrcDir)
+		util.PanicIfErr(err)
+
+		for _, f := range files {
+			oldPath := se.cacheSrcDir + util.UnixPathSeparator + f.Name()
+			newPath := se.jobDir + util.UnixPathSeparator + f.Name()
+			err = os.Rename(oldPath, newPath)
+			util.LogIfError(err)
+		}
+	}
+
 	se.vars.Resolve()
 	return nil
 }

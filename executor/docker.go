@@ -13,6 +13,7 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io/ioutil"
 	"strings"
 	"time"
 )
@@ -115,6 +116,7 @@ func (d *dockerExecutor) doStart() (out error) {
 	d.pullImage()
 	d.startContainer()
 	d.copyPlugins()
+	d.copyCache()
 
 	eid := d.runShell()
 	util.LogDebug("Exec %s is running", eid)
@@ -502,6 +504,35 @@ func (d *dockerExecutor) copyPlugins() {
 		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, dockerWorkspace, reader, config)
 		util.PanicIfErr(err)
 		util.LogDebug("Plugin dir been created in container")
+	}
+}
+
+// copy cache to job dir in docker container if cache defined
+func (d *dockerExecutor) copyCache() {
+	if !util.HasString(d.cacheSrcDir) {
+		return
+	}
+
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
+	})
+
+	files, err := ioutil.ReadDir(d.cacheSrcDir)
+	util.PanicIfErr(err)
+
+	config := types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: true,
+	}
+
+	for _, f := range files {
+		cachePath := d.cacheSrcDir + util.UnixPathSeparator + f.Name()
+		reader, err := tarArchiveFromPath(cachePath)
+		util.PanicIfErr(err)
+
+		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
+		util.PanicIfErr(err)
+
+		util.LogInfo("file %s been cached", f.Name())
 	}
 }
 
