@@ -53,20 +53,8 @@ func (se *shellExecutor) Init() (out error) {
 	err = os.MkdirAll(se.jobDir, os.ModePerm)
 	util.PanicIfErr(err)
 
-	// copy cache to job workspace if cache defined
-	if util.HasString(se.cacheSrcDir) {
-		files, err := ioutil.ReadDir(se.cacheSrcDir)
-		util.PanicIfErr(err)
-
-		for _, f := range files {
-			oldPath := se.cacheSrcDir + util.UnixPathSeparator + f.Name()
-			newPath := se.jobDir + util.UnixPathSeparator + f.Name()
-			err = os.Rename(oldPath, newPath)
-			util.LogIfError(err)
-		}
-	}
-
 	se.vars.Resolve()
+	se.copyCache()
 	return nil
 }
 
@@ -94,6 +82,8 @@ func (se *shellExecutor) Start() (out error) {
 
 		break
 	}
+
+	se.writeCache()
 	return
 }
 
@@ -106,6 +96,59 @@ func (se *shellExecutor) StopTty() {
 //====================================================================
 //	private
 //====================================================================
+
+// copy cache to job dir if cache defined in cacheSrcDir
+func (se *shellExecutor) copyCache() {
+	if !util.HasString(se.cacheSrcDir) {
+		return
+	}
+
+	files, err := ioutil.ReadDir(se.cacheSrcDir)
+	util.PanicIfErr(err)
+
+	for _, f := range files {
+		oldPath := filepath.Join(se.cacheSrcDir, f.Name())
+		newPath := filepath.Join(se.jobDir, f.Name())
+		err = os.Rename(oldPath, newPath) // error when file or dir exist
+		util.LogIfError(err)
+	}
+}
+
+// write cache back to cacheSrcDir
+func (se *shellExecutor) writeCache() {
+	if !se.inCmd.HasCache() {
+		return
+	}
+
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
+	})
+
+	cache := se.inCmd.Cache
+	for _, path := range cache.Paths {
+		path = filepath.Clean(path)
+		fullPath := filepath.Join(se.jobDir, path)
+
+		info, exist := util.IsFileExistsAndReturnFileInfo(fullPath)
+		if !exist {
+			continue
+		}
+
+		newPath := filepath.Join(se.cacheSrcDir, path)
+
+		if info.IsDir() {
+			err := util.CopyDir(fullPath, newPath)
+			util.PanicIfErr(err)
+
+			util.LogDebug("dir %s write back to cache dir", newPath)
+			continue
+		}
+
+		err := util.CopyFile(fullPath, newPath)
+		util.PanicIfErr(err)
+		util.LogDebug("file %s write back to cache dir", newPath)
+	}
+}
 
 func (se *shellExecutor) exportEnv() {
 	if util.IsEmptyString(se.envFile) {

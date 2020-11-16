@@ -26,6 +26,8 @@ func (cm *CacheManager) Download(cmdIn *domain.ShellIn) string {
 		util.LogWarn(e.Error())
 	})
 
+	cm.Resolve(cmdIn)
+
 	cache := cm.client.CacheGet(cmdIn.JobId, cmdIn.Cache.Key)
 	sendLog(cm.client, cmdIn, fmt.Sprintf("Start to download cache.. %s", cache.Key))
 
@@ -45,6 +47,16 @@ func (cm *CacheManager) Download(cmdIn *domain.ShellIn) string {
 	sendLog(cm.client, cmdIn, "All cache file downloaded")
 	util.LogDebug("cache src file loaded at %s", cacheDir)
 	return cacheDir
+}
+
+// Resolve resolve env vars in cache key and paths
+func (cm *CacheManager) Resolve(cmdIn *domain.ShellIn) {
+	cache := cmdIn.Cache
+	cache.Key = util.ParseStringWithSource(cache.Key, cmdIn.Inputs)
+
+	for i, p := range cache.Paths {
+		cache.Paths[i] = util.ParseStringWithSource(p, cmdIn.Inputs)
+	}
 }
 
 func (pw *progressWriter) Write(p []byte) (int, error) {

@@ -2,6 +2,7 @@ package util
 
 import (
 	"archive/zip"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -13,6 +14,100 @@ func IsFileExists(path string) bool {
 		return true
 	}
 	return false
+}
+
+func IsFileExistsAndReturnFileInfo(path string) (os.FileInfo, bool) {
+	stat, err := os.Stat(path)
+	if !os.IsNotExist(err) {
+		return stat, true
+	}
+	return stat, false
+}
+
+// CopyFile The file will be created if it does not already exist. If the
+// destination file exists, the contents will be replaced
+func CopyFile(src, dst string) (errOut error) {
+	defer RecoverPanic(func(e error) {
+		errOut = e
+	})
+
+	in, err := os.Open(src)
+	PanicIfErr(err)
+
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	PanicIfErr(err)
+
+	defer func() {
+		if e := out.Close(); e != nil {
+			errOut = e
+		}
+	}()
+
+	_, err = io.Copy(out, in)
+	PanicIfErr(err)
+
+	err = out.Sync()
+	PanicIfErr(err)
+
+	si, err := os.Stat(src)
+	PanicIfErr(err)
+
+	err = os.Chmod(dst, si.Mode())
+	PanicIfErr(err)
+
+	return
+}
+
+func CopyDir(src string, dst string) (err error) {
+	defer RecoverPanic(nil)
+
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+
+	si, err := os.Stat(src)
+	PanicIfErr(err)
+
+	if !si.IsDir() {
+		panic(fmt.Errorf("source is not a directory"))
+	}
+
+	_, err = os.Stat(dst)
+	if err != nil && !os.IsNotExist(err) {
+		return
+	}
+
+	if err == nil {
+		panic(fmt.Errorf("destination already exists"))
+	}
+
+	err = os.MkdirAll(dst, si.Mode())
+	PanicIfErr(err)
+
+	entries, err := ioutil.ReadDir(src)
+	PanicIfErr(err)
+
+	for _, entry := range entries {
+		srcPath := filepath.Join(src, entry.Name())
+		dstPath := filepath.Join(dst, entry.Name())
+
+		if entry.IsDir() {
+			err = CopyDir(srcPath, dstPath)
+			PanicIfErr(err)
+			continue
+		}
+
+		// skip symlinks.
+		if entry.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+
+		err = CopyFile(srcPath, dstPath)
+		PanicIfErr(err)
+	}
+
+	return
 }
 
 func Zip(src, dest, separator string) (out error) {
@@ -44,7 +139,7 @@ func Unzip(src string, dest string) (out error) {
 
 	for _, f := range r.File {
 		fpath := filepath.Join(dest, f.Name)
-		
+
 		if f.FileInfo().IsDir() {
 			_ = os.MkdirAll(fpath, os.ModePerm)
 			continue
