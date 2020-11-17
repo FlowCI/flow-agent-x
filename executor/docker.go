@@ -14,6 +14,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -100,6 +101,7 @@ func (d *dockerExecutor) Start() (out error) {
 
 		break
 	}
+
 	return
 }
 
@@ -131,6 +133,8 @@ func (d *dockerExecutor) doStart() (out error) {
 		util.LogDebug("Tty is running, wait..")
 		<-d.ttyCtx.Done()
 	}
+
+	d.writeCache()
 
 	if d.result.IsFinishStatus() {
 		return nil
@@ -533,6 +537,30 @@ func (d *dockerExecutor) copyCache() {
 		util.PanicIfErr(err)
 
 		util.LogInfo("file %s been cached", f.Name())
+		_ = os.RemoveAll(cachePath)
+	}
+}
+
+func (d *dockerExecutor) writeCache() {
+	if !d.inCmd.HasCache() {
+		return
+	}
+
+	cache := d.inCmd.Cache
+	for _, path := range cache.Paths {
+		cachePath := d.jobDir + util.UnixPathSeparator + path
+		tarStream, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, cachePath)
+
+		if err != nil {
+			util.LogWarn(err.Error())
+			continue
+		}
+
+		err = untarFromReader(tarStream, d.cacheSrcDir)
+		if err != nil {
+			util.LogWarn(err.Error())
+		}
+		tarStream.Close()
 	}
 }
 

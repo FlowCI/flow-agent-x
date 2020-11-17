@@ -168,9 +168,6 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
 		appConfig.Client.SendCmdOut(result)
-
-		// write all files in srcCache back to cache
-
 	}()
 
 	return nil
