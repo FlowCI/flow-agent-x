@@ -524,8 +524,9 @@ func (d *dockerExecutor) copyCache() {
 	files, err := ioutil.ReadDir(d.cacheSrcDir)
 	util.PanicIfErr(err)
 
+	// do not over write exiting file
 	config := types.CopyToContainerOptions{
-		AllowOverwriteDirWithFile: true,
+		AllowOverwriteDirWithFile: false,
 	}
 
 	for _, f := range files {
@@ -660,9 +661,12 @@ func (d *dockerExecutor) cleanupContainer() {
 		return
 	}
 
+	// apply new context since d.context might cancelled
+	ctx := context.Background()
+
 	for _, c := range d.configs {
 		if c.IsDelete {
-			err := d.cli.ContainerRemove(d.context, c.ContainerID, types.ContainerRemoveOptions{Force: true})
+			err := d.cli.ContainerRemove(ctx, c.ContainerID, types.ContainerRemoveOptions{Force: true})
 			if !util.LogIfError(err) {
 				util.LogInfo("Container %s %s for cmd %s has been deleted", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
@@ -670,7 +674,7 @@ func (d *dockerExecutor) cleanupContainer() {
 		}
 
 		if c.IsStop {
-			err := d.cli.ContainerStop(d.context, c.ContainerID, nil)
+			err := d.cli.ContainerStop(ctx, c.ContainerID, nil)
 			if !util.LogIfError(err) {
 				util.LogInfo("Container %s %s for cmd %s has been stopped", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
