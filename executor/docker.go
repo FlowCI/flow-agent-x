@@ -124,7 +124,7 @@ func (d *dockerExecutor) doStart() (out error) {
 	eid := d.runShell()
 	util.LogDebug("Exec %s is running", eid)
 
-	exitCode := d.waitForExit(eid, func(pid int) {
+	exitCode := d.waitForExit(d.context, eid, func(pid int) {
 		d.toStartStatus(pid)
 	})
 	d.exportEnv()
@@ -195,7 +195,7 @@ func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	go d.writeTtyIn(attach.Conn)
 	go d.writeTtyOut(attach.Reader)
 
-	d.waitForExit(exec.ID, nil)
+	d.waitForExit(d.context, exec.ID, nil)
 	return
 }
 
@@ -538,15 +538,16 @@ func (d *dockerExecutor) copyCache() {
 		// test cache path is existed
 		dest := d.jobDir + util.UnixPathSeparator + f.Name()
 		exitCode, err := d.runSingleScript("mkdir " + dest)
+
 		if exitCode != 0 {
-			util.LogWarn("file %s existed in container", dest)
-			continue
+			d.writeSingleLog(fmt.Sprintf("cache %s not applied since file or dir existed, ", f.Name()))
+		} else {
+			err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
+			util.PanicIfErr(err)
+			d.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
 		}
 
-		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
-		util.PanicIfErr(err)
-
-		util.LogInfo("file %s been cached", f.Name())
+		// remove cache from cache dir anyway
 		_ = os.RemoveAll(cachePath)
 	}
 }
@@ -656,10 +657,7 @@ func (d *dockerExecutor) runSingleScript(script string) (exitCode int, err error
 	err = d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
 	util.PanicIfErr(err)
 
-	inspect, err := d.cli.ContainerExecInspect(ctx, exec.ID)
-	util.PanicIfErr(err)
-
-	exitCode = inspect.ExitCode
+	exitCode = d.waitForExit(ctx, exec.ID, nil)
 	return
 }
 
@@ -699,22 +697,22 @@ func (d *dockerExecutor) cleanupContainer() {
 	}
 }
 
-func (d *dockerExecutor) waitForExit(eid string, onStarted func(int)) int {
-	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
+func (d *dockerExecutor) waitForExit(ctx context.Context, eid string, onStarted func(int)) int {
+	inspect, err := d.cli.ContainerExecInspect(ctx, eid)
 	util.PanicIfErr(err)
 	if onStarted != nil {
 		onStarted(inspect.Pid)
 	}
 
 	for {
-		inspect, err = d.cli.ContainerExecInspect(d.context, eid)
+		inspect, err = d.cli.ContainerExecInspect(ctx, eid)
 		util.PanicIfErr(err)
 
 		if !inspect.Running {
 			break
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	return inspect.ExitCode

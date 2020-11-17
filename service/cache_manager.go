@@ -58,6 +58,10 @@ func (cm *CacheManager) Upload(cmdIn *domain.ShellIn, cacheDir string) {
 		return
 	}
 
+	if len(fileInfos) == 0 {
+		return
+	}
+
 	files := make([]string, len(fileInfos))
 	for i, fileInfo := range fileInfos {
 		files[i] = filepath.Join(cacheDir, fileInfo.Name())

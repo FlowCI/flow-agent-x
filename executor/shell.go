@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"fmt"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
@@ -113,7 +114,12 @@ func (se *shellExecutor) copyCache() {
 		// move cache from src dir to job dir
 		// error when file or dir exist
 		err = os.Rename(oldPath, newPath)
-		util.LogIfError(err)
+
+		if err == nil {
+			se.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
+		} else {
+			se.writeSingleLog(fmt.Sprintf("cache %s not applied since file or dir existed, ", f.Name()))
+		}
 
 		// remove cache from cache dir anyway
 		_ = os.RemoveAll(oldPath)
