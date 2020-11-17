@@ -20,15 +20,16 @@ import (
 )
 
 const (
-	dockerWorkspace     = "/ws"
-	dockerPluginDir     = dockerWorkspace + "/.plugins"
-	dockerBin           = "/ws/bin"
-	dockerEnvFile       = "/tmp/.env"
-	dockerPullRetry     = 3
-	dockerSock          = "/var/run/docker.sock"
-	dockerNetwork       = "flow-ci-agent-default"
-	dockerNetworkDriver = "bridge"
-	dockerVarDockerHost = "DOCKER_HOST"
+	dockerWorkspace       = "/ws"
+	dockerPluginDir       = dockerWorkspace + "/.plugins"
+	dockerBin             = "/ws/bin"
+	dockerEnvFile         = "/tmp/.env"
+	dockerPullRetry       = 3
+	dockerSock            = "/var/run/docker.sock"
+	dockerNetwork         = "flow-ci-agent-default"
+	dockerNetworkDriver   = "bridge"
+	dockerVarDockerHost   = "DOCKER_HOST"
+	dockerDefaultExitCode = -1
 
 	dockerShellPidPath = "/tmp/.shell.pid"
 	writeShellPid      = "echo $$ > /tmp/.shell.pid\n"
@@ -199,7 +200,7 @@ func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 }
 
 func (d *dockerExecutor) StopTty() {
-	err := d.runSingleScript(killTty)
+	_, err := d.runSingleScript(killTty)
 	util.LogIfError(err)
 }
 
@@ -377,8 +378,8 @@ func (d *dockerExecutor) initConfig() {
 
 func (d *dockerExecutor) handleErrors(err error) error {
 	kill := func() {
-		_ = d.runSingleScript(killShell)
-		_ = d.runSingleScript(killTty)
+		_, _ = d.runSingleScript(killShell)
+		_, _ = d.runSingleScript(killTty)
 	}
 
 	util.LogWarn("handleError on docker: %s", err.Error())
@@ -534,6 +535,14 @@ func (d *dockerExecutor) copyCache() {
 		reader, err := tarArchiveFromPath(cachePath)
 		util.PanicIfErr(err)
 
+		// test cache path is existed
+		dest := d.jobDir + util.UnixPathSeparator + f.Name()
+		exitCode, err := d.runSingleScript("mkdir " + dest)
+		if exitCode != 0 {
+			util.LogWarn("file %s existed in container", dest)
+			continue
+		}
+
 		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
 		util.PanicIfErr(err)
 
@@ -631,19 +640,27 @@ func (d *dockerExecutor) runShell() string {
 }
 
 // run single bash script with new context
-func (d *dockerExecutor) runSingleScript(script string) error {
+func (d *dockerExecutor) runSingleScript(script string) (exitCode int, err error) {
+	defer util.RecoverPanic(func(e error) {
+		exitCode = dockerDefaultExitCode
+	})
+
 	ctx := context.Background()
 
 	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
 		Cmd: []string{linuxBash, "-c", script},
 	})
-
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	util.LogDebug("Script: %s will run", script)
-	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
+	err = d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
+	util.PanicIfErr(err)
+
+	inspect, err := d.cli.ContainerExecInspect(ctx, exec.ID)
+	util.PanicIfErr(err)
+
+	exitCode = inspect.ExitCode
+	return
 }
 
 func (d *dockerExecutor) exportEnv() {
