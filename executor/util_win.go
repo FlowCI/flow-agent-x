@@ -32,8 +32,8 @@ func readEnvFromReaderForWin(r io.Reader, filters []string) domain.Variables {
 		}
 
 		if process {
-			line = util.BytesTrimLeft(line, winNUL)
-			line = util.BytesTrimLeft(line, winUTF16CR)
+			line = util.BytesTrimRight(line, winNUL)
+			line = util.BytesTrimRight(line, winUTF16CR)
 			if len(line) == 0 {
 				continue
 			}

@@ -152,7 +152,7 @@ func IsByteStartWith(src []byte, start []byte) bool {
 	return true
 }
 
-func BytesTrimLeft(src []byte, trim []byte) []byte {
+func BytesTrimRight(src []byte, trim []byte) []byte {
 	if len(src) < len(trim) {
 		return src
 	}
@@ -173,6 +173,26 @@ func BytesTrimLeft(src []byte, trim []byte) []byte {
 	}
 
 	return src
+}
+
+func TrimLeftString(src, trim string) string {
+	if len(src) < len(trim) {
+		return src
+	}
+
+	index := -1
+	for i := 0; i < len(trim); i++ {
+		if src[i] == trim[i] {
+			index = i
+			continue
+		}
+	}
+
+	if index == -1 {
+		return ""
+	}
+
+	return src[index+1:]
 }
 
 func UTF16BytesToString(b []byte, o binary.ByteOrder) string {
