@@ -8,6 +8,7 @@ import (
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
 	"io/ioutil"
+	"path/filepath"
 )
 
 type CacheManager struct {
@@ -44,9 +45,25 @@ func (cm *CacheManager) Download(cmdIn *domain.ShellIn) string {
 		cm.client.CacheDownload(cache.Id, cacheDir, file, writer)
 	}
 
-	sendLog(cm.client, cmdIn, "All cache file downloaded")
+	sendLog(cm.client, cmdIn, "All cached files downloaded")
 	util.LogDebug("cache src file loaded at %s", cacheDir)
 	return cacheDir
+}
+
+// Upload upload all files/dirs from cache dir
+func (cm *CacheManager) Upload(cmdIn *domain.ShellIn, cacheDir string) {
+	fileInfos, err := ioutil.ReadDir(cacheDir)
+	if err != nil {
+		util.LogWarn(err.Error())
+		return
+	}
+
+	files := make([]string, len(fileInfos))
+	for i, fileInfo := range fileInfos {
+		files[i] = filepath.Join(cacheDir, fileInfo.Name())
+	}
+
+	cm.client.CachePut(cmdIn.JobId, cmdIn.Cache.Key, cacheDir, files)
 }
 
 // Resolve resolve env vars in cache key and paths

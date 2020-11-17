@@ -329,7 +329,7 @@ func (c *client) readMessage() {
 
 // method: GET/POST, path: {server}/agents/api/:path
 func (c *client) send(method, path, contentType string, body io.Reader) ([]byte, error) {
-	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
+	url := fmt.Sprintf("%s/api/%s", c.server, path)
 	req, _ := http.NewRequest(method, url, body)
 
 	req.Header.Set(util.HttpHeaderContentType, contentType)
@@ -351,7 +351,7 @@ func (c *client) send(method, path, contentType string, body io.Reader) ([]byte,
 }
 
 func (c *client) download(path string, dist io.Writer, progress io.Writer) error {
-	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
+	url := fmt.Sprintf("%s/api/%s", c.server, path)
 
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set(util.HttpHeaderAgentToken, c.token)
@@ -383,7 +383,7 @@ func (c *client) consumePendingMessage() {
 		}
 
 		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
-		util.LogInfo("pending message has been sent: %s", message.event)
+		util.LogDebug("pending message has been sent: %s", message.event)
 	}
 }
 

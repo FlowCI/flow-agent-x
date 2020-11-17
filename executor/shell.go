@@ -109,8 +109,14 @@ func (se *shellExecutor) copyCache() {
 	for _, f := range files {
 		oldPath := filepath.Join(se.cacheSrcDir, f.Name())
 		newPath := filepath.Join(se.jobDir, f.Name())
-		err = os.Rename(oldPath, newPath) // error when file or dir exist
+
+		// move cache from src dir to job dir
+		// error when file or dir exist
+		err = os.Rename(oldPath, newPath)
 		util.LogIfError(err)
+
+		// remove cache from cache dir anyway
+		_ = os.RemoveAll(oldPath)
 	}
 }
 

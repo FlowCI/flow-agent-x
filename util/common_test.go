@@ -44,5 +44,16 @@ func TestShouldDecodeUTF16(t *testing.T) {
 
 func TestShouldTrimLeftBytes(t *testing.T) {
 	assert := assert.New(t)
-	assert.Equal([]byte{0, 1, 2}, BytesTrimLeft([]byte{0, 1, 2, 3, 4}, []byte{3, 4}))
+	assert.Equal([]byte{0, 1, 2}, BytesTrimRight([]byte{0, 1, 2, 3, 4}, []byte{3, 4}))
+}
+
+func TestShouldTrimLeftString(t *testing.T) {
+	assert := assert.New(t)
+
+	p := "/var/folders/vz/__yhmfmd1j97t9gnslqm03780000gn/T/cache_362016357/cache_1"
+	z := "/var/folders/vz/__yhmfmd1j97t9gnslqm03780000gn/T/cache_362016357"
+
+	cacheName := TrimLeftString(p, z)
+	assert.NotNil(cacheName)
+	assert.Equal("/cache_1", cacheName)
 }

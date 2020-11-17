@@ -170,6 +170,8 @@ func (b *BaseExecutor) Close() {
 	close(b.stdout)
 	close(b.ttyIn)
 	close(b.ttyOut)
+
+	b.cancelFunc()
 }
 
 //====================================================================

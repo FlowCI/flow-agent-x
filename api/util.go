@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/base64"
+	"github/flowci/flow-agent-x/util"
 	"strings"
 )
 
@@ -12,7 +13,10 @@ func buildMessage(event string, body []byte) (out []byte) {
 }
 
 func encodeCacheName(workspace, fullPath string) string {
-	cacheName := strings.TrimLeft(fullPath, workspace)
+	cacheName := util.TrimLeftString(fullPath, workspace)
+	if strings.HasPrefix(cacheName, util.UnixPathSeparator) {
+		cacheName = cacheName[1:]
+	}
 	return base64.StdEncoding.EncodeToString([]byte(cacheName))
 }
 
@@ -23,5 +27,3 @@ func decodeCacheName(encodedFileName string) string {
 	}
 	return string(cacheName)
 }
-
-
