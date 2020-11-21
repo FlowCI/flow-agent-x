@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 
 RUN apt update
-RUN apt install git curl -y
+RUN apt install git curl wget -y
 
 ## docker ##
 RUN curl -L https://github.com/FlowCI/docker/releases/download/v0.20.9/docker-19_03_5 -o /usr/local/bin/docker \
@@ -16,6 +16,16 @@ RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-c
 ## ssh config
 RUN mkdir -p $HOME/.ssh
 RUN echo "StrictHostKeyChecking=no" >> $HOME/.ssh/config
+
+## install python3 environment
+RUN apt install python3.6-distutils -y
+RUN curl https://bootstrap.pypa.io/get-pip.py | python3.6
+
+RUN ln -s /usr/bin/python3.6 /usr/bin/python3
+RUN ln -s /usr/bin/python3.6 /usr/bin/python
+
+## install required pip packages
+RUN python3 -m pip install requests==2.22.0 python-lib-flow.ci==1.0.20
 
 ## default work dir
 ENV FLOWCI_AGENT_WORKSPACE=/ws
