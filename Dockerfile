@@ -21,7 +21,6 @@ RUN echo "StrictHostKeyChecking=no" >> $HOME/.ssh/config
 RUN apt install python3.6-distutils -y
 RUN curl https://bootstrap.pypa.io/get-pip.py | python3.6
 
-RUN ln -s /usr/bin/python3.6 /usr/bin/python3
 RUN ln -s /usr/bin/python3.6 /usr/bin/python
 
 ## install required pip packages
