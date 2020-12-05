@@ -220,10 +220,17 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	util.PanicIfErr(err)
 
 	if base.Category == domain.SecretCategoryAuth {
-		authSecret := &domain.AuthSecret{}
-		err = json.Unmarshal(out, authSecret)
+		auth := &domain.AuthSecret{}
+		err = json.Unmarshal(out, auth)
 		util.PanicIfErr(err)
-		return authSecret, nil
+		return auth, nil
+	}
+
+	if base.Category == domain.SecretCategorySshRsa {
+		rsa := &domain.RSASecret{}
+		err = json.Unmarshal(out, rsa)
+		util.PanicIfErr(err)
+		return rsa, nil
 	}
 
 	return nil, fmt.Errorf("unsupport secret type")

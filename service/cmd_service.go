@@ -144,12 +144,12 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 				secret, err := appConfig.Client.GetSecret(option.Auth)
 				util.PanicIfErr(err)
 
-				authSecret := secret.(*domain.AuthSecret)
-				if authSecret == nil {
-					panic(fmt.Errorf("invalid secret type for docker auth"))
+				auth, ok := secret.(*domain.AuthSecret)
+				if !ok {
+					panic(fmt.Errorf("the secret '%s' is invalid, the secret category should be 'Auth pair'", option.Auth))
 				}
 
-				option.AuthContent = authSecret.Pair
+				option.AuthContent = auth.Pair
 			}
 		}
 	}

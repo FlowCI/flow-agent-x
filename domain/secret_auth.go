@@ -8,6 +8,6 @@ type (
 
 	AuthSecret struct {
 		SecretBase
-		Pair *SimpleAuthPair
+		Pair *SimpleAuthPair `json:"pair"`
 	}
 )
