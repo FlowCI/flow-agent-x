@@ -254,7 +254,7 @@ func (d *dockerExecutor) initVolumeData() {
 		}
 
 		// pull image
-		err = d.pullImageWithName(v.Image)
+		err = d.pullImageWithName(v.Image, nil)
 		util.PanicIfErr(err)
 
 		// create volume
@@ -320,6 +320,7 @@ func (d *dockerExecutor) initConfig() {
 			runtimeOption = item
 			continue
 		}
+
 		d.configs[i] = item.ToConfig()
 	}
 
@@ -404,12 +405,12 @@ func (d *dockerExecutor) handleErrors(err error) error {
 
 func (d *dockerExecutor) pullImage() {
 	for _, c := range d.configs {
-		err := d.pullImageWithName(c.Config.Image)
+		err := d.pullImageWithName(c.Config.Image, c.Auth)
 		util.PanicIfErr(err)
 	}
 }
 
-func (d *dockerExecutor) pullImageWithName(image string) (out error) {
+func (d *dockerExecutor) pullImageWithName(image string, auth *domain.SimpleAuthPair) (out error) {
 	fullRef := image
 
 	if isDockerHubImage(image) {
@@ -420,8 +421,8 @@ func (d *dockerExecutor) pullImageWithName(image string) (out error) {
 	}
 
 	options := types.ImagePullOptions{}
-	if d.dockerAuth != nil {
-		jsonBytes, err := json.Marshal(d.dockerAuth)
+	if auth != nil {
+		jsonBytes, err := json.Marshal(auth)
 		if err != nil {
 			return err
 		}

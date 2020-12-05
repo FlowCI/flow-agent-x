@@ -226,7 +226,7 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 		return authSecret, nil
 	}
 
-	return nil, nil
+	return nil, fmt.Errorf("unsupport secret type")
 }
 
 

@@ -61,7 +61,6 @@ type BaseExecutor struct {
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	dockerAuth *domain.SimpleAuthPair
 	volumes    []*domain.DockerVolume
 	inCmd      *domain.ShellIn
 	result     *domain.ShellOut
@@ -87,8 +86,6 @@ type Options struct {
 	Cmd       *domain.ShellIn
 	Vars      domain.Variables
 	Volumes   []*domain.DockerVolume
-
-	DockerAuth *domain.SimpleAuthPair
 }
 
 func NewExecutor(options Options) Executor {
@@ -109,7 +106,6 @@ func NewExecutor(options Options) Executor {
 		result:     domain.NewShellOutput(cmd),
 		ttyIn:      make(chan string, defaultChannelBufferSize),
 		ttyOut:     make(chan string, defaultChannelBufferSize),
-		dockerAuth: options.DockerAuth,
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
