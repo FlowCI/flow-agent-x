@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -418,8 +419,17 @@ func (d *dockerExecutor) pullImageWithName(image string) (out error) {
 		}
 	}
 
+	options := types.ImagePullOptions{}
+	if d.dockerAuth != nil {
+		jsonBytes, err := json.Marshal(d.dockerAuth)
+		if err != nil {
+			return err
+		}
+		options.RegistryAuth = base64.StdEncoding.EncodeToString(jsonBytes)
+	}
+
 	for i := 0; i < dockerPullRetry; i++ {
-		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+		reader, err := d.cli.ImagePull(d.context, fullRef, options)
 		if err != nil {
 			out = err
 			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))

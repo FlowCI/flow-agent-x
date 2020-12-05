@@ -61,10 +61,11 @@ type BaseExecutor struct {
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	volumes []*domain.DockerVolume
-	inCmd   *domain.ShellIn
-	result  *domain.ShellOut
-	vars    domain.Variables // vars from input and in cmd
+	dockerAuth *domain.SimpleAuthPair
+	volumes    []*domain.DockerVolume
+	inCmd      *domain.ShellIn
+	result     *domain.ShellOut
+	vars       domain.Variables // vars from input and in cmd
 
 	stdout   chan string    // output log
 	stdOutWg sync.WaitGroup // init on subclasses
@@ -86,6 +87,8 @@ type Options struct {
 	Cmd       *domain.ShellIn
 	Vars      domain.Variables
 	Volumes   []*domain.DockerVolume
+
+	DockerAuth *domain.SimpleAuthPair
 }
 
 func NewExecutor(options Options) Executor {
@@ -95,17 +98,18 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 	base := BaseExecutor{
-		k8sConfig: options.K8s,
-		agentId:   options.AgentId,
-		workspace: options.Workspace,
-		pluginDir: options.PluginDir,
-		volumes:   options.Volumes,
-		stdout:    make(chan string, defaultChannelBufferSize),
-		inCmd:     cmd,
-		vars:      domain.ConnectVars(options.Vars, cmd.Inputs),
-		result:    domain.NewShellOutput(cmd),
-		ttyIn:     make(chan string, defaultChannelBufferSize),
-		ttyOut:    make(chan string, defaultChannelBufferSize),
+		k8sConfig:  options.K8s,
+		agentId:    options.AgentId,
+		workspace:  options.Workspace,
+		pluginDir:  options.PluginDir,
+		volumes:    options.Volumes,
+		stdout:     make(chan string, defaultChannelBufferSize),
+		inCmd:      cmd,
+		vars:       domain.ConnectVars(options.Vars, cmd.Inputs),
+		result:     domain.NewShellOutput(cmd),
+		ttyIn:      make(chan string, defaultChannelBufferSize),
+		ttyOut:     make(chan string, defaultChannelBufferSize),
+		dockerAuth: options.DockerAuth,
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
