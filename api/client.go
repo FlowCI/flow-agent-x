@@ -44,6 +44,8 @@ type (
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
 
+		GetSecret(name string) (domain.Secret, error)
+
 		Close()
 	}
 
@@ -194,6 +196,39 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 	}
 	_, _ = c.sendMessage(eventTtyLog, body, false)
 }
+
+func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = r.(error)
+		}
+	}()
+
+	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/secret/%s", c.server, name), nil)
+	req.Header.Set(util.HttpHeaderAgentToken, c.token)
+
+	resp, err := c.client.Do(req)
+	util.PanicIfErr(err)
+
+	defer resp.Body.Close()
+
+	out, err := ioutil.ReadAll(resp.Body)
+	util.PanicIfErr(err)
+
+	base := &domain.SecretBase{}
+	err = json.Unmarshal(out, base)
+	util.PanicIfErr(err)
+
+	if base.Category == domain.SecretCategoryAuth {
+		authSecret := &domain.AuthSecret{}
+		err = json.Unmarshal(out, authSecret)
+		util.PanicIfErr(err)
+		return authSecret, nil
+	}
+
+	return nil, nil
+}
+
 
 func (c *client) Close() {
 	if c.conn != nil {

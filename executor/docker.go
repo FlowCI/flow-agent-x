@@ -38,10 +38,6 @@ const (
 
 var (
 	placeHolder void
-
-	imagePrefixSkip = map[string]struct{}{
-		"mcr.microsoft.com": placeHolder,
-	}
 )
 
 type (
@@ -413,10 +409,9 @@ func (d *dockerExecutor) pullImage() {
 }
 
 func (d *dockerExecutor) pullImageWithName(image string) (out error) {
-	split := strings.Split(image, "/")
 	fullRef := image
 
-	if _, exist := imagePrefixSkip[split[0]]; !exist {
+	if isDockerHubImage(image) {
 		fullRef = "docker.io/library/" + image
 		if strings.Contains(image, "/") {
 			fullRef = "docker.io/" + image

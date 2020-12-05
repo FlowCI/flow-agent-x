@@ -16,6 +16,13 @@ func init() {
 	util.EnableDebugLog()
 }
 
+func TestShouldCheckRepoLinkIsDockerHub(t *testing.T) {
+	assert := assert.New(t)
+	assert.True(isDockerHubImage("flowci/core"))
+	assert.False(isDockerHubImage("http://localhost:8080/flowci/core"))
+	assert.False(isDockerHubImage("mcr.microsoft.com/dotnet/core/sdk:2.2.301"))
+}
+
 func TestShouldExecInDocker(t *testing.T) {
 	assert := assert.New(t)
 	cmd := createDockerTestCmd()
