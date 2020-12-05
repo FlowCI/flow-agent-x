@@ -3,6 +3,7 @@ package executor
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -38,10 +39,6 @@ const (
 
 var (
 	placeHolder void
-
-	imagePrefixSkip = map[string]struct{}{
-		"mcr.microsoft.com": placeHolder,
-	}
 )
 
 type (
@@ -257,7 +254,7 @@ func (d *dockerExecutor) initVolumeData() {
 		}
 
 		// pull image
-		err = d.pullImageWithName(v.Image)
+		err = d.pullImageWithName(v.Image, nil)
 		util.PanicIfErr(err)
 
 		// create volume
@@ -323,6 +320,7 @@ func (d *dockerExecutor) initConfig() {
 			runtimeOption = item
 			continue
 		}
+
 		d.configs[i] = item.ToConfig()
 	}
 
@@ -407,24 +405,32 @@ func (d *dockerExecutor) handleErrors(err error) error {
 
 func (d *dockerExecutor) pullImage() {
 	for _, c := range d.configs {
-		err := d.pullImageWithName(c.Config.Image)
+		err := d.pullImageWithName(c.Config.Image, c.Auth)
 		util.PanicIfErr(err)
 	}
 }
 
-func (d *dockerExecutor) pullImageWithName(image string) (out error) {
-	split := strings.Split(image, "/")
+func (d *dockerExecutor) pullImageWithName(image string, auth *domain.SimpleAuthPair) (out error) {
 	fullRef := image
 
-	if _, exist := imagePrefixSkip[split[0]]; !exist {
+	if isDockerHubImage(image) {
 		fullRef = "docker.io/library/" + image
 		if strings.Contains(image, "/") {
 			fullRef = "docker.io/" + image
 		}
 	}
 
+	options := types.ImagePullOptions{}
+	if auth != nil {
+		jsonBytes, err := json.Marshal(auth)
+		if err != nil {
+			return err
+		}
+		options.RegistryAuth = base64.StdEncoding.EncodeToString(jsonBytes)
+	}
+
 	for i := 0; i < dockerPullRetry; i++ {
-		reader, err := d.cli.ImagePull(d.context, fullRef, types.ImagePullOptions{})
+		reader, err := d.cli.ImagePull(d.context, fullRef, options)
 		if err != nil {
 			out = err
 			d.writeSingleLog(fmt.Sprintf("Unable to pull image %s since %s, retrying", image, err.Error()))

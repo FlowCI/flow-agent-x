@@ -23,6 +23,15 @@ var (
 	dockerStdErrHeaderPrefix = []byte{2, 0, 0, 0}
 )
 
+// is repo link belong to the format <hub-user>/<repo-name>
+func isDockerHubImage(image string) bool {
+	items := strings.Split(image, "/")
+	if len(items) <= 2 {
+		return true
+	}
+	return false
+}
+
 func removeDockerHeader(in []byte) []byte {
 	if len(in) < dockerHeaderSize {
 		return in

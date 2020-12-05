@@ -4,6 +4,7 @@ import "github.com/docker/docker/api/types/container"
 
 type DockerConfig struct {
 	Name     string
+	Auth     *SimpleAuthPair
 	Config   *container.Config
 	Host     *container.HostConfig
 	IsStop   bool

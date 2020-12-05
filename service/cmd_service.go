@@ -138,6 +138,22 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		util.PanicIfErr(err)
 	}
 
+	if in.HasDockerOption() {
+		for _, option := range in.Dockers {
+			if option.HasAuth() {
+				secret, err := appConfig.Client.GetSecret(option.Auth)
+				util.PanicIfErr(err)
+
+				auth, ok := secret.(*domain.AuthSecret)
+				if !ok {
+					panic(fmt.Errorf("the secret '%s' is invalid, the secret category should be 'Auth pair'", option.Auth))
+				}
+
+				option.AuthContent = auth.Pair
+			}
+		}
+	}
+
 	s.executor = executor.NewExecutor(executor.Options{
 		K8s: &domain.K8sConfig{
 			Enabled:   appConfig.K8sEnabled,
