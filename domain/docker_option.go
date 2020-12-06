@@ -9,6 +9,7 @@ import (
 type (
 	DockerOption struct {
 		Image             string    `json:"image"`
+		Auth              string    `json:"auth"`
 		Name              string    `json:"name"`
 		Entrypoint        []string  `json:"entrypoint"` // host:container
 		Command           []string  `json:"command"`
@@ -20,8 +21,14 @@ type (
 		IsStopContainer   bool      `json:"isStopContainer"`
 		IsDeleteContainer bool      `json:"isDeleteContainer"`
 		ContainerID       string    // try to resume if container id is existed
+
+		AuthContent *SimpleAuthPair // the real auth secret from 'auth' name
 	}
 )
+
+func (d *DockerOption) HasAuth() bool {
+	return d.Auth != ""
+}
 
 func (d *DockerOption) ToRuntimeConfig(vars Variables, workingDir string, binds []string) *DockerConfig {
 	return d.toConfig(vars, workingDir, binds, true)
@@ -66,6 +73,7 @@ func (d *DockerOption) toConfig(vars Variables, workingDir string, binds []strin
 		IsStop:      d.IsStopContainer,
 		IsDelete:    d.IsDeleteContainer,
 		ContainerID: d.ContainerID,
+		Auth:        d.AuthContent,
 	}
 
 	if util.HasString(workingDir) {

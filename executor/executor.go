@@ -63,10 +63,10 @@ type BaseExecutor struct {
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	volumes []*domain.DockerVolume
-	inCmd   *domain.ShellIn
-	result  *domain.ShellOut
-	vars    domain.Variables // vars from input and in cmd
+	volumes    []*domain.DockerVolume
+	inCmd      *domain.ShellIn
+	result     *domain.ShellOut
+	vars       domain.Variables // vars from input and in cmd
 
 	stdout   chan string    // output log
 	stdOutWg sync.WaitGroup // init on subclasses

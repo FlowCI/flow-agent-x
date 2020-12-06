@@ -1,7 +1,9 @@
 flow-agent-x
 ============
-
-[![LICENSE](https://img.shields.io/github/license/pingcap/tidb.svg)](https://github.com/pingcap/tidb/blob/master/LICENSE)  
+  
+![GitHub](https://img.shields.io/github/license/flowci/flow-agent-x)
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/flowci/flow-agent-x)
+![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/flowci/flow-agent-x)
 
 The new version agent for flow.ci
 
