@@ -28,8 +28,11 @@ const (
 )
 
 var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
+	newline      = []byte{'\n'}
+	space        = []byte{' '}
+	disconnected = &message{
+		event: "disconnected",
+	}
 )
 
 type (
@@ -350,6 +353,7 @@ func (c *client) isConnected() bool {
 
 func (c *client) readMessage() {
 	// start receive data
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -358,6 +362,7 @@ func (c *client) readMessage() {
 				c.setConnState(connStateReconnecting)
 				c.reConn <- struct{}{}
 				c.conn = nil
+				c.pending <- disconnected
 				break
 			}
 
@@ -418,11 +423,10 @@ func (c *client) download(path string, dist io.Writer, progress io.Writer) error
 
 func (c *client) consumePendingMessage() {
 	for message := range c.pending {
-		// wait until connected
-		for !c.isConnected() {
-			time.Sleep(5 * time.Second)
+		if message == disconnected {
+			util.LogDebug("exit ws message consumer")
+			break
 		}
-
 		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
 		util.LogDebug("pending message has been sent: %s", message.event)
 	}
