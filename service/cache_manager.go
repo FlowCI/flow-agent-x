@@ -30,7 +30,7 @@ func (cm *CacheManager) Download(cmdIn *domain.ShellIn) string {
 	cm.Resolve(cmdIn)
 
 	cache := cm.client.CacheGet(cmdIn.JobId, cmdIn.Cache.Key)
-	sendLog(cm.client, cmdIn, fmt.Sprintf("Start to download cache.. %s", cache.Key))
+	sendLog(cm.client, cmdIn, fmt.Sprintf("Start to download cache %s", cache.Key))
 
 	writer := &progressWriter{
 		client: cm.client,
@@ -67,7 +67,15 @@ func (cm *CacheManager) Upload(cmdIn *domain.ShellIn, cacheDir string) {
 		files[i] = filepath.Join(cacheDir, fileInfo.Name())
 	}
 
-	cm.client.CachePut(cmdIn.JobId, cmdIn.Cache.Key, cacheDir, files)
+	sendLog(cm.client, cmdIn, fmt.Sprintf("Start to upload cache %s", cmdIn.Cache.Key))
+
+	err = cm.client.CachePut(cmdIn.JobId, cmdIn.Cache.Key, cacheDir, files)
+	if err != nil {
+		sendLog(cm.client, cmdIn, fmt.Sprintf("Unable to cache %s : %s", cmdIn.Cache.Key, err.Error()))
+		return
+	}
+
+	sendLog(cm.client, cmdIn, fmt.Sprintf("Cache %s uploaded", cmdIn.Cache.Key))
 }
 
 // Resolve resolve env vars in cache key and paths

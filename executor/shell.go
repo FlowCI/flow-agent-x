@@ -111,14 +111,17 @@ func (se *shellExecutor) copyCache() {
 		oldPath := filepath.Join(se.cacheSrcDir, f.Name())
 		newPath := filepath.Join(se.jobDir, f.Name())
 
+		if util.IsFileExists(newPath) {
+			_ = os.Remove(newPath)
+		}
+
 		// move cache from src dir to job dir
-		// error when file or dir exist
 		err = os.Rename(oldPath, newPath)
 
 		if err == nil {
 			se.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
 		} else {
-			se.writeSingleLog(fmt.Sprintf("cache %s not applied since file or dir existed, ", f.Name()))
+			se.writeSingleLog(fmt.Sprintf("cache %s not applied: %s", f.Name(), err.Error()))
 		}
 
 		// remove cache from cache dir anyway

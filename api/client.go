@@ -48,7 +48,7 @@ type (
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
 
-		CachePut(jobId, name, workspace string, paths []string)
+		CachePut(jobId, name, workspace string, paths []string) error
 		CacheGet(jobId, name string) *domain.JobCache
 		CacheDownload(cacheId, workspace, file string, progress io.Writer)
 
@@ -188,9 +188,9 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 	_ = c.sendMessageWithJson(eventTtyLog, body)
 }
 
-func (c *client) CachePut(jobId, key, workspace string, paths []string) {
+func (c *client) CachePut(jobId, key, workspace string, paths []string) (out error) {
 	defer util.RecoverPanic(func(e error) {
-		util.LogWarn(e.Error())
+		out = e
 	})
 
 	tempDir, err := ioutil.TempDir("", "agent_cache_")
@@ -234,6 +234,7 @@ func (c *client) CachePut(jobId, key, workspace string, paths []string) {
 	util.PanicIfErr(err)
 
 	util.LogInfo("[CachePut] %d/%d files cached in %s", len(parts), len(paths), key)
+	return
 }
 
 func (c *client) CacheGet(jobId, key string) *domain.JobCache {

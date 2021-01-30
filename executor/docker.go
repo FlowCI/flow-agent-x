@@ -541,17 +541,13 @@ func (d *dockerExecutor) copyCache() {
 		reader, err := tarArchiveFromPath(cachePath)
 		util.PanicIfErr(err)
 
-		// test cache path is existed
+		// rm existing path and copy cache into dest dir
 		dest := d.jobDir + util.UnixPathSeparator + f.Name()
-		exitCode, err := d.runSingleScript("mkdir " + dest)
+		_, _ = d.runSingleScript("rm -rf " + dest)
 
-		if exitCode != 0 {
-			d.writeSingleLog(fmt.Sprintf("cache %s not applied since file or dir existed, ", f.Name()))
-		} else {
-			err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
-			util.PanicIfErr(err)
-			d.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
-		}
+		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
+		util.PanicIfErr(err)
+		d.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
 
 		// remove cache from cache dir anyway
 		_ = os.RemoveAll(cachePath)
