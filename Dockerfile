@@ -24,7 +24,7 @@ RUN curl https://bootstrap.pypa.io/get-pip.py | python3.6
 RUN ln -s /usr/bin/python3.6 /usr/bin/python
 
 ## install required pip packages
-RUN python3 -m pip install requests==2.22.0 python-lib-flow.ci==1.0.20
+RUN python3 -m pip install requests==2.22.0 python-lib-flow.ci==1.21.5
 
 ## default work dir
 ENV FLOWCI_AGENT_WORKSPACE=/ws
