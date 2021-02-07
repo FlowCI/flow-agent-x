@@ -520,7 +520,7 @@ func (d *dockerExecutor) copyPlugins() {
 
 // copy cache to job dir in docker container if cache defined
 func (d *dockerExecutor) copyCache() {
-	if !util.HasString(d.cacheSrcDir) {
+	if !util.HasString(d.cacheInputDir) {
 		return
 	}
 
@@ -528,7 +528,7 @@ func (d *dockerExecutor) copyCache() {
 		util.LogWarn(e.Error())
 	})
 
-	files, err := ioutil.ReadDir(d.cacheSrcDir)
+	files, err := ioutil.ReadDir(d.cacheInputDir)
 	util.PanicIfErr(err)
 
 	// do not over write exiting file
@@ -537,7 +537,7 @@ func (d *dockerExecutor) copyCache() {
 	}
 
 	for _, f := range files {
-		cachePath := d.cacheSrcDir + util.UnixPathSeparator + f.Name()
+		cachePath := d.cacheInputDir + util.UnixPathSeparator + f.Name()
 		reader, err := tarArchiveFromPath(cachePath)
 		util.PanicIfErr(err)
 
@@ -559,7 +559,15 @@ func (d *dockerExecutor) writeCache() {
 		return
 	}
 
+	dir, err := ioutil.TempDir("", "_cache_output_")
+	if err != nil {
+		util.LogWarn(err.Error())
+		return
+	}
+
+	d.cacheOutputDir = dir
 	cache := d.inCmd.Cache
+
 	for _, path := range cache.Paths {
 		cachePath := d.jobDir + util.UnixPathSeparator + path
 		tarStream, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, cachePath)
@@ -569,10 +577,11 @@ func (d *dockerExecutor) writeCache() {
 			continue
 		}
 
-		err = untarFromReader(tarStream, d.cacheSrcDir)
+		err = untarFromReader(tarStream, dir)
 		if err != nil {
 			util.LogWarn(err.Error())
 		}
+
 		tarStream.Close()
 	}
 }

@@ -25,6 +25,8 @@ const (
 type Executor interface {
 	Init() error
 
+	CacheDir() (string, string)
+
 	CmdIn() *domain.ShellIn
 
 	StartTty(ttyId string, onStarted func(ttyId string)) error
@@ -53,20 +55,22 @@ type Executor interface {
 type BaseExecutor struct {
 	k8sConfig *domain.K8sConfig
 
-	agentId     string // should be agent token
-	workspace   string // agent workspace
-	cacheSrcDir string // downloaded cache temp dir
-	pluginDir   string
-	jobDir      string // job workspace
+	agentId   string // should be agent token
+	workspace string // agent workspace
+	pluginDir string
+	jobDir    string // job workspace
+
+	cacheInputDir  string // downloaded cache temp dir
+	cacheOutputDir string // temp dir that need to upload
 
 	os         string // current operation system
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	volumes    []*domain.DockerVolume
-	inCmd      *domain.ShellIn
-	result     *domain.ShellOut
-	vars       domain.Variables // vars from input and in cmd
+	volumes []*domain.DockerVolume
+	inCmd   *domain.ShellIn
+	result  *domain.ShellOut
+	vars    domain.Variables // vars from input and in cmd
 
 	stdout   chan string    // output log
 	stdOutWg sync.WaitGroup // init on subclasses
@@ -98,18 +102,18 @@ func NewExecutor(options Options) Executor {
 
 	cmd := options.Cmd
 	base := BaseExecutor{
-		k8sConfig:   options.K8s,
-		agentId:     options.AgentId,
-		workspace:   options.Workspace,
-		pluginDir:   options.PluginDir,
-		cacheSrcDir: options.CacheSrcDir,
-		volumes:     options.Volumes,
-		stdout:      make(chan string, defaultChannelBufferSize),
-		inCmd:       cmd,
-		vars:        domain.ConnectVars(options.Vars, cmd.Inputs),
-		result:      domain.NewShellOutput(cmd),
-		ttyIn:       make(chan string, defaultChannelBufferSize),
-		ttyOut:      make(chan string, defaultChannelBufferSize),
+		k8sConfig:     options.K8s,
+		agentId:       options.AgentId,
+		workspace:     options.Workspace,
+		pluginDir:     options.PluginDir,
+		cacheInputDir: options.CacheSrcDir,
+		volumes:       options.Volumes,
+		stdout:        make(chan string, defaultChannelBufferSize),
+		inCmd:         cmd,
+		vars:          domain.ConnectVars(options.Vars, cmd.Inputs),
+		result:        domain.NewShellOutput(cmd),
+		ttyIn:         make(chan string, defaultChannelBufferSize),
+		ttyOut:        make(chan string, defaultChannelBufferSize),
 	}
 
 	ctx, cancel := context.WithTimeout(options.Parent, time.Duration(cmd.Timeout)*time.Second)
@@ -125,6 +129,12 @@ func NewExecutor(options Options) Executor {
 	return &shellExecutor{
 		BaseExecutor: base,
 	}
+}
+
+func (b *BaseExecutor) CacheDir() (input string, output string) {
+	input = b.cacheInputDir
+	output = b.cacheOutputDir
+	return
 }
 
 // CmdID current bash executor cmd id

@@ -173,14 +173,18 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 
 	go func() {
 		defer func() {
+			input, output := s.executor.CacheDir()
+			os.RemoveAll(input)
+			os.RemoveAll(output)
+
 			s.release()
-			os.RemoveAll(cacheSrcDir)
 		}()
 
 		_ = s.executor.Start()
 
 		// write all files in srcCache back to cache
-		s.cacheManager.Upload(in, cacheSrcDir)
+		_, output := s.executor.CacheDir()
+		s.cacheManager.Upload(in, output)
 
 		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)

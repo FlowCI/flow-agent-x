@@ -100,15 +100,15 @@ func (se *shellExecutor) StopTty() {
 
 // copy cache to job dir if cache defined in cacheSrcDir
 func (se *shellExecutor) copyCache() {
-	if !util.HasString(se.cacheSrcDir) {
+	if !util.HasString(se.cacheInputDir) {
 		return
 	}
 
-	files, err := ioutil.ReadDir(se.cacheSrcDir)
+	files, err := ioutil.ReadDir(se.cacheInputDir)
 	util.PanicIfErr(err)
 
 	for _, f := range files {
-		oldPath := filepath.Join(se.cacheSrcDir, f.Name())
+		oldPath := filepath.Join(se.cacheInputDir, f.Name())
 		newPath := filepath.Join(se.jobDir, f.Name())
 
 		if util.IsFileExists(newPath) {
@@ -139,7 +139,15 @@ func (se *shellExecutor) writeCache() {
 		util.LogWarn(e.Error())
 	})
 
+	dir, err := ioutil.TempDir("", "_cache_output_")
+	if err != nil {
+		util.LogWarn(err.Error())
+		return
+	}
+
+	se.cacheOutputDir = dir
 	cache := se.inCmd.Cache
+
 	for _, path := range cache.Paths {
 		path = filepath.Clean(path)
 		fullPath := filepath.Join(se.jobDir, path)
@@ -149,7 +157,7 @@ func (se *shellExecutor) writeCache() {
 			continue
 		}
 
-		newPath := filepath.Join(se.cacheSrcDir, path)
+		newPath := filepath.Join(dir, path)
 
 		if info.IsDir() {
 			err := util.CopyDir(fullPath, newPath)
