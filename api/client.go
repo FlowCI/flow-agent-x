@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -27,8 +28,11 @@ const (
 )
 
 var (
-	newline = []byte{'\n'}
-	space   = []byte{' '}
+	newline      = []byte{'\n'}
+	space        = []byte{' '}
+	disconnected = &message{
+		event: "disconnected",
+	}
 )
 
 type (
@@ -43,6 +47,10 @@ type (
 		SendCmdOut(out domain.CmdOut) error
 		SendShellLog(jobId, stepId, b64Log string)
 		SendTtyLog(ttyId, b64Log string)
+
+		CachePut(jobId, name, workspace string, paths []string) error
+		CacheGet(jobId, name string) *domain.JobCache
+		CacheDownload(cacheId, workspace, file string, progress io.Writer)
 
 		GetSecret(name string) (domain.Secret, error)
 
@@ -64,6 +72,12 @@ type (
 	message struct {
 		event string
 		body  []byte
+	}
+
+	// part: multipart data
+	part struct {
+		key  string
+		file string
 	}
 )
 
@@ -96,7 +110,7 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	c.setConnState(connStateConnected)
 
 	// send init connect event
-	_, err = c.sendMessage(eventConnect, init, true)
+	_, err = c.sendMessageWithResp(eventConnect, init)
 	if err != nil {
 		return err
 	}
@@ -124,45 +138,26 @@ func (c *client) ReportProfile(r *domain.Resource) (err error) {
 }
 
 func (c *client) UploadLog(filePath string) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
+	defer util.RecoverPanic(func(e error) {
+		err = e
+	})
 
-	file, err := os.Open(filePath)
-	util.PanicIfErr(err)
-
-	defer file.Close()
-
-	// construct multi part
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
-	util.PanicIfErr(err)
-
-	_, err = io.Copy(part, file)
-	util.PanicIfErr(err)
-
-	// flush file to writer
-	_ = writer.Close()
+	buffer, contentType := c.buildMultipartContent([]*part{
+		{
+			key:  "file",
+			file: filePath,
+		},
+	})
 
 	// send request
-	raw, err := c.send("POST", "logs/upload", writer.FormDataContentType(), body)
+	raw, err := c.send("POST", "logs/upload", contentType, buffer)
 	util.PanicIfErr(err)
 
-	// get response data
-	var message domain.Response
-	err = json.Unmarshal(raw, &message)
+	_, err = c.parseResponse(raw, &domain.Response{})
 	util.PanicIfErr(err)
 
-	if message.IsOk() {
-		util.LogInfo("[Uploaded]: %s", filePath)
-		return nil
-	}
-
-	return fmt.Errorf(message.Message)
+	util.LogInfo("[Uploaded]: %s", filePath)
+	return
 }
 
 func (c *client) GetCmdIn() <-chan []byte {
@@ -170,11 +165,7 @@ func (c *client) GetCmdIn() <-chan []byte {
 }
 
 func (c *client) SendCmdOut(out domain.CmdOut) error {
-	_, err := c.sendMessageWithBytes(eventCmdOut, out.ToBytes(), false)
-	if err != nil {
-		return err
-	}
-
+	_ = c.sendMessageWithBytes(eventCmdOut, out.ToBytes())
 	util.LogDebug("Result of cmd been pushed")
 	return nil
 }
@@ -186,7 +177,7 @@ func (c *client) SendShellLog(jobId, stepId, b64Log string) {
 		Log:    b64Log,
 	}
 
-	_, _ = c.sendMessage(eventShellLog, body, false)
+	_ = c.sendMessageWithJson(eventShellLog, body)
 }
 
 func (c *client) SendTtyLog(ttyId, b64Log string) {
@@ -194,7 +185,92 @@ func (c *client) SendTtyLog(ttyId, b64Log string) {
 		ID:  ttyId,
 		Log: b64Log,
 	}
-	_, _ = c.sendMessage(eventTtyLog, body, false)
+	_ = c.sendMessageWithJson(eventTtyLog, body)
+}
+
+func (c *client) CachePut(jobId, key, workspace string, paths []string) (out error) {
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
+
+	tempDir, err := ioutil.TempDir("", "agent_cache_")
+	util.PanicIfErr(err)
+	defer os.RemoveAll(tempDir)
+
+	var parts []*part
+	for _, path := range paths {
+		if !util.IsFileExists(path) {
+			util.LogWarn("the file %s not exist", path)
+			continue
+		}
+
+		if !strings.HasPrefix(path, workspace) {
+			util.LogWarn("the cache path must be under workspace")
+			continue
+		}
+
+		cacheZipName := encodeCacheName(workspace, path)
+		zipPath := tempDir + util.UnixPathSeparator + cacheZipName
+		err = util.Zip(path, zipPath, util.UnixPathSeparator)
+
+		if err != nil {
+			util.LogWarn(err.Error())
+			continue
+		}
+
+		parts = append(parts, &part{
+			key:  "files",
+			file: zipPath,
+		})
+	}
+
+	buffer, contentType := c.buildMultipartContent(parts)
+
+	path := fmt.Sprintf("cache/%s/%s/%s", jobId, key, util.OS())
+	raw, err := c.send("POST", path, contentType, buffer)
+	util.PanicIfErr(err)
+
+	_, err = c.parseResponse(raw, &domain.Response{})
+	util.PanicIfErr(err)
+
+	util.LogInfo("[CachePut] %d/%d files cached in %s", len(parts), len(paths), key)
+	return
+}
+
+func (c *client) CacheGet(jobId, key string) *domain.JobCache {
+	raw, err := c.send("GET", fmt.Sprintf("cache/%s/%s", jobId, key), "", nil)
+	util.PanicIfErr(err)
+
+	resp, err := c.parseResponse(raw, &domain.JobCacheResponse{})
+	util.PanicIfErr(err)
+
+	jobCache := resp.(*domain.JobCacheResponse)
+	return jobCache.Data
+}
+
+func (c *client) CacheDownload(cacheId, workspace, file string, progress io.Writer) {
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
+	})
+
+	tmpPath := fmt.Sprintf("%s/%s.tmp", workspace, file)
+	tmpFile, err := os.Create(tmpPath)
+	util.PanicIfErr(err)
+
+	err = c.download(fmt.Sprintf("cache/%s?file=%s", cacheId, file), tmpFile, progress)
+	util.PanicIfErr(err)
+
+	zippedFile := workspace + util.UnixPathSeparator + file
+	err = os.Rename(tmpPath, zippedFile)
+	util.PanicIfErr(err)
+
+	defer os.RemoveAll(zippedFile)
+
+	cacheFileName := decodeCacheName(file)
+	dest := workspace + util.UnixPathSeparator + cacheFileName
+
+	err = util.Unzip(zippedFile, dest)
+	util.PanicIfErr(err)
 }
 
 func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
@@ -236,12 +312,32 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	return nil, fmt.Errorf("unsupport secret type")
 }
 
-
 func (c *client) Close() {
 	if c.conn != nil {
 		close(c.pending)
 		_ = c.conn.Close()
 	}
+}
+
+func (c *client) buildMultipartContent(parts []*part) (*bytes.Buffer, string) {
+	buffer := &bytes.Buffer{}
+	writer := multipart.NewWriter(buffer)
+	defer writer.Close()
+
+	for _, part := range parts {
+		file, err := os.Open(part.file)
+		util.PanicIfErr(err)
+
+		part, err := writer.CreateFormFile(part.key, filepath.Base(part.file))
+		util.PanicIfErr(err)
+
+		_, err = io.Copy(part, file)
+		util.PanicIfErr(err)
+
+		_ = file.Close()
+	}
+
+	return buffer, writer.FormDataContentType()
 }
 
 func (c *client) setConnState(state int32) {
@@ -258,6 +354,7 @@ func (c *client) isConnected() bool {
 
 func (c *client) readMessage() {
 	// start receive data
+
 	for {
 		_, message, err := c.conn.ReadMessage()
 		if err != nil {
@@ -266,6 +363,7 @@ func (c *client) readMessage() {
 				c.setConnState(connStateReconnecting)
 				c.reConn <- struct{}{}
 				c.conn = nil
+				c.pending <- disconnected
 				break
 			}
 
@@ -277,8 +375,8 @@ func (c *client) readMessage() {
 }
 
 // method: GET/POST, path: {server}/agents/api/:path
-func (c *client) send(method, path, contentType string, body io.Reader) (out []byte, err error) {
-	url := fmt.Sprintf("%s/agents/api/%s", c.server, path)
+func (c *client) send(method, path, contentType string, body io.Reader) ([]byte, error) {
+	url := fmt.Sprintf("%s/api/%s", c.server, path)
 	req, _ := http.NewRequest(method, url, body)
 
 	req.Header.Set(util.HttpHeaderContentType, contentType)
@@ -286,73 +384,107 @@ func (c *client) send(method, path, contentType string, body io.Reader) (out []b
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	defer resp.Body.Close()
 
-	out, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-
-	return
-}
-
-func (c *client) consumePendingMessage() {
-	for message := range c.pending {
-		// wait until connected
-		for !c.isConnected() {
-			time.Sleep(5 * time.Second)
-		}
-
-		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
-		util.LogInfo("pending message has been sent: %s", message.event)
-	}
-}
-
-func (c *client) sendMessage(event string, msg interface{}, hasResp bool) (resp *domain.Response, out error) {
-	body, err := json.Marshal(msg)
+	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	return c.sendMessageWithBytes(event, body, hasResp)
+	return data, nil
 }
 
-func (c *client) sendMessageWithBytes(event string, body []byte, hasResp bool) (resp *domain.Response, out error) {
-	defer func() {
-		if r := recover(); r != nil {
-			out = r.(error)
-		}
-	}()
+func (c *client) download(path string, dist io.Writer, progress io.Writer) error {
+	url := fmt.Sprintf("%s/api/%s", c.server, path)
 
-	// wait until connected
-	if c.isReConnecting() {
-		c.pending <- &message{
-			event: event,
-			body:  body,
-		}
-		return
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set(util.HttpHeaderAgentToken, c.token)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
 	}
 
-	_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
+	defer resp.Body.Close()
 
-	if !hasResp {
-		return
+	if progress == nil {
+		progress = &CounterWrite{}
 	}
+
+	_, err = io.Copy(dist, io.TeeReader(resp.Body, progress))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (c *client) consumePendingMessage() {
+	for message := range c.pending {
+		if message == disconnected {
+			util.LogDebug("exit ws message consumer")
+			break
+		}
+		_ = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(message.event, message.body))
+		util.LogDebug("pending message has been sent: %s", message.event)
+	}
+}
+
+func (c *client) sendMessageWithJson(event string, msg interface{}) error {
+	body, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	c.pending <- &message{
+		event: event,
+		body:  body,
+	}
+	return nil
+}
+
+func (c *client) sendMessageWithBytes(event string, body []byte) error {
+	c.pending <- &message{
+		event: event,
+		body:  body,
+	}
+	return nil
+}
+
+func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domain.Response, out error) {
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
+
+	body, err := json.Marshal(msg)
+	util.PanicIfErr(err)
+
+	err = c.conn.WriteMessage(websocket.BinaryMessage, buildMessage(event, body))
+	util.PanicIfErr(err)
 
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
 
-	resp = &domain.Response{}
-	err = json.Unmarshal(data, resp)
+	message, err := c.parseResponse(data, &domain.Response{})
 	util.PanicIfErr(err)
 
-	if !resp.IsOk() {
-		out = fmt.Errorf(resp.Message)
-		return
+	resp = message.(*domain.Response)
+	return
+}
+
+func (c *client) parseResponse(body []byte, resp domain.ResponseMessage) (domain.ResponseMessage, error) {
+	// get response data
+	err := json.Unmarshal(body, resp)
+	if err != nil {
+		return nil, err
 	}
 
-	return
+	if resp.IsOk() {
+		return resp, nil
+	}
+
+	return nil, fmt.Errorf(resp.GetMessage())
 }

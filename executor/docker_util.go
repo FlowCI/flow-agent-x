@@ -4,10 +4,8 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
-	"container/list"
 	"github/flowci/flow-agent-x/util"
 	"io"
-	v1 "k8s.io/api/core/v1"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,51 +46,41 @@ func removeDockerHeader(in []byte) []byte {
 	return in
 }
 
-func toContainerArray(v1List *list.List) []v1.Container {
-	array := make([]v1.Container, v1List.Len())
-	i := 0
-	for e := v1List.Front(); e != nil; e = e.Next() {
-		c := e.Value.(*v1.Container)
-		array[i] = *c
-		i++
-	}
-	return array
-}
+func untarFromReader(tarReader io.Reader, dest string) error {
+	reader := tar.NewReader(tarReader)
+	for {
+		header, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
 
-func k8sDinDContainer() *v1.Container {
-	return &v1.Container{
-		Name:  "dind-daemon",
-		Image: "docker:dind",
-		SecurityContext: &v1.SecurityContext{
-			Privileged: util.PointerBoolean(true),
-		},
-		Env: []v1.EnvVar{
-			{
-				Name:  "DOCKER_TLS_CERTDIR", // disable tls
-				Value: "",
-			},
-		},
-	}
-}
+		if err != nil {
+			return err
+		}
 
-func k8sSetDockerNetwork(script string) string {
-	index := strings.Index(script, "docker run")
-	if index == -1 {
-		return script
-	}
+		fileInfo := header.FileInfo()
+		target := dest + util.UnixPathSeparator + header.Name
 
-	if !strings.Contains(script[index:], "--network=") {
-		return strings.Replace(script, "docker run", "docker run --network=host", 1)
+		if fileInfo.IsDir() {
+			if err := os.MkdirAll(target, 0755); err != nil {
+				return err
+			}
+			continue
+		}
+
+		f, err := os.OpenFile(target, os.O_CREATE|os.O_RDWR, os.FileMode(header.Mode))
+		if err != nil {
+			return err
+		}
+
+		if _, err := io.Copy(f, reader); err != nil {
+			return err
+		}
+
+		f.Close()
 	}
 
-	start := strings.Index(script, "--network=")
-	end := util.IndexOfFirstSpace(script[start:]) - 1
-
-	if end < 0 {
-		return script
-	}
-
-	return strings.Replace(script, script[start:end], "--network=host", 1)
+	return nil
 }
 
 // tar dir, ex: abc/.. output is archived content .. in dir
@@ -102,11 +90,10 @@ func tarArchiveFromPath(path string) (io.Reader, error) {
 	dir := filepath.Dir(path)
 
 	ok := filepath.Walk(path, func(file string, fi os.FileInfo, err error) (out error) {
-		defer func() {
-			if err := recover(); err != nil {
-				out = err.(error)
-			}
-		}()
+		defer util.RecoverPanic(func(e error) {
+			out = e
+		})
+
 		util.PanicIfErr(err)
 
 		header, err := tar.FileInfoHeader(fi, fi.Name())

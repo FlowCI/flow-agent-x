@@ -14,20 +14,23 @@ import (
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
 
 const (
-	dockerWorkspace     = "/ws"
-	dockerPluginDir     = dockerWorkspace + "/.plugins"
-	dockerBin           = "/ws/bin"
-	dockerEnvFile       = "/tmp/.env"
-	dockerPullRetry     = 3
-	dockerSock          = "/var/run/docker.sock"
-	dockerNetwork       = "flow-ci-agent-default"
-	dockerNetworkDriver = "bridge"
-	dockerVarDockerHost = "DOCKER_HOST"
+	dockerWorkspace       = "/ws"
+	dockerPluginDir       = dockerWorkspace + "/.plugins"
+	dockerBin             = "/ws/bin"
+	dockerEnvFile         = "/tmp/.env"
+	dockerPullRetry       = 3
+	dockerSock            = "/var/run/docker.sock"
+	dockerNetwork         = "flow-ci-agent-default"
+	dockerNetworkDriver   = "bridge"
+	dockerVarDockerHost   = "DOCKER_HOST"
+	dockerDefaultExitCode = -1
 
 	dockerShellPidPath = "/tmp/.shell.pid"
 	writeShellPid      = "echo $$ > /tmp/.shell.pid\n"
@@ -50,7 +53,6 @@ type (
 		cli         *client.Client
 		configs     []*domain.DockerConfig
 		ttyExecId   string
-		workDir     string
 		envFile     string
 	}
 )
@@ -64,11 +66,9 @@ func (d *dockerExecutor) runtime() *domain.DockerConfig {
 }
 
 func (d *dockerExecutor) Init() (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
-	}()
+	defer util.RecoverPanic(func(e error) {
+		out = e
+	})
 
 	d.os = util.OSLinux // only support unix based image
 	d.result.StartAt = time.Now()
@@ -82,7 +82,7 @@ func (d *dockerExecutor) Init() (out error) {
 	d.initAgentVolume()
 	d.initConfig()
 
-	return
+	return nil
 }
 
 func (d *dockerExecutor) Start() (out error) {
@@ -99,17 +99,16 @@ func (d *dockerExecutor) Start() (out error) {
 
 		break
 	}
+
 	return
 }
 
 func (d *dockerExecutor) doStart() (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = d.handleErrors(err.(error))
-		}
+	defer util.RecoverPanic(func(e error) {
+		out = d.handleErrors(e)
+	})
 
-		d.cleanupContainer()
-	}()
+	defer d.cleanupContainer()
 
 	// one for pull image output, and one for cmd output
 	d.stdOutWg.Add(1)
@@ -117,11 +116,12 @@ func (d *dockerExecutor) doStart() (out error) {
 	d.pullImage()
 	d.startContainer()
 	d.copyPlugins()
+	d.copyCache()
 
 	eid := d.runShell()
 	util.LogDebug("Exec %s is running", eid)
 
-	exitCode := d.waitForExit(eid, func(pid int) {
+	exitCode := d.waitForExit(d.context, eid, func(pid int) {
 		d.toStartStatus(pid)
 	})
 	d.exportEnv()
@@ -132,6 +132,8 @@ func (d *dockerExecutor) doStart() (out error) {
 		<-d.ttyCtx.Done()
 	}
 
+	d.writeCache()
+
 	if d.result.IsFinishStatus() {
 		return nil
 	}
@@ -141,23 +143,21 @@ func (d *dockerExecutor) doStart() (out error) {
 }
 
 func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (out error) {
-	defer func() {
-		if err := recover(); err != nil {
-			out = err.(error)
-		}
+	defer util.RecoverPanic(func(e error) {
+		out = e
 
 		d.ttyExecId = ""
 		d.ttyId = ""
-	}()
+	})
 
 	if d.IsInteracting() {
-		return fmt.Errorf("interaction is ongoning")
+		panic(fmt.Errorf("interaction is ongoning"))
 	}
 
 	runtime := d.runtime()
 
 	if runtime.ContainerID == "" {
-		return fmt.Errorf("container not started")
+		panic(fmt.Errorf("container not started"))
 	}
 
 	config := types.ExecConfig{
@@ -192,12 +192,12 @@ func (d *dockerExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	go d.writeTtyIn(attach.Conn)
 	go d.writeTtyOut(attach.Reader)
 
-	d.waitForExit(exec.ID, nil)
+	d.waitForExit(d.context, exec.ID, nil)
 	return
 }
 
 func (d *dockerExecutor) StopTty() {
-	err := d.runSingleScript(killTty)
+	_, err := d.runSingleScript(killTty)
 	util.LogIfError(err)
 }
 
@@ -292,20 +292,19 @@ func (d *dockerExecutor) initAgentVolume() {
 	name := "agent-" + d.agentId
 	ok, v := d.getVolume(name)
 
-	if !ok {
-		body := volume.VolumesCreateBody{
-			Name: name,
-		}
-
-		created, err := d.cli.VolumeCreate(d.context, body)
-		util.PanicIfErr(err)
-
-		d.agentVolume = created
-		util.LogInfo("Agent volume '%s' created", name)
-	} else {
+	if ok {
 		d.agentVolume = *v
 		util.LogInfo("Agent volume '%s' existed", name)
+		return
 	}
+
+	body := volume.VolumesCreateBody{Name: name}
+	created, err := d.cli.VolumeCreate(d.context, body)
+	util.PanicIfErr(err)
+
+	d.agentVolume = created
+	util.LogInfo("Agent volume '%s' created", name)
+	return
 }
 
 func (d *dockerExecutor) initConfig() {
@@ -334,9 +333,9 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	// set job work dir in the container = /ws/{flow id}
-	d.workDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
+	d.jobDir = dockerWorkspace + "/" + util.ParseString(d.inCmd.FlowId)
 	d.vars[domain.VarAgentWorkspace] = dockerWorkspace
-	d.vars[domain.VarAgentJobDir] = d.workDir
+	d.vars[domain.VarAgentJobDir] = d.jobDir
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
@@ -364,7 +363,7 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	d.vars.Resolve()
-	config := runtimeOption.ToRuntimeConfig(d.vars, d.workDir, binds)
+	config := runtimeOption.ToRuntimeConfig(d.vars, d.jobDir, binds)
 
 	// set default entrypoint for runtime container
 	if !config.HasEntrypoint() {
@@ -377,8 +376,8 @@ func (d *dockerExecutor) initConfig() {
 
 func (d *dockerExecutor) handleErrors(err error) error {
 	kill := func() {
-		_ = d.runSingleScript(killShell)
-		_ = d.runSingleScript(killTty)
+		_, _ = d.runSingleScript(killShell)
+		_, _ = d.runSingleScript(killTty)
 	}
 
 	util.LogWarn("handleError on docker: %s", err.Error())
@@ -519,6 +518,74 @@ func (d *dockerExecutor) copyPlugins() {
 	}
 }
 
+// copy cache to job dir in docker container if cache defined
+func (d *dockerExecutor) copyCache() {
+	if !util.HasString(d.cacheInputDir) {
+		return
+	}
+
+	defer util.RecoverPanic(func(e error) {
+		util.LogWarn(e.Error())
+	})
+
+	files, err := ioutil.ReadDir(d.cacheInputDir)
+	util.PanicIfErr(err)
+
+	// do not over write exiting file
+	config := types.CopyToContainerOptions{
+		AllowOverwriteDirWithFile: false,
+	}
+
+	for _, f := range files {
+		cachePath := d.cacheInputDir + util.UnixPathSeparator + f.Name()
+		reader, err := tarArchiveFromPath(cachePath)
+		util.PanicIfErr(err)
+
+		// rm existing path and copy cache into dest dir
+		dest := d.jobDir + util.UnixPathSeparator + f.Name()
+		_, _ = d.runSingleScript("rm -rf " + dest)
+
+		err = d.cli.CopyToContainer(d.context, d.runtime().ContainerID, d.jobDir, reader, config)
+		util.PanicIfErr(err)
+		d.writeSingleLog(fmt.Sprintf("cache %s has been applied", f.Name()))
+
+		// remove cache from cache dir anyway
+		_ = os.RemoveAll(cachePath)
+	}
+}
+
+func (d *dockerExecutor) writeCache() {
+	if !d.inCmd.HasCache() {
+		return
+	}
+
+	dir, err := ioutil.TempDir("", "_cache_output_")
+	if err != nil {
+		util.LogWarn(err.Error())
+		return
+	}
+
+	d.cacheOutputDir = dir
+	cache := d.inCmd.Cache
+
+	for _, path := range cache.Paths {
+		cachePath := d.jobDir + util.UnixPathSeparator + path
+		tarStream, _, err := d.cli.CopyFromContainer(d.context, d.runtime().ContainerID, cachePath)
+
+		if err != nil {
+			util.LogWarn(err.Error())
+			continue
+		}
+
+		err = untarFromReader(tarStream, dir)
+		if err != nil {
+			util.LogWarn(err.Error())
+		}
+
+		tarStream.Close()
+	}
+}
+
 func (d *dockerExecutor) runShell() string {
 	runtime := d.runtime()
 
@@ -585,19 +652,24 @@ func (d *dockerExecutor) runShell() string {
 }
 
 // run single bash script with new context
-func (d *dockerExecutor) runSingleScript(script string) error {
+func (d *dockerExecutor) runSingleScript(script string) (exitCode int, err error) {
+	defer util.RecoverPanic(func(e error) {
+		exitCode = dockerDefaultExitCode
+	})
+
 	ctx := context.Background()
 
 	exec, err := d.cli.ContainerExecCreate(ctx, d.runtime().ContainerID, types.ExecConfig{
 		Cmd: []string{linuxBash, "-c", script},
 	})
-
-	if err != nil {
-		return err
-	}
+	util.PanicIfErr(err)
 
 	util.LogDebug("Script: %s will run", script)
-	return d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
+	err = d.cli.ContainerExecStart(ctx, exec.ID, types.ExecStartCheck{Detach: true, Tty: false})
+	util.PanicIfErr(err)
+
+	exitCode = d.waitForExit(ctx, exec.ID, nil)
+	return
 }
 
 func (d *dockerExecutor) exportEnv() {
@@ -615,9 +687,12 @@ func (d *dockerExecutor) cleanupContainer() {
 		return
 	}
 
+	// apply new context since d.context might cancelled
+	ctx := context.Background()
+
 	for _, c := range d.configs {
 		if c.IsDelete {
-			err := d.cli.ContainerRemove(d.context, c.ContainerID, types.ContainerRemoveOptions{Force: true})
+			err := d.cli.ContainerRemove(ctx, c.ContainerID, types.ContainerRemoveOptions{Force: true})
 			if !util.LogIfError(err) {
 				util.LogInfo("Container %s %s for cmd %s has been deleted", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
@@ -625,7 +700,7 @@ func (d *dockerExecutor) cleanupContainer() {
 		}
 
 		if c.IsStop {
-			err := d.cli.ContainerStop(d.context, c.ContainerID, nil)
+			err := d.cli.ContainerStop(ctx, c.ContainerID, nil)
 			if !util.LogIfError(err) {
 				util.LogInfo("Container %s %s for cmd %s has been stopped", c.Config.Image, c.ContainerID, d.inCmd.ID)
 			}
@@ -633,22 +708,22 @@ func (d *dockerExecutor) cleanupContainer() {
 	}
 }
 
-func (d *dockerExecutor) waitForExit(eid string, onStarted func(int)) int {
-	inspect, err := d.cli.ContainerExecInspect(d.context, eid)
+func (d *dockerExecutor) waitForExit(ctx context.Context, eid string, onStarted func(int)) int {
+	inspect, err := d.cli.ContainerExecInspect(ctx, eid)
 	util.PanicIfErr(err)
 	if onStarted != nil {
 		onStarted(inspect.Pid)
 	}
 
 	for {
-		inspect, err = d.cli.ContainerExecInspect(d.context, eid)
+		inspect, err = d.cli.ContainerExecInspect(ctx, eid)
 		util.PanicIfErr(err)
 
 		if !inspect.Running {
 			break
 		}
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 	}
 
 	return inspect.ExitCode

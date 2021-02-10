@@ -20,27 +20,18 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
-var (
-	singleton *CmdService
-	once      sync.Once
-)
-
 type (
 	// CmdService receive and execute cmd
 	CmdService struct {
+		pluginManager *PluginManager
+		cacheManager  *CacheManager
+
+		cmdIn <-chan []byte
+
 		executor executor.Executor
 		mux      sync.Mutex
 	}
 )
-
-// GetCmdService get singleton of cmd service
-func GetCmdService() *CmdService {
-	once.Do(func() {
-		singleton = new(CmdService)
-		singleton.start()
-	})
-	return singleton
-}
 
 // IsRunning check is available to run cmd
 func (s *CmdService) IsRunning() bool {
@@ -71,17 +62,13 @@ func (s *CmdService) Execute(bytes []byte) error {
 	}
 }
 
-// new thread to consume rabbitmq message
 func (s *CmdService) start() {
-	appConfig := config.GetInstance()
-	cmdIn := appConfig.Client.GetCmdIn()
-
 	go func() {
 		defer util.LogDebug("[Exit]: Rabbit mq consumer")
 
 		for {
 			select {
-			case bytes, ok := <-cmdIn:
+			case bytes, ok := <-s.cmdIn:
 				if !ok {
 					break
 				}
@@ -103,6 +90,7 @@ func (s *CmdService) release() {
 		s.executor.Close()
 		s.executor = nil
 	}
+
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
 }
 
@@ -133,11 +121,17 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	}()
 
 	if in.HasPlugin() {
-		plugins := util.NewPlugins(appConfig.PluginDir, appConfig.Server)
-		err := plugins.Load(in.Plugin)
+		err := s.pluginManager.Load(in.Plugin)
 		util.PanicIfErr(err)
 	}
 
+	// all cache will move to job dir after started
+	cacheSrcDir := ""
+	if in.HasCache() {
+		cacheSrcDir = s.cacheManager.Download(in)
+	}
+
+	// load docker secret
 	if in.HasDockerOption() {
 		for _, option := range in.Dockers {
 			if option.HasAuth() {
@@ -162,13 +156,14 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 			PodName:   appConfig.K8sPodName,
 			PodIp:     appConfig.K8sPodIp,
 		},
-		AgentId:   appConfig.Token,
-		Parent:    appConfig.AppCtx,
-		Workspace: appConfig.Workspace,
-		PluginDir: appConfig.PluginDir,
-		Cmd:       in,
-		Vars:      s.initEnv(),
-		Volumes:   appConfig.Volumes,
+		AgentId:     appConfig.Token,
+		Parent:      appConfig.AppCtx,
+		Workspace:   appConfig.Workspace,
+		PluginDir:   appConfig.PluginDir,
+		CacheSrcDir: cacheSrcDir,
+		Cmd:         in,
+		Vars:        s.initEnv(),
+		Volumes:     appConfig.Volumes,
 	})
 
 	err = s.executor.Init()
@@ -177,8 +172,19 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	s.startLogConsumer()
 
 	go func() {
-		defer s.release()
+		defer func() {
+			input, output := s.executor.CacheDir()
+			os.RemoveAll(input)
+			os.RemoveAll(output)
+
+			s.release()
+		}()
+
 		_ = s.executor.Start()
+
+		// write all files in srcCache back to cache
+		_, output := s.executor.CacheDir()
+		s.cacheManager.Upload(in, output)
 
 		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
