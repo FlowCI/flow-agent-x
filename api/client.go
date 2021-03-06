@@ -41,7 +41,7 @@ type (
 		ReConn() <-chan struct{}
 
 		UploadLog(filePath string) error
-		ReportProfile(*domain.Resource) error
+		ReportProfile(profile *domain.AgentProfile) error
 
 		GetCmdIn() <-chan []byte
 		SendCmdOut(out domain.CmdOut) error
@@ -127,13 +127,8 @@ func (c *client) ReConn() <-chan struct{} {
 	return c.reConn
 }
 
-func (c *client) ReportProfile(r *domain.Resource) (err error) {
-	body, err := json.Marshal(r)
-	if err != nil {
-		return
-	}
-
-	_, err = c.send("POST", "profile", util.HttpMimeJson, bytes.NewBuffer(body))
+func (c *client) ReportProfile(r *domain.AgentProfile) (err error) {
+	_ = c.sendMessageWithJson(eventProfile, r)
 	return
 }
 

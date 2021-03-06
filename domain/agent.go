@@ -15,22 +15,22 @@ const (
 )
 
 type (
-	// Resource agent resource data
-	Resource struct {
-		Cpu         int    `json:"cpu"`
-		TotalMemory uint64 `json:"totalMemory"`
-		FreeMemory  uint64 `json:"freeMemory"`
-		TotalDisk   uint64 `json:"totalDisk"`
-		FreeDisk    uint64 `json:"freeDisk"`
+	// AgentProfile, token signed at server side
+	AgentProfile struct {
+ 		CpuNum      int     `json:"cpuNum"`
+		CpuUsage    float64 `json:"cpuUsage"`
+		TotalMemory uint64  `json:"totalMemory"`
+		FreeMemory  uint64  `json:"freeMemory"`
+		TotalDisk   uint64  `json:"totalDisk"`
+		FreeDisk    uint64  `json:"freeDisk"`
 	}
 
 	// AgentConnect request data to get settings from server
 	AgentInit struct {
-		IsK8sCluster bool      `json:"k8sCluster"`
-		Token        string    `json:"token"`
-		Port         int       `json:"port"`
-		Os           string    `json:"os"`
-		Status       string    `json:"status"`
-		Resource     *Resource `json:"resource"`
+		IsK8sCluster bool   `json:"k8sCluster"`
+		Token        string `json:"token"`
+		Port         int    `json:"port"`
+		Os           string `json:"os"`
+		Status       string `json:"status"`
 	}
 )

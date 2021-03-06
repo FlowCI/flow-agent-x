@@ -64,13 +64,15 @@ func (m *Manager) Init() {
 	m.sendAgentProfile()
 }
 
-func (m *Manager) FetchProfile() *domain.Resource {
+func (m *Manager) FetchProfile() *domain.AgentProfile {
 	nCpu, _ := cpu.Counts(true)
+	percent, _ := cpu.Percent(time.Second, false)
 	vmStat, _ := mem.VirtualMemory()
 	diskStat, _ := disk.Usage("/")
 
-	return &domain.Resource{
-		Cpu:         nCpu,
+	return &domain.AgentProfile{
+		CpuNum:      nCpu,
+		CpuUsage:    percent[0],
 		TotalMemory: util.ByteToMB(vmStat.Total),
 		FreeMemory:  util.ByteToMB(vmStat.Available),
 		TotalDisk:   util.ByteToMB(diskStat.Total),
@@ -100,7 +102,6 @@ func (m *Manager) connect() error {
 		IsK8sCluster: m.K8sCluster,
 		Port:         m.Port,
 		Os:           util.OS(),
-		Resource:     m.FetchProfile(),
 		Status:       string(m.Status),
 	}
 
@@ -138,7 +139,7 @@ func (m *Manager) sendAgentProfile() {
 			case <-m.AppCtx.Done():
 				return
 			default:
-				time.Sleep(1 * time.Minute)
+				time.Sleep(10 * time.Second)
 				_ = m.Client.ReportProfile(m.FetchProfile())
 			}
 		}
