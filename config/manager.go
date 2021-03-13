@@ -9,7 +9,11 @@ import (
 	"github/flowci/flow-agent-x/api"
 	"github/flowci/flow-agent-x/domain"
 	"github/flowci/flow-agent-x/util"
+	"net"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +24,7 @@ type (
 
 		Status domain.AgentStatus
 
+		Debug  bool
 		Server string
 		Token  string
 		Port   int
@@ -46,6 +51,19 @@ type (
 )
 
 func (m *Manager) Init() {
+	// init vars
+	if m.Port < 0 {
+		m.Port = m.getDefaultPort()
+	}
+
+	m.PluginDir = filepath.Join(m.Workspace, ".plugins")
+	m.LoggingDir = filepath.Join(m.Workspace, ".logs")
+
+	m.K8sNodeName = os.Getenv(domain.VarK8sNodeName)
+	m.K8sPodName = os.Getenv(domain.VarK8sPodName)
+	m.K8sPodIp = os.Getenv(domain.VarK8sPodIp)
+	m.K8sNamespace = os.Getenv(domain.VarK8sNamespace)
+
 	// init dir
 	_ = os.MkdirAll(m.Workspace, os.ModePerm)
 	_ = os.MkdirAll(m.LoggingDir, os.ModePerm)
@@ -62,6 +80,24 @@ func (m *Manager) Init() {
 
 	m.listenReConn()
 	m.sendAgentProfile()
+}
+
+func (m *Manager) PrintInfo() {
+	util.LogInfo("--- [Server URL]: %s", m.Server)
+	util.LogInfo("--- [Token]: %s", m.Token)
+	util.LogInfo("--- [Port]: %d", m.Port)
+	util.LogInfo("--- [Workspace]: %s", m.Workspace)
+	util.LogInfo("--- [Plugin Dir]: %s", m.PluginDir)
+	util.LogInfo("--- [Log Dir]: %s", m.LoggingDir)
+	util.LogInfo("--- [Volume Str]: %s", m.VolumesStr)
+
+	if m.K8sEnabled {
+		util.LogInfo("--- [K8s InCluster]: %d", m.K8sCluster)
+		util.LogInfo("--- [K8s Node]: %s", m.K8sNodeName)
+		util.LogInfo("--- [K8s Namespace]: %s", m.K8sNamespace)
+		util.LogInfo("--- [K8s Pod]: %s", m.K8sPodName)
+		util.LogInfo("--- [K8s Pod IP]: %s", m.K8sPodIp)
+	}
 }
 
 func (m *Manager) FetchProfile() *domain.AgentProfile {
@@ -88,6 +124,20 @@ func (m *Manager) Close() {
 // --------------------------------
 //		Private Functions
 // --------------------------------
+
+func (m *Manager) getDefaultPort() int {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	util.FailOnError(err, "Cannot start listen localhost")
+	defer func() {
+		_ = listener.Close()
+	}()
+
+	addressAndPort := listener.Addr().String()
+
+	i, err := strconv.Atoi(addressAndPort[strings.Index(addressAndPort, ":")+1:])
+	util.FailOnError(err, "Invalid port format")
+	return i
+}
 
 func (m *Manager) initVolumes() {
 	if util.IsEmptyString(m.VolumesStr) {
