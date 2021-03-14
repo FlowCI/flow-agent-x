@@ -17,7 +17,7 @@ const (
 type (
 	// AgentProfile, token signed at server side
 	AgentProfile struct {
- 		CpuNum      int     `json:"cpuNum"`
+		CpuNum      int     `json:"cpuNum"`
 		CpuUsage    float64 `json:"cpuUsage"`
 		TotalMemory uint64  `json:"totalMemory"`
 		FreeMemory  uint64  `json:"freeMemory"`
@@ -25,7 +25,7 @@ type (
 		FreeDisk    uint64  `json:"freeDisk"`
 	}
 
-	// AgentConnect request data to get settings from server
+	// AgentInit request data to get settings to server
 	AgentInit struct {
 		IsK8sCluster bool   `json:"k8sCluster"`
 		Token        string `json:"token"`
@@ -33,4 +33,22 @@ type (
 		Os           string `json:"os"`
 		Status       string `json:"status"`
 	}
+
+	// AgentConfig response body of AgentInit from server
+	AgentConfig struct {
+		ExitOnIdle int `json:"exitOnIdle"` // 0 for don't exit agent on idle
+	}
+
+	AgentConfigResponse struct {
+		Response
+		Data *AgentConfig
+	}
 )
+
+func (r *AgentConfigResponse) IsOk() bool {
+	return r.Code == ok
+}
+
+func (r *AgentConfigResponse) GetMessage() string {
+	return r.Message
+}

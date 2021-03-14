@@ -8,3 +8,16 @@ type JobCache struct {
 	Os     string   `json:"os"`
 	Files  []string `json:"files"`
 }
+
+type JobCacheResponse struct {
+	Response
+	Data *JobCache
+}
+
+func (r *JobCacheResponse) IsOk() bool {
+	return r.Code == ok
+}
+
+func (r *JobCacheResponse) GetMessage() string {
+	return r.Message
+}

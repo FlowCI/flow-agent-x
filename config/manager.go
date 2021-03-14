@@ -23,6 +23,7 @@ type (
 		Zk *util.ZkClient
 
 		Status domain.AgentStatus
+		Config *domain.AgentConfig
 
 		Debug  bool
 		Server string
@@ -75,8 +76,7 @@ func (m *Manager) Init() {
 	m.Client = api.NewClient(m.Token, m.Server)
 
 	m.initVolumes()
-	err := m.connect()
-	util.PanicIfErr(err)
+	util.PanicIfErr(m.connect())
 
 	m.listenReConn()
 	m.sendAgentProfile()
@@ -155,7 +155,13 @@ func (m *Manager) connect() error {
 		Status:       string(m.Status),
 	}
 
-	return m.Client.Connect(initData)
+	config, err := m.Client.Connect(initData)
+	if err != nil {
+		return err
+	}
+
+	m.Config = config
+	return nil
 }
 
 func (m *Manager) listenReConn() {

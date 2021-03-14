@@ -37,7 +37,7 @@ var (
 
 type (
 	Client interface {
-		Connect(*domain.AgentInit) error
+		Connect(*domain.AgentInit) (*domain.AgentConfig, error)
 		ReConn() <-chan struct{}
 
 		UploadLog(filePath string) error
@@ -81,10 +81,10 @@ type (
 	}
 )
 
-func (c *client) Connect(init *domain.AgentInit) error {
+func (c *client) Connect(init *domain.AgentInit) (*domain.AgentConfig, error) {
 	u, err := url.Parse(c.server)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	u.Scheme = "ws"
@@ -103,16 +103,17 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	// build connection
 	c.conn, _, err = dialer.Dial(u.String(), header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.conn.SetReadLimit(bufferSize)
 	c.setConnState(connStateConnected)
 
 	// send init connect event
-	_, err = c.sendMessageWithResp(eventConnect, init)
+	resp := &domain.AgentConfigResponse{}
+	err = c.sendMessageWithResp(eventConnect, init, resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// start to read message
@@ -120,7 +121,7 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	go c.consumePendingMessage()
 
 	util.LogInfo("Agent is connected to server %s", c.server)
-	return nil
+	return resp.Data, nil
 }
 
 func (c *client) ReConn() <-chan struct{} {
@@ -449,7 +450,7 @@ func (c *client) sendMessageWithBytes(event string, body []byte) error {
 	return nil
 }
 
-func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domain.Response, out error) {
+func (c *client) sendMessageWithResp(event string, msg interface{}, resp domain.ResponseMessage) (out error) {
 	defer util.RecoverPanic(func(e error) {
 		out = e
 	})
@@ -463,10 +464,8 @@ func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domai
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
 
-	message, err := c.parseResponse(data, &domain.Response{})
+	_, err = c.parseResponse(data, resp)
 	util.PanicIfErr(err)
-
-	resp = message.(*domain.Response)
 	return
 }
 
