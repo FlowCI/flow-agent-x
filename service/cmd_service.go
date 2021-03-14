@@ -89,6 +89,9 @@ func (s *CmdService) release() {
 	if s.executor != nil {
 		s.executor.Close()
 		s.executor = nil
+
+		cm := config.GetInstance()
+		cm.FireEvent(domain.EventOnIdle)
 	}
 
 	util.LogDebug("[Exit]: cmd been executed and service is available !")
@@ -103,7 +106,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		}
 	}()
 
-	appConfig := config.GetInstance()
+	cm := config.GetInstance()
 
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -115,10 +118,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	err := initShellCmd(in)
 	util.PanicIfErr(err)
 
-	appConfig.Status = domain.AgentBusy
-	defer func() {
-		appConfig.Status = domain.AgentIdle
-	}()
+	cm.FireEvent(domain.EventOnBusy)
 
 	if in.HasPlugin() {
 		err := s.pluginManager.Load(in.Plugin)
@@ -135,7 +135,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 	if in.HasDockerOption() {
 		for _, option := range in.Dockers {
 			if option.HasAuth() {
-				secret, err := appConfig.Client.GetSecret(option.Auth)
+				secret, err := cm.Client.GetSecret(option.Auth)
 				util.PanicIfErr(err)
 
 				auth, ok := secret.(*domain.AuthSecret)
@@ -150,20 +150,20 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 
 	s.executor = executor.NewExecutor(executor.Options{
 		K8s: &domain.K8sConfig{
-			Enabled:   appConfig.K8sEnabled,
-			InCluster: appConfig.K8sCluster,
-			Namespace: appConfig.K8sNamespace,
-			PodName:   appConfig.K8sPodName,
-			PodIp:     appConfig.K8sPodIp,
+			Enabled:   cm.K8sEnabled,
+			InCluster: cm.K8sCluster,
+			Namespace: cm.K8sNamespace,
+			PodName:   cm.K8sPodName,
+			PodIp:     cm.K8sPodIp,
 		},
-		AgentId:     appConfig.Token,
-		Parent:      appConfig.AppCtx,
-		Workspace:   appConfig.Workspace,
-		PluginDir:   appConfig.PluginDir,
+		AgentId:     cm.Token,
+		Parent:      cm.AppCtx,
+		Workspace:   cm.Workspace,
+		PluginDir:   cm.PluginDir,
 		CacheSrcDir: cacheSrcDir,
 		Cmd:         in,
 		Vars:        s.initEnv(),
-		Volumes:     appConfig.Volumes,
+		Volumes:     cm.Volumes,
 	})
 
 	err = s.executor.Init()
@@ -188,7 +188,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 
 		result := s.executor.GetResult()
 		util.LogInfo("Cmd '%s' been executed with exit code %d", result.ID, result.Code)
-		appConfig.Client.SendCmdOut(result)
+		cm.Client.SendCmdOut(result)
 	}()
 
 	return nil

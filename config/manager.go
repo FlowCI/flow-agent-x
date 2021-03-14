@@ -17,13 +17,13 @@ import (
 	"time"
 )
 
+const pluginDir = ".plugins"
+const logDir = ".logs"
+
 type (
 	// Manager to handle server connection and config
 	Manager struct {
 		Zk *util.ZkClient
-
-		Status domain.AgentStatus
-		Config *domain.AgentConfig
 
 		Debug  bool
 		Server string
@@ -48,6 +48,11 @@ type (
 
 		AppCtx context.Context
 		Cancel context.CancelFunc
+
+		idleTimer *time.Timer
+		config    *domain.AgentConfig
+		status    domain.AgentStatus
+		events    map[domain.AppEvent]func()
 	}
 )
 
@@ -57,8 +62,8 @@ func (m *Manager) Init() {
 		m.Port = m.getDefaultPort()
 	}
 
-	m.PluginDir = filepath.Join(m.Workspace, ".plugins")
-	m.LoggingDir = filepath.Join(m.Workspace, ".logs")
+	m.PluginDir = filepath.Join(m.Workspace, pluginDir)
+	m.LoggingDir = filepath.Join(m.Workspace, logDir)
 
 	m.K8sNodeName = os.Getenv(domain.VarK8sNodeName)
 	m.K8sPodName = os.Getenv(domain.VarK8sPodName)
@@ -75,29 +80,18 @@ func (m *Manager) Init() {
 	m.Cancel = cancel
 	m.Client = api.NewClient(m.Token, m.Server)
 
+	// init events
+	m.events[domain.EventOnIdle] = m.onIdleEvent
+	m.events[domain.EventOnBusy] = m.onBusyEvent
+
 	m.initVolumes()
 	util.PanicIfErr(m.connect())
 
 	m.listenReConn()
 	m.sendAgentProfile()
-}
 
-func (m *Manager) PrintInfo() {
-	util.LogInfo("--- [Server URL]: %s", m.Server)
-	util.LogInfo("--- [Token]: %s", m.Token)
-	util.LogInfo("--- [Port]: %d", m.Port)
-	util.LogInfo("--- [Workspace]: %s", m.Workspace)
-	util.LogInfo("--- [Plugin Dir]: %s", m.PluginDir)
-	util.LogInfo("--- [Log Dir]: %s", m.LoggingDir)
-	util.LogInfo("--- [Volume Str]: %s", m.VolumesStr)
-
-	if m.K8sEnabled {
-		util.LogInfo("--- [K8s InCluster]: %d", m.K8sCluster)
-		util.LogInfo("--- [K8s Node]: %s", m.K8sNodeName)
-		util.LogInfo("--- [K8s Namespace]: %s", m.K8sNamespace)
-		util.LogInfo("--- [K8s Pod]: %s", m.K8sPodName)
-		util.LogInfo("--- [K8s Pod IP]: %s", m.K8sPodIp)
-	}
+	m.printInfo()
+	m.FireEvent(domain.EventOnIdle)
 }
 
 func (m *Manager) FetchProfile() *domain.AgentProfile {
@@ -116,14 +110,70 @@ func (m *Manager) FetchProfile() *domain.AgentProfile {
 	}
 }
 
+func (m *Manager) FireEvent(event domain.AppEvent) {
+	if f, ok := m.events[event]; ok {
+		f()
+	}
+}
+
 // Close release resources and connections
 func (m *Manager) Close() {
 	m.Client.Close()
 }
 
 // --------------------------------
+//		Events Handler
+// --------------------------------
+
+func (m *Manager) onIdleEvent() {
+	m.status = domain.AgentIdle
+	util.LogInfo("[Agent Status] = Idle")
+
+	if m.config.ExitOnIdle <= 0 {
+		return
+	}
+
+	if m.idleTimer != nil {
+		m.idleTimer.Stop()
+	}
+
+	m.idleTimer = time.NewTimer(time.Duration(m.config.ExitOnIdle) * time.Second)
+	go func() {
+		t := <-m.idleTimer.C
+		panic(fmt.Errorf("idle after %d seconds, agent will be exited", t.Second()))
+	}()
+}
+
+func (m *Manager) onBusyEvent() {
+	m.status = domain.AgentBusy
+	util.LogInfo("[Agent Status] = Busy")
+
+	m.idleTimer.Stop()
+	m.idleTimer = nil
+}
+
+// --------------------------------
 //		Private Functions
 // --------------------------------
+
+func (m *Manager) printInfo() {
+	util.LogInfo("--- [Server URL]: %s", m.Server)
+	util.LogInfo("--- [Token]: %s", m.Token)
+	util.LogInfo("--- [Port]: %d", m.Port)
+	util.LogInfo("--- [Workspace]: %s", m.Workspace)
+	util.LogInfo("--- [Plugin Dir]: %s", m.PluginDir)
+	util.LogInfo("--- [Log Dir]: %s", m.LoggingDir)
+	util.LogInfo("--- [Volume Str]: %s", m.VolumesStr)
+	util.LogInfo("--- [Exit On Idle]: %d (seconds)", m.config.ExitOnIdle)
+
+	if m.K8sEnabled {
+		util.LogInfo("--- [K8s InCluster]: %d", m.K8sCluster)
+		util.LogInfo("--- [K8s Node]: %s", m.K8sNodeName)
+		util.LogInfo("--- [K8s Namespace]: %s", m.K8sNamespace)
+		util.LogInfo("--- [K8s Pod]: %s", m.K8sPodName)
+		util.LogInfo("--- [K8s Pod IP]: %s", m.K8sPodIp)
+	}
+}
 
 func (m *Manager) getDefaultPort() int {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -152,7 +202,7 @@ func (m *Manager) connect() error {
 		IsK8sCluster: m.K8sCluster,
 		Port:         m.Port,
 		Os:           util.OS(),
-		Status:       string(m.Status),
+		Status:       string(m.status),
 	}
 
 	config, err := m.Client.Connect(initData)
@@ -160,7 +210,7 @@ func (m *Manager) connect() error {
 		return err
 	}
 
-	m.Config = config
+	m.config = config
 	return nil
 }
 

@@ -14,7 +14,8 @@ var (
 func GetInstance() *Manager {
 	once.Do(func() {
 		singleton = &Manager{
-			Status: domain.AgentIdle,
+			status: domain.AgentIdle,
+			events: map[domain.AppEvent]func(){},
 		}
 	})
 	return singleton

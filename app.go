@@ -109,7 +109,6 @@ func start(c *cli.Context) error {
 
 	cm := config.GetInstance()
 	cm.Init()
-	cm.PrintInfo()
 
 	defer cm.Close()
 
@@ -129,12 +128,11 @@ func startGin(cm *config.Manager) {
 	}
 
 	server := &http.Server{
-		Addr:    fmt.Sprintf("0.0.0.0:%d", cm.Port),
+		Addr:    fmt.Sprintf(":%d", cm.Port),
 		Handler: router,
 	}
 
 	go func() {
-		util.LogInfo("Agent URL: %s", server.Addr)
 		err := server.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			util.FailOnError(err, "Unable to listen")
