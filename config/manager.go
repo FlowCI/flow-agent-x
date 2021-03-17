@@ -135,6 +135,7 @@ func (m *Manager) onIdleEvent() {
 
 	if m.idleTimer != nil {
 		m.idleTimer.Stop()
+		m.idleTimer = nil
 	}
 
 	m.idleTimer = time.NewTimer(time.Duration(m.config.ExitOnIdle) * time.Second)
@@ -148,8 +149,10 @@ func (m *Manager) onBusyEvent() {
 	m.status = domain.AgentBusy
 	util.LogInfo("[Agent Status] = Busy")
 
-	m.idleTimer.Stop()
-	m.idleTimer = nil
+	if m.idleTimer != nil {
+		m.idleTimer.Stop()
+		m.idleTimer = nil
+	}
 }
 
 // --------------------------------
