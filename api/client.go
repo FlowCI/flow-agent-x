@@ -305,6 +305,13 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 		return rsa, nil
 	}
 
+	if base.Category == domain.SecretCategoryToken {
+		token := &domain.TokenSecret{}
+		err = json.Unmarshal(out, token)
+		util.PanicIfErr(err)
+		return token, nil
+	}
+
 	return nil, fmt.Errorf("unsupport secret type")
 }
 

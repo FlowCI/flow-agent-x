@@ -112,3 +112,9 @@ func (v Variables) ToStringArray() []string {
 func (v Variables) IsEmpty() bool {
 	return len(v) == 0
 }
+
+func (v Variables) AddMapVars(vars map[string]string) {
+	for key, value := range vars {
+		v[key] = value
+	}
+}

@@ -163,6 +163,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		CacheSrcDir: cacheSrcDir,
 		Cmd:         in,
 		Vars:        s.initEnv(),
+		SecretVars:  s.InitSecretEnv(in),
 		Volumes:     cm.Volumes,
 	})
 
@@ -234,6 +235,23 @@ func (s *CmdService) initEnv() domain.Variables {
 	}
 
 	return vars
+}
+
+func (s *CmdService) InitSecretEnv(in *domain.ShellIn) domain.Variables {
+	vars := domain.NewVariables()
+
+	if !in.HasSecrets() {
+		return vars;
+	}
+
+	api := config.GetInstance().Client
+	for _, name := range in.Secrets {
+		secret, err := api.GetSecret(name)
+		util.PanicIfErr(err)
+		vars.AddMapVars(secret.ToEnvs())
+	}
+
+	return vars;
 }
 
 func (s *CmdService) execTty(bytes []byte) {

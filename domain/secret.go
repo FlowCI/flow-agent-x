@@ -12,11 +12,16 @@ type (
 	Secret interface {
 		GetName() string
 		GetCategory() string
+		ToEnvs() map[string]string
 	}
 
 	SecretBase struct {
 		Name     string `json:"name"`
 		Category string `json:"category"`
+	}
+
+	SecretField struct {
+		Data string `json:"data"`
 	}
 )
 

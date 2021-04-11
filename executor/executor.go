@@ -92,6 +92,7 @@ type Options struct {
 	CacheSrcDir string
 	Cmd         *domain.ShellIn
 	Vars        domain.Variables
+	SecretVars  domain.Variables
 	Volumes     []*domain.DockerVolume
 }
 
