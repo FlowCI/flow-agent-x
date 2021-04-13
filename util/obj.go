@@ -1,6 +1,7 @@
 package util
 
 import (
+	"fmt"
 	"log"
 	"reflect"
 )
@@ -8,6 +9,12 @@ import (
 func PanicIfErr(err error) {
 	if err != nil {
 		panic(err)
+	}
+}
+
+func PanicIfNil(obj interface{}, msg string) {
+	if obj == nil {
+		panic(fmt.Errorf("unhandled nil pointer : %s", msg))
 	}
 }
 

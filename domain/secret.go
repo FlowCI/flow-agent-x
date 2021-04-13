@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 const (
 	SecretCategoryAuth        = "AUTH"
 	SecretCategorySshRsa      = "SSH_RSA"
@@ -22,6 +24,15 @@ type (
 
 	SecretField struct {
 		Data string `json:"data"`
+	}
+
+	SecretResponse struct {
+		Response
+		Data *SecretBase     `json:"data"`
+	}
+
+	SecretResponseRaw struct {
+		Raw json.RawMessage     `json:"data"`
 	}
 )
 

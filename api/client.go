@@ -287,32 +287,39 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	out, err := ioutil.ReadAll(resp.Body)
 	util.PanicIfErr(err)
 
-	base := &domain.SecretBase{}
-	err = json.Unmarshal(out, base)
+	secretResp, err := c.parseResponse(out, &domain.SecretResponse{})
+	util.PanicIfErr(err)
+
+	body := secretResp.(*domain.SecretResponse)
+	util.PanicIfNil(body.Data, "secret data")
+
+	base := body.Data
+	baseRaw := &domain.SecretResponseRaw{}
+	err = json.Unmarshal(out, baseRaw)
 	util.PanicIfErr(err)
 
 	if base.Category == domain.SecretCategoryAuth {
 		auth := &domain.AuthSecret{}
-		err = json.Unmarshal(out, auth)
+		err = json.Unmarshal(baseRaw.Raw, auth)
 		util.PanicIfErr(err)
 		return auth, nil
 	}
 
 	if base.Category == domain.SecretCategorySshRsa {
 		rsa := &domain.RSASecret{}
-		err = json.Unmarshal(out, rsa)
+		err = json.Unmarshal(baseRaw.Raw, rsa)
 		util.PanicIfErr(err)
 		return rsa, nil
 	}
 
 	if base.Category == domain.SecretCategoryToken {
 		token := &domain.TokenSecret{}
-		err = json.Unmarshal(out, token)
+		err = json.Unmarshal(baseRaw.Raw, token)
 		util.PanicIfErr(err)
 		return token, nil
 	}
 
-	return nil, fmt.Errorf("unsupport secret type")
+	return nil, fmt.Errorf("secret '%s' category '%s' is unsupported", base.GetName(), base.GetCategory())
 }
 
 func (c *client) Close() {
