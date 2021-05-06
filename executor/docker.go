@@ -363,7 +363,7 @@ func (d *dockerExecutor) initConfig() {
 	}
 
 	d.vars.Resolve()
-	config := runtimeOption.ToRuntimeConfig(d.vars, d.jobDir, binds)
+	config := runtimeOption.ToRuntimeConfig(domain.ConnectVars(d.vars, d.secretVars), d.jobDir, binds)
 
 	// set default entrypoint for runtime container
 	if !config.HasEntrypoint() {

@@ -8,6 +8,7 @@ import (
 const (
 	VarServerUrl = "FLOWCI_SERVER_URL"
 
+	VarAgentDebug         = "FLOWCI_AGENT_DEBUG" // boolean
 	VarAgentToken         = "FLOWCI_AGENT_TOKEN"
 	VarAgentPort          = "FLOWCI_AGENT_PORT"
 	VarAgentWorkspace     = "FLOWCI_AGENT_WORKSPACE"
@@ -110,4 +111,10 @@ func (v Variables) ToStringArray() []string {
 // IsEmpty to check is empty variables
 func (v Variables) IsEmpty() bool {
 	return len(v) == 0
+}
+
+func (v Variables) AddMapVars(vars map[string]string) {
+	for key, value := range vars {
+		v[key] = value
+	}
 }

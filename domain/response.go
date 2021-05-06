@@ -15,11 +15,6 @@ type (
 		Code    int
 		Message string
 	}
-
-	JobCacheResponse struct {
-		Response
-		Data *JobCache
-	}
 )
 
 func (r *Response) IsOk() bool {
@@ -27,13 +22,5 @@ func (r *Response) IsOk() bool {
 }
 
 func (r *Response) GetMessage() string {
-	return r.Message
-}
-
-func (r *JobCacheResponse) IsOk() bool {
-	return r.Code == ok
-}
-
-func (r *JobCacheResponse) GetMessage() string {
 	return r.Message
 }

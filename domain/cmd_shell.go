@@ -18,7 +18,7 @@ type (
 		JobId        string          `json:"jobId"`
 		AllowFailure bool            `json:"allowFailure"`
 		Plugin       string          `json:"plugin"`
-		Cache        *Cache           `json:"cache"`
+		Cache        *Cache          `json:"cache"`
 		Dockers      []*DockerOption `json:"dockers"`
 		Bash         []string        `json:"bash"`
 		Pwsh         []string        `json:"pwsh"`
@@ -26,6 +26,7 @@ type (
 		Timeout      int             `json:"timeout"`
 		Inputs       Variables       `json:"inputs"`
 		EnvFilters   []string        `json:"envFilters"`
+		Secrets      []string        `json:"secrets"`
 	}
 
 	ShellOut struct {
@@ -51,6 +52,10 @@ type (
 // ===================================
 //		ShellIn Methods
 // ===================================
+
+func (in *ShellIn) HasSecrets() bool {
+	return in.Secrets != nil && len(in.Secrets) > 0
+}
 
 func (in *ShellIn) HasCache() bool {
 	return in.Cache != nil

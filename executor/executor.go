@@ -67,10 +67,11 @@ type BaseExecutor struct {
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	volumes []*domain.DockerVolume
-	inCmd   *domain.ShellIn
-	result  *domain.ShellOut
-	vars    domain.Variables // vars from input and in cmd
+	volumes    []*domain.DockerVolume
+	inCmd      *domain.ShellIn
+	result     *domain.ShellOut
+	vars       domain.Variables // vars from input and in cmd
+	secretVars domain.Variables
 
 	stdout   chan string    // output log
 	stdOutWg sync.WaitGroup // init on subclasses
@@ -92,6 +93,7 @@ type Options struct {
 	CacheSrcDir string
 	Cmd         *domain.ShellIn
 	Vars        domain.Variables
+	SecretVars  domain.Variables
 	Volumes     []*domain.DockerVolume
 }
 
@@ -111,6 +113,7 @@ func NewExecutor(options Options) Executor {
 		stdout:        make(chan string, defaultChannelBufferSize),
 		inCmd:         cmd,
 		vars:          domain.ConnectVars(options.Vars, cmd.Inputs),
+		secretVars:    options.SecretVars,
 		result:        domain.NewShellOutput(cmd),
 		ttyIn:         make(chan string, defaultChannelBufferSize),
 		ttyOut:        make(chan string, defaultChannelBufferSize),
@@ -137,7 +140,6 @@ func (b *BaseExecutor) CacheDir() (input string, output string) {
 	return
 }
 
-// CmdID current bash executor cmd id
 func (b *BaseExecutor) CmdIn() *domain.ShellIn {
 	return b.inCmd
 }
@@ -146,7 +148,6 @@ func (b *BaseExecutor) TtyId() string {
 	return b.ttyId
 }
 
-// LogChannel for output log from stdout, stdin
 func (b *BaseExecutor) Stdout() <-chan string {
 	return b.stdout
 }
@@ -167,7 +168,6 @@ func (b *BaseExecutor) GetResult() *domain.ShellOut {
 	return b.result
 }
 
-// Stop stop current running script
 func (b *BaseExecutor) Kill() {
 	b.cancelFunc()
 }

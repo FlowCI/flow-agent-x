@@ -37,11 +37,11 @@ var (
 
 type (
 	Client interface {
-		Connect(*domain.AgentInit) error
+		Connect(*domain.AgentInit) (*domain.AgentConfig, error)
 		ReConn() <-chan struct{}
 
 		UploadLog(filePath string) error
-		ReportProfile(*domain.Resource) error
+		ReportProfile(profile *domain.AgentProfile) error
 
 		GetCmdIn() <-chan []byte
 		SendCmdOut(out domain.CmdOut) error
@@ -81,10 +81,10 @@ type (
 	}
 )
 
-func (c *client) Connect(init *domain.AgentInit) error {
+func (c *client) Connect(init *domain.AgentInit) (*domain.AgentConfig, error) {
 	u, err := url.Parse(c.server)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	u.Scheme = "ws"
@@ -103,16 +103,17 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	// build connection
 	c.conn, _, err = dialer.Dial(u.String(), header)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.conn.SetReadLimit(bufferSize)
 	c.setConnState(connStateConnected)
 
 	// send init connect event
-	_, err = c.sendMessageWithResp(eventConnect, init)
+	resp := &domain.AgentConfigResponse{}
+	err = c.sendMessageWithResp(eventConnect, init, resp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// start to read message
@@ -120,20 +121,15 @@ func (c *client) Connect(init *domain.AgentInit) error {
 	go c.consumePendingMessage()
 
 	util.LogInfo("Agent is connected to server %s", c.server)
-	return nil
+	return resp.Data, nil
 }
 
 func (c *client) ReConn() <-chan struct{} {
 	return c.reConn
 }
 
-func (c *client) ReportProfile(r *domain.Resource) (err error) {
-	body, err := json.Marshal(r)
-	if err != nil {
-		return
-	}
-
-	_, err = c.send("POST", "profile", util.HttpMimeJson, bytes.NewBuffer(body))
+func (c *client) ReportProfile(r *domain.AgentProfile) (err error) {
+	_ = c.sendMessageWithJson(eventProfile, r)
 	return
 }
 
@@ -291,25 +287,39 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	out, err := ioutil.ReadAll(resp.Body)
 	util.PanicIfErr(err)
 
-	base := &domain.SecretBase{}
-	err = json.Unmarshal(out, base)
+	secretResp, err := c.parseResponse(out, &domain.SecretResponse{})
+	util.PanicIfErr(err)
+
+	body := secretResp.(*domain.SecretResponse)
+	util.PanicIfNil(body.Data, "secret data")
+
+	base := body.Data
+	baseRaw := &domain.SecretResponseRaw{}
+	err = json.Unmarshal(out, baseRaw)
 	util.PanicIfErr(err)
 
 	if base.Category == domain.SecretCategoryAuth {
 		auth := &domain.AuthSecret{}
-		err = json.Unmarshal(out, auth)
+		err = json.Unmarshal(baseRaw.Raw, auth)
 		util.PanicIfErr(err)
 		return auth, nil
 	}
 
 	if base.Category == domain.SecretCategorySshRsa {
 		rsa := &domain.RSASecret{}
-		err = json.Unmarshal(out, rsa)
+		err = json.Unmarshal(baseRaw.Raw, rsa)
 		util.PanicIfErr(err)
 		return rsa, nil
 	}
 
-	return nil, fmt.Errorf("unsupport secret type")
+	if base.Category == domain.SecretCategoryToken {
+		token := &domain.TokenSecret{}
+		err = json.Unmarshal(baseRaw.Raw, token)
+		util.PanicIfErr(err)
+		return token, nil
+	}
+
+	return nil, fmt.Errorf("secret '%s' category '%s' is unsupported", base.GetName(), base.GetCategory())
 }
 
 func (c *client) Close() {
@@ -454,7 +464,7 @@ func (c *client) sendMessageWithBytes(event string, body []byte) error {
 	return nil
 }
 
-func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domain.Response, out error) {
+func (c *client) sendMessageWithResp(event string, msg interface{}, resp domain.ResponseMessage) (out error) {
 	defer util.RecoverPanic(func(e error) {
 		out = e
 	})
@@ -468,10 +478,8 @@ func (c *client) sendMessageWithResp(event string, msg interface{}) (resp *domai
 	_, data, err := c.conn.ReadMessage()
 	util.PanicIfErr(err)
 
-	message, err := c.parseResponse(data, &domain.Response{})
+	_, err = c.parseResponse(data, resp)
 	util.PanicIfErr(err)
-
-	resp = message.(*domain.Response)
 	return
 }
 

@@ -11,3 +11,10 @@ type (
 		Pair *SimpleAuthPair `json:"pair"`
 	}
 )
+
+func (s *AuthSecret) ToEnvs() map[string]string {
+	return map[string]string{
+		s.GetName() + "_USERNAME": s.Pair.Username,
+		s.GetName() + "_PASSWORD": s.Pair.Password,
+	}
+}
