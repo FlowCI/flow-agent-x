@@ -34,6 +34,7 @@ func (se *shellExecutor) doStart() (out error) {
 	command := exec.Command(path, "-NoLogo", "-NoProfile", "-NonInteractive", "-File", ps1File)
 	command.Dir = se.jobDir
 	command.Env = append(os.Environ(), se.vars.ToStringArray()...)
+	command.Env = append(command.Env, se.secretVars.ToStringArray()...)
 
 	stdout, err := command.StdoutPipe()
 	util.PanicIfErr(err)
@@ -108,6 +109,7 @@ func (se *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	c := exec.Command(path, "-NoLogo", "-NoProfile")
 	c.Dir = se.jobDir
 	c.Env = append(os.Environ(), se.vars.ToStringArray()...)
+	c.Env = append(c.Env, se.secretVars.ToStringArray()...)
 
 	stdin, err := c.StdinPipe()
 	util.PanicIfErr(err)
