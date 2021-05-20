@@ -106,9 +106,14 @@ func (m *Manager) FetchProfile() *domain.AgentProfile {
 	vmStat, _ := mem.VirtualMemory()
 	diskStat, _ := disk.Usage("/")
 
+	cpuUsage := float64(0)
+	if len(percent) > 0 {
+		cpuUsage = percent[0]
+	}
+
 	return &domain.AgentProfile{
 		CpuNum:      nCpu,
-		CpuUsage:    percent[0],
+		CpuUsage:    cpuUsage,
 		TotalMemory: util.ByteToMB(vmStat.Total),
 		FreeMemory:  util.ByteToMB(vmStat.Available),
 		TotalDisk:   util.ByteToMB(diskStat.Total),
