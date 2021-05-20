@@ -63,6 +63,14 @@ func main() {
 			Destination: &cm.Port,
 		},
 
+		cli.StringFlag{
+			Name:        "profile",
+			Usage:       "Enable or disable agent profiling",
+			EnvVar:      domain.VarAgentEnableProfile,
+			Value:       "true",
+			Destination: &cm.ProfileEnabledStr,
+		},
+
 		cli.BoolFlag{
 			Name:        "k8sEnabled",
 			Usage:       "Indicate is run from k8s",

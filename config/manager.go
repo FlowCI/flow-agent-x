@@ -30,6 +30,9 @@ type (
 		Token  string
 		Port   int
 
+		ProfileEnabled    bool
+		ProfileEnabledStr string
+
 		K8sEnabled   bool
 		K8sCluster   bool
 		K8sNodeName  string
@@ -61,6 +64,9 @@ func (m *Manager) Init() {
 	if m.Port < 0 {
 		m.Port = m.getDefaultPort()
 	}
+	var err error
+	m.ProfileEnabled, err = strconv.ParseBool(m.ProfileEnabledStr)
+	util.PanicIfErr(err)
 
 	m.PluginDir = filepath.Join(m.Workspace, pluginDir)
 	m.LoggingDir = filepath.Join(m.Workspace, logDir)
@@ -242,6 +248,10 @@ func (m *Manager) listenReConn() {
 }
 
 func (m *Manager) sendAgentProfile() {
+	if !m.ProfileEnabled {
+		return
+	}
+
 	go func() {
 		for {
 			select {
