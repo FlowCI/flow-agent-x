@@ -131,22 +131,7 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		cacheSrcDir = s.cacheManager.Download(in)
 	}
 
-	// load docker secret
-	if in.HasDockerOption() {
-		for _, option := range in.Dockers {
-			if option.HasAuth() {
-				secret, err := cm.Client.GetSecret(option.Auth)
-				util.PanicIfErr(err)
-
-				auth, ok := secret.(*domain.AuthSecret)
-				if !ok {
-					panic(fmt.Errorf("the secret '%s' is invalid, the secret category should be 'Auth pair'", option.Auth))
-				}
-
-				option.AuthContent = auth.Pair
-			}
-		}
-	}
+	s.loadSecretForDocker(in)
 
 	s.executor = executor.NewExecutor(executor.Options{
 		K8s: &domain.K8sConfig{
@@ -163,7 +148,8 @@ func (s *CmdService) execShell(in *domain.ShellIn) (out error) {
 		CacheSrcDir: cacheSrcDir,
 		Cmd:         in,
 		Vars:        s.initEnv(),
-		SecretVars:  s.InitSecretEnv(in),
+		SecretVars:  s.initSecretEnv(in),
+		ConfigVars:  s.initConfigEnv(in),
 		Volumes:     cm.Volumes,
 	})
 
@@ -237,11 +223,12 @@ func (s *CmdService) initEnv() domain.Variables {
 	return vars
 }
 
-func (s *CmdService) InitSecretEnv(in *domain.ShellIn) domain.Variables {
+// initSecretEnv load secret value as environment variables
+func (s *CmdService) initSecretEnv(in *domain.ShellIn) domain.Variables {
 	vars := domain.NewVariables()
 
 	if !in.HasSecrets() {
-		return vars;
+		return vars
 	}
 
 	api := config.GetInstance().Client
@@ -251,7 +238,25 @@ func (s *CmdService) InitSecretEnv(in *domain.ShellIn) domain.Variables {
 		vars.AddMapVars(secret.ToEnvs())
 	}
 
-	return vars;
+	return vars
+}
+
+// initConfigEnv load config value as environment variables
+func (s *CmdService) initConfigEnv(in *domain.ShellIn) domain.Variables {
+	vars := domain.NewVariables()
+
+	if !in.HasConfigs() {
+		return vars
+	}
+
+	api := config.GetInstance().Client
+	for _, name := range in.Configs {
+		config, err := api.GetConfig(name)
+		util.PanicIfErr(err)
+		vars.AddMapVars(config.ToEnvs())
+	}
+
+	return vars
 }
 
 func (s *CmdService) execTty(bytes []byte) {
@@ -401,6 +406,27 @@ func (s *CmdService) startLogConsumer() {
 
 	go consumeShellLog()
 	go consumeTtyLog()
+}
+
+func (s *CmdService) loadSecretForDocker(in *domain.ShellIn) {
+	if !in.HasDockerOption() {
+		return
+	}
+
+	cm := config.GetInstance()
+	for _, option := range in.Dockers {
+		if option.HasAuth() {
+			secret, err := cm.Client.GetSecret(option.Auth)
+			util.PanicIfErr(err)
+
+			auth, ok := secret.(*domain.AuthSecret)
+			if !ok {
+				panic(fmt.Errorf("the secret '%s' is invalid, the secret category should be 'Auth pair'", option.Auth))
+			}
+
+			option.AuthContent = auth.Pair
+		}
+	}
 }
 
 // ---------------------------------

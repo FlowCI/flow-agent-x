@@ -1,7 +1,5 @@
 package domain
 
-import "encoding/json"
-
 const (
 	SecretCategoryAuth        = "AUTH"
 	SecretCategorySshRsa      = "SSH_RSA"
@@ -15,6 +13,7 @@ type (
 		GetName() string
 		GetCategory() string
 		ToEnvs() map[string]string
+		SecretMarker()
 	}
 
 	SecretBase struct {
@@ -28,11 +27,7 @@ type (
 
 	SecretResponse struct {
 		Response
-		Data *SecretBase     `json:"data"`
-	}
-
-	SecretResponseRaw struct {
-		Raw json.RawMessage     `json:"data"`
+		Data *SecretBase `json:"data"`
 	}
 )
 
@@ -42,4 +37,8 @@ func (s *SecretBase) GetName() string {
 
 func (s *SecretBase) GetCategory() string {
 	return s.Category
+}
+
+func (s *SecretBase) SecretMarker() {
+	// placeholder
 }
