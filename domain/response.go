@@ -1,5 +1,7 @@
 package domain
 
+import "encoding/json"
+
 const (
 	ok = 200
 )
@@ -14,6 +16,10 @@ type (
 	Response struct {
 		Code    int
 		Message string
+	}
+
+	ResponseRaw struct {
+		Raw json.RawMessage `json:"data"`
 	}
 )
 

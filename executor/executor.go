@@ -67,11 +67,13 @@ type BaseExecutor struct {
 	context    context.Context
 	cancelFunc context.CancelFunc
 
-	volumes    []*domain.DockerVolume
-	inCmd      *domain.ShellIn
-	result     *domain.ShellOut
+	volumes []*domain.DockerVolume
+	inCmd   *domain.ShellIn
+	result  *domain.ShellOut
+
 	vars       domain.Variables // vars from input and in cmd
 	secretVars domain.Variables
+	configVars domain.Variables
 
 	stdout   chan string    // output log
 	stdOutWg sync.WaitGroup // init on subclasses
@@ -94,6 +96,7 @@ type Options struct {
 	Cmd         *domain.ShellIn
 	Vars        domain.Variables
 	SecretVars  domain.Variables
+	ConfigVars  domain.Variables
 	Volumes     []*domain.DockerVolume
 }
 
@@ -114,6 +117,7 @@ func NewExecutor(options Options) Executor {
 		inCmd:         cmd,
 		vars:          domain.ConnectVars(options.Vars, cmd.Inputs),
 		secretVars:    options.SecretVars,
+		configVars:    options.ConfigVars,
 		result:        domain.NewShellOutput(cmd),
 		ttyIn:         make(chan string, defaultChannelBufferSize),
 		ttyOut:        make(chan string, defaultChannelBufferSize),

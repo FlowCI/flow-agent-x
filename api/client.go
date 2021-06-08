@@ -53,6 +53,7 @@ type (
 		CacheDownload(cacheId, workspace, file string, progress io.Writer)
 
 		GetSecret(name string) (domain.Secret, error)
+		GetConfig(name string) (domain.Config, error)
 
 		Close()
 	}
@@ -270,11 +271,9 @@ func (c *client) CacheDownload(cacheId, workspace, file string, progress io.Writ
 }
 
 func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = r.(error)
-		}
-	}()
+	defer util.RecoverPanic(func(e error) {
+		err = e
+	})
 
 	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/secret/%s", c.server, name), nil)
 	req.Header.Set(util.HttpHeaderAgentToken, c.token)
@@ -294,7 +293,7 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	util.PanicIfNil(body.Data, "secret data")
 
 	base := body.Data
-	baseRaw := &domain.SecretResponseRaw{}
+	baseRaw := &domain.ResponseRaw{}
 	err = json.Unmarshal(out, baseRaw)
 	util.PanicIfErr(err)
 
@@ -320,6 +319,50 @@ func (c *client) GetSecret(name string) (secret domain.Secret, err error) {
 	}
 
 	return nil, fmt.Errorf("secret '%s' category '%s' is unsupported", base.GetName(), base.GetCategory())
+}
+
+func (c *client) GetConfig(name string) (config domain.Config, err error) {
+	defer util.RecoverPanic(func(e error) {
+		err = e
+	})
+
+	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("%s/api/config/%s", c.server, name), nil)
+	req.Header.Set(util.HttpHeaderAgentToken, c.token)
+
+	resp, err := c.client.Do(req)
+	util.PanicIfErr(err)
+
+	defer resp.Body.Close()
+
+	out, err := ioutil.ReadAll(resp.Body)
+	util.PanicIfErr(err)
+
+	configResp, err := c.parseResponse(out, &domain.ConfigResponse{})
+	util.PanicIfErr(err)
+
+	body := configResp.(*domain.ConfigResponse)
+	util.PanicIfNil(body.Data, "config data")
+
+	base := body.Data
+	baseRaw := &domain.ResponseRaw{}
+	err = json.Unmarshal(out, baseRaw)
+	util.PanicIfErr(err)
+
+	if base.Category == domain.ConfigCategorySmtp {
+		auth := &domain.SmtpConfig{}
+		err = json.Unmarshal(baseRaw.Raw, auth)
+		util.PanicIfErr(err)
+		return auth, nil
+	}
+
+	if base.Category == domain.ConfigCategoryText {
+		rsa := &domain.TextConfig{}
+		err = json.Unmarshal(baseRaw.Raw, rsa)
+		util.PanicIfErr(err)
+		return rsa, nil
+	}
+
+	return nil, fmt.Errorf("config '%s' category '%s' is unsupported", base.GetName(), base.GetCategory())
 }
 
 func (c *client) Close() {
