@@ -7,6 +7,6 @@ type TextConfig struct {
 
 func (c *TextConfig) ToEnvs() map[string]string {
 	return map[string]string{
-		c.GetName() + "_TEXT": c.Text,
+		c.GetName(): c.Text,
 	}
 }
