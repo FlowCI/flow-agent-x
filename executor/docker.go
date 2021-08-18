@@ -439,7 +439,7 @@ func (d *dockerExecutor) pullImageWithName(image string, auth *domain.SimpleAuth
 	fullRef := image
 
 	if isDockerHubImage(image) {
-		fullRef = image
+		fullRef = "docker.io/library/" + image
 		if strings.Contains(image, "/") {
 			fullRef = "docker.io/" + image
 		}
