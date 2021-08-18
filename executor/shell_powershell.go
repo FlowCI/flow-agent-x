@@ -35,6 +35,7 @@ func (se *shellExecutor) doStart() (out error) {
 	command.Dir = se.jobDir
 	command.Env = append(os.Environ(), se.vars.ToStringArray()...)
 	command.Env = append(command.Env, se.secretVars.ToStringArray()...)
+	command.Env = append(command.Env, se.configVars.ToStringArray()...)
 
 	stdout, err := command.StdoutPipe()
 	util.PanicIfErr(err)
@@ -110,6 +111,7 @@ func (se *shellExecutor) StartTty(ttyId string, onStarted func(ttyId string)) (o
 	c.Dir = se.jobDir
 	c.Env = append(os.Environ(), se.vars.ToStringArray()...)
 	c.Env = append(c.Env, se.secretVars.ToStringArray()...)
+	c.Env = append(c.Env, se.configVars.ToStringArray()...)
 
 	stdin, err := c.StdinPipe()
 	util.PanicIfErr(err)

@@ -402,6 +402,23 @@ func (d *dockerExecutor) handleErrors(err error) error {
 	return err
 }
 
+func (d *dockerExecutor) findImageLocally(image string) (bool, error) {
+	list, err := d.cli.ImageList(d.context, types.ImageListOptions{All: true})
+	if err != nil {
+		return false, err
+	}
+
+	for _, imageInfo := range list {
+		for _, t := range imageInfo.RepoTags {
+			if t == image {
+				return true, nil
+			}
+		}
+	}
+
+	return false, nil
+}
+
 func (d *dockerExecutor) pullImage() {
 	for _, c := range d.configs {
 		err := d.pullImageWithName(c.Config.Image, c.Auth)
@@ -410,10 +427,19 @@ func (d *dockerExecutor) pullImage() {
 }
 
 func (d *dockerExecutor) pullImageWithName(image string, auth *domain.SimpleAuthPair) (out error) {
+	if isOnLocal, err := d.findImageLocally(image); isOnLocal {
+		out = err
+		return
+	}
+
+	if util.HasError(out) {
+		return
+	}
+
 	fullRef := image
 
 	if isDockerHubImage(image) {
-		fullRef = "docker.io/library/" + image
+		fullRef = image
 		if strings.Contains(image, "/") {
 			fullRef = "docker.io/" + image
 		}
