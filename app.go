@@ -15,7 +15,7 @@ import (
 	"github/flowci/flow-agent-x/util"
 )
 
-const version = "0.21.21"
+const version = "1.21.33"
 
 func init() {
 	util.LogInit()
