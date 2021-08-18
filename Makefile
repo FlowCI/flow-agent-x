@@ -20,7 +20,7 @@ DOCKER_RUN 		:= docker run -it --rm -v $(CURRENT_DIR):/ws $(GOENV) -w /ws --netw
 
 DOCKER_BUILD 	:= ./build.sh
 
-.PHONY: build protogen test docker clean cleanall
+.PHONY: build protogen test image clean cleanall
 
 build:
 	$(DOCKER_RUN) "$(GOGEN) && $(GOBUILD_LINUX) && $(GOBUILD_MAC) && $(GOBUILD_WIN)"
@@ -29,7 +29,7 @@ test:
 	$(GOTEST_MOCK_GEN)
 	$(DOCKER_RUN) "$(GOTEST)"
 
-docker: build
+image: build
 	$(DOCKER_BUILD) $(tag)
 
 clean:
