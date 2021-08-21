@@ -9,7 +9,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
-	"github.com/docker/docker/api/types/volume"
 	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
@@ -49,7 +48,6 @@ type (
 
 	dockerExecutor struct {
 		BaseExecutor
-		agentVolume types.Volume
 		cli         *client.Client
 		configs     []*domain.DockerConfig
 		ttyExecId   string
@@ -79,7 +77,6 @@ func (d *dockerExecutor) Init() (out error) {
 
 	d.initVolumeData()
 	d.initNetwork()
-	d.initAgentVolume()
 	d.initConfig()
 
 	return nil
@@ -287,26 +284,6 @@ func (d *dockerExecutor) initNetwork() {
 	}
 }
 
-// agent volume that bind to /ws inside docker
-func (d *dockerExecutor) initAgentVolume() {
-	name := "agent-" + d.agentId
-	ok, v := d.getVolume(name)
-
-	if ok {
-		d.agentVolume = *v
-		util.LogInfo("Agent volume '%s' existed", name)
-		return
-	}
-
-	body := volume.VolumesCreateBody{Name: name}
-	created, err := d.cli.VolumeCreate(d.context, body)
-	util.PanicIfErr(err)
-
-	d.agentVolume = created
-	util.LogInfo("Agent volume '%s' created", name)
-	return
-}
-
 func (d *dockerExecutor) initConfig() {
 	d.configs = make([]*domain.DockerConfig, len(d.inCmd.Dockers))
 
@@ -340,7 +317,7 @@ func (d *dockerExecutor) initConfig() {
 	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
 	// setup run time config
-	binds := []string{d.agentVolume.Name + ":" + dockerWorkspace}
+	binds := []string{d.workspace + ":" + dockerWorkspace}
 	for _, v := range d.volumes {
 		ok, _ := d.getVolume(v.Name)
 		if !ok {
