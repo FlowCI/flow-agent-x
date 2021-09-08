@@ -88,16 +88,17 @@ type BaseExecutor struct {
 type Options struct {
 	K8s *domain.K8sConfig
 
-	AgentId     string
-	Parent      context.Context
-	Workspace   string
-	PluginDir   string
-	CacheSrcDir string
-	Cmd         *domain.ShellIn
-	Vars        domain.Variables
-	SecretVars  domain.Variables
-	ConfigVars  domain.Variables
-	Volumes     []*domain.DockerVolume
+	AgentId                        string
+	Parent                         context.Context
+	Workspace                 string
+	WorkspaceFromDockerVolume bool
+	PluginDir                 string
+	CacheSrcDir                    string
+	Cmd                            *domain.ShellIn
+	Vars                           domain.Variables
+	SecretVars                     domain.Variables
+	ConfigVars                     domain.Variables
+	Volumes                        []*domain.DockerVolume
 }
 
 func NewExecutor(options Options) Executor {
@@ -129,7 +130,8 @@ func NewExecutor(options Options) Executor {
 
 	if cmd.HasDockerOption() {
 		return &dockerExecutor{
-			BaseExecutor: base,
+			BaseExecutor:       base,
+			wsFromDockerVolume: options.WorkspaceFromDockerVolume,
 		}
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/volume"
 	volumetypes "github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 	"github/flowci/flow-agent-x/domain"
@@ -48,10 +49,12 @@ type (
 
 	dockerExecutor struct {
 		BaseExecutor
-		cli         *client.Client
-		configs     []*domain.DockerConfig
-		ttyExecId   string
-		envFile     string
+		wsFromDockerVolume bool
+		wsVolume           types.Volume
+		cli                *client.Client
+		configs            []*domain.DockerConfig
+		ttyExecId          string
+		envFile            string
 	}
 )
 
@@ -77,6 +80,7 @@ func (d *dockerExecutor) Init() (out error) {
 
 	d.initVolumeData()
 	d.initNetwork()
+	d.initWorkspaceVolume()
 	d.initConfig()
 
 	return nil
@@ -316,8 +320,15 @@ func (d *dockerExecutor) initConfig() {
 	d.vars[domain.VarAgentPluginDir] = dockerPluginDir
 	d.vars[domain.VarAgentDockerNetwork] = dockerNetwork
 
+	// setup workspace
+	ws := d.workspace
+	if d.wsFromDockerVolume {
+		ws = d.wsVolume.Name
+	}
+
 	// setup run time config
-	binds := []string{d.workspace + ":" + dockerWorkspace}
+	binds := []string{ws + ":" + dockerWorkspace}
+
 	for _, v := range d.volumes {
 		ok, _ := d.getVolume(v.Name)
 		if !ok {
@@ -327,7 +338,7 @@ func (d *dockerExecutor) initConfig() {
 		binds = append(binds, v.ToBindStr())
 	}
 
-	// mount docker dock if exit or running on windows
+	// mount docker dock if exit or running on Windows
 	if util.IsFileExists(dockerSock) || util.IsWindows() {
 		binds = append(binds, fmt.Sprintf("%s:%s", dockerSock, dockerSock))
 	}
@@ -349,6 +360,31 @@ func (d *dockerExecutor) initConfig() {
 
 	// set runtime to the first element in the config array
 	d.configs[0] = config
+}
+
+// agent volume that bind to /ws inside docker
+func (d *dockerExecutor) initWorkspaceVolume() {
+	if !d.wsFromDockerVolume {
+		util.LogInfo("Workspace volume will be mounted from host machine")
+		return
+	}
+
+	name := "agent-" + d.agentId
+	ok, v := d.getVolume(name)
+
+	if ok {
+		d.wsVolume = *v
+		util.LogInfo("Agent volume '%s' existed", name)
+		return
+	}
+
+	body := volume.VolumesCreateBody{Name: name}
+	created, err := d.cli.VolumeCreate(d.context, body)
+	util.PanicIfErr(err)
+
+	d.wsVolume = created
+	util.LogInfo("Workspace volume '%s' created", name)
+	return
 }
 
 func (d *dockerExecutor) handleErrors(err error) error {
@@ -460,7 +496,10 @@ func (d *dockerExecutor) startContainer() {
 
 		err = d.cli.ContainerStart(d.context, resp.ID, types.ContainerStartOptions{})
 		util.PanicIfErr(err)
-		util.LogInfo("Container started %s %s", c.Config.Image, resp.ID)
+
+		msg := fmt.Sprintf("Container started %s %s", c.Config.Image, resp.ID)
+		util.LogInfo(msg)
+		d.writeSingleLog(msg)
 
 		c.ContainerID = resp.ID
 		ids[i] = c.ContainerID

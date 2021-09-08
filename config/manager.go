@@ -3,18 +3,19 @@ package config
 import (
 	"context"
 	"fmt"
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/mem"
-	"github/flowci/flow-agent-x/api"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 	"net"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/shirou/gopsutil/v3/cpu"
+	"github.com/shirou/gopsutil/v3/disk"
+	"github.com/shirou/gopsutil/v3/mem"
+	"github/flowci/flow-agent-x/api"
+	"github/flowci/flow-agent-x/domain"
+	"github/flowci/flow-agent-x/util"
 )
 
 const pluginDir = ".plugins"
@@ -43,6 +44,7 @@ type (
 		Workspace  string
 		LoggingDir string
 		PluginDir  string
+		IsFromDocker bool
 
 		Client api.Client
 
@@ -66,6 +68,9 @@ func (m *Manager) Init() {
 	}
 	var err error
 	m.ProfileEnabled, err = strconv.ParseBool(m.ProfileEnabledStr)
+	util.PanicIfErr(err)
+
+	m.IsFromDocker, err = strconv.ParseBool(util.GetEnv(domain.VarAgentFromDocker, "false"))
 	util.PanicIfErr(err)
 
 	m.PluginDir = filepath.Join(m.Workspace, pluginDir)
