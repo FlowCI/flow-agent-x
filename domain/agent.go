@@ -15,7 +15,7 @@ const (
 )
 
 type (
-	// AgentProfile, token signed at server side
+	// AgentProfile token signed at server side
 	AgentProfile struct {
 		CpuNum      int     `json:"cpuNum"`
 		CpuUsage    float64 `json:"cpuUsage"`
@@ -27,7 +27,8 @@ type (
 
 	// AgentInit request data to get settings to server
 	AgentInit struct {
-		IsK8sCluster bool   `json:"k8sCluster"`
+		IsK8sCluster bool   `json:"isK8sCluster"`
+		IsDocker     bool   `json:"isDocker"`
 		Token        string `json:"token"`
 		Port         int    `json:"port"`
 		Os           string `json:"os"`
