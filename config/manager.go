@@ -41,9 +41,9 @@ type (
 		K8sPodIp     string
 		K8sNamespace string
 
-		Workspace  string
-		LoggingDir string
-		PluginDir  string
+		Workspace    string
+		LoggingDir   string
+		PluginDir    string
 		IsFromDocker bool
 
 		Client api.Client
@@ -219,6 +219,7 @@ func (m *Manager) initVolumes() {
 func (m *Manager) connect() error {
 	initData := &domain.AgentInit{
 		IsK8sCluster: m.K8sCluster,
+		IsDocker:     m.IsFromDocker,
 		Port:         m.Port,
 		Os:           util.OS(),
 		Status:       string(m.status),
