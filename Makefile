@@ -15,7 +15,7 @@ GOTEST_MOCK_GEN := docker run --rm -v "$(CURRENT_DIR)":/src -w /src vektra/mocke
 GOTEST      	:= $(GO) test ./... -v -timeout 10s
 GOENV			:= -e GOCACHE=/ws/.cache -e GOPATH=/ws/.vender -e GO111MODULE=on
 
-DOCKER_IMG		:= golang:1.13
+DOCKER_IMG		:= golang:1.17
 DOCKER_RUN 		:= docker run -it --rm -v $(CURRENT_DIR):/ws $(GOENV) -w /ws --network host $(DOCKER_IMG) /bin/bash -c
 
 DOCKER_BUILD 	:= ./build.sh
