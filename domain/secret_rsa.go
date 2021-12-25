@@ -16,5 +16,6 @@ type (
 func (s *RSASecret) ToEnvs() map[string]string {
 	return map[string]string{
 		s.GetName() + "_PUBLIC_KEY":  s.Pair.PublicKey,
+		s.GetName() + "_PRIVATE_KEY":  s.Pair.PrivateKey,
 	}
 }
