@@ -4,8 +4,8 @@
     <working_directory value="$PROJECT_DIR$/" />
     <go_parameters value="-i" />
     <envs>
-      <env name="FLOWCI_AGENT_TOKEN" value="41b81d62-9f3a-41ef-852e-72d86d708e4d" />
-      <env name="FLOWCI_SERVER_URL" value="http://192.168.31.110:8080" />
+      <env name="FLOWCI_AGENT_TOKEN" value="ea69a69b-f53e-488c-87a2-71c531961b4d" />
+      <env name="FLOWCI_SERVER_URL" value="http://192.168.31.173:8080" />
       <env name="FLOWCI_AGENT_VOLUMES" value="name=pyenv,dest=/ci/python,script=init.sh,image=flowci/pyenv,init=init-pyenv-volume.sh" />
       <env name="GIN_MODE" value="release" />
       <env name="GODEBUG" value="memprofilerate=1" />
