@@ -3,13 +3,13 @@ package dao
 import (
 	"database/sql"
 
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
-	//file = "agent.db"
+//file = "agent.db"
 )
 
 // Client for sqlite3

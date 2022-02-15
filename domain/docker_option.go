@@ -3,7 +3,7 @@ package domain
 import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 type (

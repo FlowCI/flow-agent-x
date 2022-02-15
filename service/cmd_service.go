@@ -14,10 +14,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github/flowci/flow-agent-x/config"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/executor"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/config"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/executor"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 type (

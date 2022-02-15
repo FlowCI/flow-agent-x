@@ -1,3 +1,4 @@
+//go:build !windows
 // +build !windows
 
 package executor
@@ -6,7 +7,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/creack/pty"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	"io/ioutil"
 	"os"
 	"os/exec"

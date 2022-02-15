@@ -2,10 +2,10 @@ package executor
 
 import (
 	"encoding/base64"
+	"github.com/flowci/flow-agent-x/config"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"github.com/stretchr/testify/assert"
-	"github/flowci/flow-agent-x/config"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 	"testing"
 	"time"
 )
@@ -157,12 +157,12 @@ func TestShouldRunWithTwoContainers(t *testing.T) {
 		Environment: map[string]string{
 			"MYSQL_ROOT_PASSWORD": "test",
 		},
-		Ports: []string{"3306:3306"},
+		Ports:             []string{"3306:3306"},
 		IsDeleteContainer: true,
 	})
 	cmd.Dockers = append(cmd.Dockers, &domain.DockerOption{
-		Image: "mysql:5.6",
-		Command: []string{"mysql", "-h127.0.0.1", "-uroot", "-ptest"},
+		Image:             "mysql:5.6",
+		Command:           []string{"mysql", "-h127.0.0.1", "-uroot", "-ptest"},
 		IsDeleteContainer: true,
 	})
 

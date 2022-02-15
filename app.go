@@ -6,13 +6,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/flowci/flow-agent-x/config"
+	"github.com/flowci/flow-agent-x/controller"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/urfave/cli"
-	"github/flowci/flow-agent-x/config"
-	"github/flowci/flow-agent-x/controller"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 )
 
 const version = "1.21.50"

@@ -1,7 +1,7 @@
 package config
 
 import (
-	"github/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/domain"
 	"sync"
 )
 

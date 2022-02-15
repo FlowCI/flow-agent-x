@@ -1,3 +1,4 @@
+//go:build windows
 // +build windows
 
 package executor
@@ -5,7 +6,7 @@ package executor
 import (
 	"context"
 	"fmt"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	"io"
 	"io/ioutil"
 	"os"

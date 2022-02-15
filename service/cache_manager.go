@@ -4,9 +4,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/dustin/go-humanize"
-	"github/flowci/flow-agent-x/api"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/api"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"io/ioutil"
 	"path/filepath"
 )

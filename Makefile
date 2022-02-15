@@ -15,7 +15,7 @@ GOBUILD_WIN     := $(WIN_AMD64) $(GO) build -o bin/$(PROJECT)-win -v
 
 GOTEST_MOCK_GEN := docker run --rm -v "$(CURRENT_DIR)":/src -w /src vektra/mockery --all
 GOTEST      	:= $(GO) test ./... -v -timeout 10s
-GOENV			:= -e GOCACHE=/ws/.cache -e GOPATH=/ws/.vender -e GO111MODULE=on
+GOENV			:= -e GOCACHE=/ws/.cache -e GOPATH=/ws/.vender
 
 DOCKER_IMG		:= golang:1.17
 DOCKER_RUN 		:= docker run -it --rm -v $(CURRENT_DIR):/ws $(GOENV) -w /ws --network host $(DOCKER_IMG) /bin/bash -c

@@ -4,7 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	"io"
 	"os"
 	"path/filepath"

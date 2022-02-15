@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flowci/flow-agent-x/api"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"github.com/shirou/gopsutil/v3/cpu"
 	"github.com/shirou/gopsutil/v3/disk"
 	"github.com/shirou/gopsutil/v3/mem"
-	"github/flowci/flow-agent-x/api"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 )
 
 const pluginDir = ".plugins"

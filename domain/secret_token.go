@@ -1,6 +1,6 @@
 package domain
 
-import "github/flowci/flow-agent-x/util"
+import "github.com/flowci/flow-agent-x/util"
 
 type (
 	TokenSecret struct {

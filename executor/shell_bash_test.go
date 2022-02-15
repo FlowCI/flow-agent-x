@@ -1,12 +1,13 @@
+//go:build !windows
 // +build !windows
 
 package executor
 
 import (
 	"encoding/base64"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"github.com/stretchr/testify/assert"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
 	"testing"
 	"time"
 )

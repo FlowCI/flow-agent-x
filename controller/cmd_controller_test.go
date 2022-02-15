@@ -1,10 +1,10 @@
 package controller
 
 import (
+	"github.com/flowci/flow-agent-x/api"
+	"github.com/flowci/flow-agent-x/config"
+	"github.com/flowci/flow-agent-x/mocks"
 	"github.com/streadway/amqp"
-	"github/flowci/flow-agent-x/api"
-	"github/flowci/flow-agent-x/config"
-	"github/flowci/flow-agent-x/mocks"
 	"testing"
 
 	"github.com/gin-gonic/gin"
