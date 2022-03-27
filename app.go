@@ -15,7 +15,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-const version = "1.21.50"
+const version = "1.22.12"
 
 func init() {
 	util.LogInit()
