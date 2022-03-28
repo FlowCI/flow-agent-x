@@ -2,7 +2,7 @@ package domain
 
 import (
 	"fmt"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	VarAgentDockerNetwork = "FLOWCI_AGENT_DOCKER_NETWORK"
 	VarAgentDockerAuth    = "FLOWCI_AGENT_DOCKER_AUTH"     // for private docker repo auth
 	VarAgentEnableProfile = "FLOWCI_AGENT_PROFILE_ENABLED" // boolean
-	VarAgentFromDocker    = "FLOWCI_DOCKER_AGENT" // boolean
+	VarAgentFromDocker    = "FLOWCI_DOCKER_AGENT"          // boolean
 
 	VarK8sEnabled   = "FLOWCI_AGENT_K8S_ENABLED"    // boolean
 	VarK8sInCluster = "FLOWCI_AGENT_K8S_IN_CLUSTER" // boolean

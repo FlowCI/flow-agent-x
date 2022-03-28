@@ -2,7 +2,7 @@ package domain
 
 import (
 	"fmt"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	"strings"
 )
 

@@ -1,8 +1,8 @@
 package executor
 
 import (
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"io"
 	"os/exec"
 	"strings"
@@ -51,7 +51,7 @@ func newLineForOs(os string) string {
 
 func readEnvFromReader(os string, r io.Reader, filters []string) domain.Variables {
 	if os == util.OSWin {
-		return readEnvFromReaderForWin(r,filters)
+		return readEnvFromReaderForWin(r, filters)
 	}
 
 	return readEnvFromReaderForUnix(r, filters)

@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github/flowci/flow-agent-x/config"
+	"github.com/flowci/flow-agent-x/config"
 	"strings"
 	"sync"
 )

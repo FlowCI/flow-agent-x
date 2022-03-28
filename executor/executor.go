@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"io"
 	"sync"
 	"sync/atomic"
@@ -88,17 +88,17 @@ type BaseExecutor struct {
 type Options struct {
 	K8s *domain.K8sConfig
 
-	AgentId                        string
-	Parent                         context.Context
+	AgentId                   string
+	Parent                    context.Context
 	Workspace                 string
 	WorkspaceFromDockerVolume bool
 	PluginDir                 string
-	CacheSrcDir                    string
-	Cmd                            *domain.ShellIn
-	Vars                           domain.Variables
-	SecretVars                     domain.Variables
-	ConfigVars                     domain.Variables
-	Volumes                        []*domain.DockerVolume
+	CacheSrcDir               string
+	Cmd                       *domain.ShellIn
+	Vars                      domain.Variables
+	SecretVars                domain.Variables
+	ConfigVars                domain.Variables
+	Volumes                   []*domain.DockerVolume
 }
 
 func NewExecutor(options Options) Executor {

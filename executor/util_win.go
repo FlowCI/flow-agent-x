@@ -3,8 +3,8 @@ package executor
 import (
 	"bufio"
 	"encoding/binary"
-	"github/flowci/flow-agent-x/domain"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/domain"
+	"github.com/flowci/flow-agent-x/util"
 	"io"
 	"strings"
 )

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 )
 
 const (

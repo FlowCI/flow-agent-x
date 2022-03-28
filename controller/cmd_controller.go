@@ -3,8 +3,8 @@ package controller
 import (
 	"net/http"
 
+	"github.com/flowci/flow-agent-x/service"
 	"github.com/gin-gonic/gin"
-	"github/flowci/flow-agent-x/service"
 )
 
 type CmdController struct {

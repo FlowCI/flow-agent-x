@@ -2,7 +2,7 @@ package api
 
 import (
 	"encoding/base64"
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	"strings"
 )
 

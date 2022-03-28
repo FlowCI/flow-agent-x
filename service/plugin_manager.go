@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github/flowci/flow-agent-x/util"
+	"github.com/flowci/flow-agent-x/util"
 	git "gopkg.in/src-d/go-git.v4"
 	"os"
 	"path/filepath"
