@@ -1,27 +1,22 @@
-FROM ubuntu:18.04
+FROM docker:20.10-cli as docker
 
-RUN apt update
-RUN apt install git curl wget -y
+FROM python:3.10.6-alpine3.16
 
-## docker ##
-RUN curl -L https://github.com/FlowCI/docker/releases/download/v0.20.9/docker-19_03_5 -o /usr/local/bin/docker \
-    && chmod +x /usr/local/bin/docker \
-    && ln -s /usr/local/bin/docker /usr/bin/docker
+RUN apk update
+RUN apk add bash git curl wget
 
-## docker compose ##
-RUN curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose \
-    && chmod +x /usr/local/bin/docker-compose \
-    && ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+## docker v20.10.18 ##
+COPY --from=docker /usr/local/bin/docker /usr/local/bin/docker
+
+## docker compose v2.11.1 ##
+COPY --from=docker /usr/libexec/docker/cli-plugins/docker-compose /usr/local/bin/docker-compose
 
 ## ssh config
 RUN mkdir -p $HOME/.ssh
 RUN echo "StrictHostKeyChecking=no" >> $HOME/.ssh/config
 
-## install python3 environment
-RUN apt install python3.6-distutils -y
-RUN curl https://bootstrap.pypa.io/pip/3.6/get-pip.py | python3.6
-
-RUN ln -s /usr/bin/python3.6 /usr/bin/python
+## upgrade pip
+RUN pip install --upgrade pip
 
 ## install required pip packages
 RUN python3 -m pip install requests==2.22.0 python-lib-flow.ci==1.21.6
