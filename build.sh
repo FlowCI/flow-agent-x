@@ -6,7 +6,7 @@ if [[ -n $version ]]; then
   VersionTag="-t flowci/agent:$version"
 fi
 
-# docker run --privileged --rm tonistiigi/binfmt --install all
+docker run --privileged --rm tonistiigi/binfmt --install all
 # docker buildx create --name flowci --use
 
 docker buildx build -f ./Dockerfile --platform linux/arm64,linux/amd64 --push -t flowci/agent:latest $VersionTag ./bin
